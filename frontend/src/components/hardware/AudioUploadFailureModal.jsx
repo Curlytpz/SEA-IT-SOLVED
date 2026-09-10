@@ -1,0 +1,5 @@
+import { Btn } from '../ui';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
+export default function AudioUploadFailureModal({loading,onRetry,onEndWithoutAudio,onCancel}){
+  return <Dialog open onOpenChange={open=>{if(!open&&!loading)onCancel();}}><DialogContent showCloseButton={false} className="sm:max-w-lg"><DialogHeader><DialogTitle>Your lesson recording could not be saved.</DialogTitle><DialogDescription>You can retry the upload, end the lesson without audio, or cancel and remain in the lesson. Ending without audio will not create a recording record.</DialogDescription></DialogHeader><DialogFooter className="sm:flex-wrap"><Btn variant="ghost" disabled={loading} onClick={onCancel}>Cancel</Btn><Btn variant="danger" disabled={loading} onClick={onEndWithoutAudio}>End Lesson Without Audio</Btn><Btn loading={loading} onClick={onRetry}>Retry Upload</Btn></DialogFooter></DialogContent></Dialog>;
+}

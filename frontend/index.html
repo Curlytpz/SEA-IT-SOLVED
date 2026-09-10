@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#F5F3EC" />
+    <meta name="description" content="SEA-IT-SOLVED is an AI-assisted smart whiteboard platform for mathematics lesson capture, instructor review, learning materials, quizzes, and analytics." />
+    <link rel="icon" type="image/png" sizes="128x128" href="/sea-favicon.png?v=6" />
+    <title>SEA-IT-SOLVED | Smart Whiteboard</title>
+    <script>
+      (() => {
+        const key = 'sea-it-solved-theme';
+        const saved = localStorage.getItem(key);
+        const dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.classList.toggle('dark', dark);
+        document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

@@ -1,0 +1,293 @@
+/* One document surface plus one optional math panel. */
+.visual-math-dialog {
+  gap: 0.9rem;
+}
+
+.whole-composition-editor {
+  min-height: 9rem;
+  max-height: min(46dvh, 27rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid hsl(var(--input));
+  border-radius: 12px;
+  background: hsl(var(--input-surface));
+  padding: 1rem;
+  color: hsl(var(--foreground));
+  caret-color: hsl(var(--primary));
+  cursor: text;
+  font-size: 1rem;
+  line-height: 2.75;
+  overflow-wrap: anywhere;
+  scrollbar-color: #94a3b8 transparent;
+  scrollbar-width: thin;
+  white-space: pre-wrap;
+}
+
+.whole-composition-editor:empty::before {
+  content: attr(data-placeholder);
+  color: hsl(var(--muted-foreground));
+  pointer-events: none;
+}
+
+.whole-composition-editor:hover {
+  border-color: hsl(var(--muted-foreground));
+}
+
+.whole-composition-editor:focus {
+  border-color: hsl(var(--primary));
+  outline: 3px solid hsl(var(--ring) / 0.14);
+  outline-offset: 1px;
+}
+
+.dark .whole-composition-editor {
+  border-color: hsl(var(--input));
+  background: hsl(var(--input-surface));
+  color: hsl(var(--foreground));
+  caret-color: hsl(var(--primary));
+}
+
+.dark .whole-composition-editor:hover {
+  border-color: hsl(var(--muted-foreground));
+}
+
+.composition-equation {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  margin: 0 0.08rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding: 0 0.18rem;
+  color: inherit;
+  cursor: pointer;
+  line-height: 1.25;
+  vertical-align: middle;
+}
+
+.composition-equation:hover {
+  background: hsl(var(--surface-subtle));
+}
+
+.composition-equation:focus-visible,
+.composition-equation.is-active {
+  background: hsl(var(--primary-subtle));
+  box-shadow: inset 0 -2px 0 hsl(var(--primary));
+  outline: none;
+}
+
+.dark .composition-equation:hover {
+  background: hsl(var(--surface-subtle));
+}
+
+.dark .composition-equation:focus-visible,
+.dark .composition-equation.is-active {
+  background: hsl(var(--primary-subtle));
+  box-shadow: inset 0 -2px 0 hsl(var(--primary));
+}
+
+.composition-equation-preview {
+  display: inline-block;
+  min-width: 1.25rem;
+  color: inherit;
+}
+
+.composition-equation .katex,
+.composition-equation-preview .katex {
+  font-size: 1.08em;
+}
+
+.whole-composition-toolbar {
+  display: flex;
+  min-height: 44px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.whole-composition-toolbar > span {
+  flex: 1 1 18rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.dark .whole-composition-toolbar > span {
+  color: hsl(var(--muted-foreground));
+}
+
+.visual-math-lower-panel {
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  background: hsl(var(--surface-subtle));
+  padding: 0.85rem;
+}
+
+.dark .visual-math-lower-panel {
+  border-color: hsl(var(--border));
+  background: hsl(var(--surface-elevated));
+}
+
+.visual-math-panel-heading {
+  display: flex;
+  min-height: 44px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.visual-math-panel-heading > div {
+  min-width: 0;
+}
+
+.visual-math-panel-heading strong,
+.visual-math-panel-heading span {
+  display: block;
+}
+
+.visual-math-panel-heading strong {
+  color: hsl(var(--foreground));
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.visual-math-panel-heading span {
+  margin-top: 0.15rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.dark .visual-math-panel-heading strong {
+  color: hsl(var(--foreground));
+}
+
+.dark .visual-math-panel-heading span {
+  color: hsl(var(--muted-foreground));
+}
+
+.visual-math-lower-panel .visual-math-field,
+.visual-math-lower-panel .math-editor-fallback {
+  width: 100%;
+  min-height: 58px;
+  border: 1px solid hsl(var(--primary) / .45);
+  border-radius: 10px;
+  background: hsl(var(--input-surface));
+  padding: 0.65rem 0.75rem;
+  color: hsl(var(--foreground));
+}
+
+.visual-math-lower-panel .visual-math-field:focus-within {
+  border-color: hsl(var(--primary));
+  outline: 3px solid hsl(var(--ring) / .14);
+  outline-offset: 1px;
+}
+
+.dark .visual-math-lower-panel .visual-math-field,
+.dark .visual-math-lower-panel .math-editor-fallback {
+  border-color: hsl(var(--primary) / .65);
+  background: hsl(var(--input-surface));
+  color: hsl(var(--foreground));
+}
+
+.math-editor-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.math-editor-fallback.has-error {
+  border-color: #d97706;
+  background: #fffbeb;
+}
+
+.dark .math-editor-fallback.has-error {
+  border-color: #f59e0b;
+  background: #2b2112;
+}
+
+.math-editor-retry {
+  display: inline-grid;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 8px;
+  color: #92400e;
+}
+
+.math-editor-retry:hover {
+  background: #fef3c7;
+}
+
+.math-editor-retry:focus-visible {
+  outline: 3px solid rgba(217, 119, 6, 0.25);
+  outline-offset: 1px;
+}
+
+.dark .math-editor-retry {
+  color: #fcd34d;
+}
+
+.dark .math-editor-retry:hover {
+  background: #422d12;
+}
+
+.visual-math-dialog-keyboard {
+  max-height: min(32dvh, 18rem);
+  overflow-y: auto;
+  border-radius: 10px;
+  scrollbar-color: #94a3b8 transparent;
+  scrollbar-width: thin;
+}
+
+@media (max-width: 639px) {
+  .visual-math-dialog {
+    max-height: calc(100dvh - 1rem);
+    padding: 1rem;
+  }
+
+  .whole-composition-editor {
+    min-height: 11rem;
+    max-height: 38dvh;
+    padding: 0.8rem;
+    font-size: 1rem;
+    line-height: 2.9;
+  }
+
+  .whole-composition-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .whole-composition-toolbar > button {
+    width: 100%;
+  }
+
+  .whole-composition-toolbar > span {
+    flex-basis: auto;
+  }
+
+  .visual-math-panel-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .visual-math-panel-heading > button {
+    width: 100%;
+  }
+
+  .visual-math-lower-panel {
+    padding: 0.7rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .whole-composition-editor,
+  .composition-equation {
+    scroll-behavior: auto;
+  }
+}

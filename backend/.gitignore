@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Runtime / uploads
+storage/
+
+# QA artifacts
+.demo-qa/
+
+# Test coverage
+coverage/
+
+# Build outputs
+dist/
+build/
+
+# Logs
+*.log

@@ -1,0 +1,5 @@
+import { Alert, Btn } from '../ui';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
+export default function MicrophoneStartFailureModal({message,loading,onRetry,onContinue,onCancel}){
+  return <Dialog open onOpenChange={open=>{if(!open&&!loading)onCancel();}}><DialogContent showCloseButton={false} className="sm:max-w-lg"><DialogHeader><DialogTitle>Microphone is unavailable.</DialogTitle><DialogDescription>You can retry or continue the lesson without audio recording. Camera and lesson functionality will remain available.</DialogDescription></DialogHeader>{message&&<Alert type="warning" label="Audio warning" className="mb-0">{message}</Alert>}<DialogFooter className="sm:flex-wrap"><Btn variant="ghost" disabled={loading} onClick={onCancel}>Cancel</Btn><Btn variant="secondary" disabled={loading} onClick={onContinue}>Continue Without Audio</Btn><Btn loading={loading} onClick={onRetry}>Retry Microphone</Btn></DialogFooter></DialogContent></Dialog>;
+}

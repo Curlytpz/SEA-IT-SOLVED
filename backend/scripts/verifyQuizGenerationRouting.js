@@ -13,10 +13,10 @@ const {quizGenerationSpec}=require('../src/utils/quizGenerationSpec');
 
 async function main(){
   const examples=[
-    'Generate a 5-question quiz with 3 multiple-choice questions and 2 problem-solving questions.',
-    'Generate a 5-question quiz. Questions 2 and 4 should be problem solving.',
-    'Generate a 5-question quiz with 2 problem-solving questions. Enable tips and formulas for them.',
-    'Generate a 5-question quiz. Questions 1, 3, and 5 multiple choice. Questions 2 and 4 problem solving.',
+    'Generate a 5-question medium quiz with 3 multiple-choice questions and 2 problem-solving questions.',
+    'Generate a 5-question medium quiz. Questions 2 and 4 should be problem solving.',
+    'Generate a 5-question medium quiz with 2 problem-solving questions. Enable tips and formulas for them.',
+    'Generate a 5-question medium quiz. Questions 1, 3, and 5 multiple choice. Questions 2 and 4 problem solving.',
     'Generate a 5-question quiz with 3 multiple-choice questions and 2 problem-solving questions. Make the problem-solving questions require handwritten solutions. Enable a helpful tip and formula for both problem-solving questions. Use medium difficulty.',
   ];
   const scope={};vm.runInNewContext(fs.readFileSync(require.resolve('../../shared/quizEditTargeting.cjs'),'utf8'),scope);
@@ -111,8 +111,37 @@ async function main(){
       assert.equal((await quizzes()).length,before,'Invalid output must never create a partial draft.');
     }
     mode='valid';
-    await chat.send(ids.lesson,ids.user,{message:'Generate a 5-question quiz.'});
-    assert.equal((await quizzes()).length,before+1,'Ordinary objective generation still works.');
+    const clarification=await chat.send(ids.lesson,ids.user,{message:'Generate a 5-question quiz.'});
+    assert.equal(clarification.requiresQuizOptions,true);
+    assert.deepEqual(clarification.missingQuizParameters,['difficulty','questionType']);
+    assert.equal((await quizzes()).length,before,'Incomplete quiz details must not create a draft.');
+    await chat.send(ids.lesson,ids.user,{message:'Generate a 5-question medium multiple-choice quiz.'});
+    assert.equal((await quizzes()).length,before+1,'Complete ordinary objective generation still works.');
+
+    const beforeOne=(await quizzes()).length;
+    const oneQuestion=await chat.send(ids.lesson,ids.user,{message:'Generate one medium problem-solving question.'});
+    assert.equal(oneQuestion.quizCreated,true);
+    const oneQuiz=(await quizzes()).at(-1);
+    const oneQuizQuestions=(await pool.query('SELECT question_type FROM lesson_quiz_questions WHERE quiz_id=$1 ORDER BY question_order',[oneQuiz.id])).rows;
+    assert.equal((await quizzes()).length,beforeOne+1);
+    assert.deepEqual(oneQuizQuestions.map(row=>row.question_type),['PROBLEM_SOLVING']);
+
+    const pending=await chat.send(ids.lesson,ids.user,{message:'Make a hard multiple choice quiz.'});
+    assert.deepEqual(pending.missingQuizParameters,['questionCount']);
+    const beforeContinuation=(await quizzes()).length;
+    const continued=await chat.send(ids.lesson,ids.user,{message:'10',quizDraft:{...pending.quizDraft,prompt:pending.quizPrompt}});
+    assert.equal(continued.quizCreated,true);
+    const continuedQuiz=(await quizzes()).at(-1);
+    const continuedQuestions=(await pool.query('SELECT question_type FROM lesson_quiz_questions WHERE quiz_id=$1 ORDER BY question_order',[continuedQuiz.id])).rows;
+    assert.equal((await quizzes()).length,beforeContinuation+1);
+    assert.equal(continuedQuestions.length,10);
+    assert(continuedQuestions.every(row=>row.question_type==='MULTIPLE_CHOICE'));
+
+    const beforeInvalid=(await quizzes()).length;
+    const invalidCount=await chat.send(ids.lesson,ids.user,{message:'Make 30 hard multiple choice questions.'});
+    assert.deepEqual(invalidCount.missingQuizParameters,['questionCount']);
+    assert.match(invalidCount.message.content,/supports 1–20/);
+    assert.equal((await quizzes()).length,beforeInvalid,'Invalid count must not create a draft.');
     assert(calls>=examples.length+1);
     console.log('PASS invalid provider mix/help rejected before save; ordinary objective generation preserved');
     console.log('QUIZ GENERATION ROUTING: PASS (real DB; provider network mocked)');

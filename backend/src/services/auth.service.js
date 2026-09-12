@@ -23,6 +23,7 @@ function buildSafeUser(row) {
     studentNumber: row.student_number || undefined,
     role:          row.role,
     status:        row.status,
+    successfulLoginCount: Number(row.successful_login_count) || 0,
     createdAt:     row.created_at,
   };
 }
@@ -169,11 +170,23 @@ async function login({ email, password, expectedRole }) {
     throw new AppError('Your account has been suspended. Contact the administrator.', 403);
   }
 
+  // Record only a genuinely successful login. This happens after password,
+  // role, and account-state validation, and the atomic increment prevents
+  // concurrent login requests from observing the same sequence number.
+  const successfulLogin = await pool.query(
+    `UPDATE users
+     SET successful_login_count = successful_login_count + 1
+     WHERE id = $1
+     RETURNING *`,
+    [user.id]
+  );
+  const authenticatedUser = successfulLogin.rows[0];
+
   // PENDING instructors CAN log in and receive a token.
   // The token is valid for /api/auth/me (to show the awaiting-approval screen)
   // but ALL instructor resource endpoints require status=ACTIVE via authorizeActive().
-  const token = signToken({ id: user.id, role: user.role, authVersion: Number(user.auth_version) || 0 });
-  return { user: buildSafeUser(user), token };
+  const token = signToken({ id: authenticatedUser.id, role: authenticatedUser.role, authVersion: Number(authenticatedUser.auth_version) || 0 });
+  return { user: buildSafeUser(authenticatedUser), token };
 }
 
 // ─── Get me ───────────────────────────────────────────────────────────────

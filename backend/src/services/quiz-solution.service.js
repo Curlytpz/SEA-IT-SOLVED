@@ -116,24 +116,29 @@ async function analyze(id, instructorId, { review = defaultReview } = {}) {
   active.add(id);
   try {
     const row = await ownedAnswer(id, instructorId);
-    if (row.graded_at || row.recognition_status !== 'READY') throw new AppError('Recognize an ungraded solution before AI analysis.', 409);
+    if (row.recognition_status !== 'READY') throw new AppError('Recognize the solution before AI analysis.', 409);
     let excerpt = '';
     try { excerpt = approvedExcerpt(await contextService.getApprovedForReasoning(row.lesson_id, instructorId)); }
     catch (error) { if (error.statusCode !== 404 && error.statusCode !== 409 && error.status !== 404 && error.status !== 409) throw error; }
     const parsed = reviewSchema.safeParse(await review({
       activity: { problem: clean(row.prompt, 10000), instructions: clean(row.problem_settings?.instructions, 4000),
-        expectedSolutionOrRubric: clean(row.problem_settings?.rubric, 12000) },
+        expectedSolutionOrRubric: clean(row.problem_settings?.rubric, 12000), maxPoints: Number(row.max_points) },
       studentSolution: { extractedText: clean(row.recognition_result?.plainText, 12000),
         math: (row.recognition_result?.mathExpressions || []).slice(0, 30),
         recognitionWarnings: (row.recognition_result?.warnings || []).slice(0, 12) },
       approvedLessonContextExcerpt: excerpt,
     }));
     if (!parsed.success) throw new AppError('AI returned an invalid advisory review. No grade was changed.', 422);
+    const maxScore=Number(row.max_points);
+    const suggestedScore=Math.round(Number(parsed.data.suggested_score)*100)/100;
+    if(!Number.isFinite(suggestedScore)||suggestedScore<0||suggestedScore>maxScore){
+      throw new AppError('AI returned an invalid suggested score. No grade was changed.',422);
+    }
     // Advisory writes ONLY ai_review. Never points_awarded, is_correct, grade, or attempt score.
     const saved = await pool.query(`UPDATE quiz_attempt_answers SET ai_review=$3,updated_at=NOW()
-      WHERE id=$1 AND solution_revision=$2 AND graded_at IS NULL AND recognition_status='READY'
+      WHERE id=$1 AND solution_revision=$2 AND recognition_status='READY'
         AND recognition_result=$4::jsonb RETURNING id`,
-      [id, row.solution_revision, JSON.stringify({ ...parsed.data, reviewedAt: new Date().toISOString() }), JSON.stringify(row.recognition_result)]);
+      [id, row.solution_revision, JSON.stringify({ ...parsed.data, suggested_score:suggestedScore, max_score:maxScore, reviewedAt: new Date().toISOString() }), JSON.stringify(row.recognition_result)]);
     if (!saved.rowCount) throw new AppError('The answer changed during analysis. No review was saved.', 409);
     return instructorAnswer(await ownedAnswer(id, instructorId));
   } finally { active.delete(id); }

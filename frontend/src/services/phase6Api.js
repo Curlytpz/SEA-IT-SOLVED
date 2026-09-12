@@ -11,6 +11,10 @@ export async function startQuizAttempt(quizId){const{data}=await api.post(`/stud
 export async function getQuizAttempt(attemptId){const{data}=await api.get(`/student/attempts/${attemptId}`);return data.data;}
 export async function saveQuizAnswer(attemptId,questionId,answer){const{data}=await api.put(`/student/attempts/${attemptId}/answers/${questionId}`,{answer});return data.data;}
 export async function submitQuizAttempt(attemptId,confirmUnanswered=false){const{data}=await api.post(`/student/attempts/${attemptId}/submit`,{confirmUnanswered});return data.data;}
+export async function getQuizTutor(attemptId){const{data}=await api.get(`/student/attempts/${attemptId}/tutor`);return data.data;}
+export async function generateQuizTutor(attemptId){const{data}=await api.post(`/student/attempts/${attemptId}/tutor`);return data.data;}
+export async function generateQuizTutorPractice(attemptId){const{data}=await api.post(`/student/attempts/${attemptId}/tutor/practice`);return data.data;}
+export async function checkQuizTutorPractice(attemptId,practiceId,answer){const{data}=await api.post(`/student/attempts/${attemptId}/tutor/practice/${practiceId}/check`,{answer});return data.data;}
 export async function getQuizHistory(){const{data}=await api.get('/student/quiz-history');return data.data.attempts;}
 export async function getQuizAnalytics(quizId){const{data}=await api.get(`/instructor/quizzes/${quizId}/analytics`);return data.data;}
 export async function getSectionAnalytics(sectionId){const{data}=await api.get(`/instructor/sections/${sectionId}/analytics`);return data.data;}

@@ -1,18 +1,22 @@
 const pool = require('../db/pool');
 const AppError = require('../utils/AppError');
+const { AsyncLocalStorage } = require('node:async_hooks');
 const contextService = require('./lesson-context.service');
 const intelligenceService = require('./lesson-intelligence.service');
 const geminiInteractive = require('./geminiInteractive.service');
 const GeminiLessonChatProvider = require('../reasoning/GeminiLessonChatProvider');
 const { normalizeGeneratedLessonTitle, normalizeGeneratedText } = require('../utils/generatedContent');
 const { normalizeLessonMathContent } = require('../utils/mathContent');
-const { explicitQuizGeneration, quizIntent, quizEditIntent, generateNotesIntent, editIntent, questionCount, quizDifficulty } = require('../utils/lessonChatIntent');
+const { conversationTitle } = require('../utils/lessonChatHistory');
+const { explicitQuizGeneration, quizIntent, quizEditIntent, generateNotesIntent, editIntent, wholeLessonEditIntent, prepareQuizDraft, quizClarificationMessage, isQuizDraftContinuation } = require('../utils/lessonChatIntent');
 const { GEMINI_API_KEY, GEMINI_CHAT_MODEL, GEMINI_INTERACTIVE_TIMEOUT_MS } = require('../config/env');
 
 const provider = new GeminiLessonChatProvider({ apiKey: GEMINI_API_KEY, model: GEMINI_CHAT_MODEL, timeoutMs: GEMINI_INTERACTIVE_TIMEOUT_MS });
 const MATERIAL_TYPES = ['SUMMARY','NOTES','EXPLANATION','KEY_FORMULAS','WORKED_EXAMPLE','COMMON_MISTAKES'];
 const EDIT_ACTIONS = ['UPDATE_SECTION','ADD_SECTION','REMOVE_SECTION','RENAME_TITLE'];
 const EDIT_OPERATIONS = ['replace','append','prepend','insert_after','insert_before','rewrite','delete'];
+const chatSessionScope = new AsyncLocalStorage();
+const CHAT_HISTORY_LIMIT = 30;
 
 function sourceLabel(chunk) {
   const source = chunk.source || {};
@@ -29,27 +33,161 @@ function safeMessage(row) {
   if(row.role==='ASSISTANT'&&looksLikePayload&&action==='MATERIAL_EDITED')content='Lesson material updated.';
   if(row.role==='ASSISTANT'&&looksLikePayload&&action==='MATERIALS_GENERATED')content='Lesson notes generated successfully.';
   if(row.role==='ASSISTANT'&&looksLikePayload&&action==='QUIZ_EDITED')content='Quiz updated.';
-  return {role:row.role,content,messageType:row.message_type||'ASK',sourceReferences:Array.isArray(row.source_references)?row.source_references:[],action,operation:row.metadata?.operation||null,changedMaterialId:row.metadata?.changedMaterialId||null,createdAt:row.created_at};
+  return {id:row.id,role:row.role,content,messageType:row.message_type||'ASK',sourceReferences:Array.isArray(row.source_references)?row.source_references:[],action,operation:row.metadata?.operation||null,changedMaterialId:row.metadata?.changedMaterialId||null,quizPrompt:row.metadata?.quizPrompt||null,quizDraft:row.metadata?.quizDraft||null,missingQuizParameters:row.metadata?.missingQuizParameters||null,createdAt:row.created_at};
 }
 function safeMaterial(row) { const content=row.content&&typeof row.content==='object'?row.content:{};return { id:row.id, type:row.material_type, title:normalizeGeneratedLessonTitle(row.title), content:{...content,markdown:normalizeGeneratedText(content.markdown,{markdown:true})}, sourceReferences:row.source_references||[], provider:row.provider, providerVersion:row.provider_version, outdated:row.outdated, generatedAt:row.generated_at, displayOrder:row.display_order }; }
 function snapshot(row) { return row ? { exists:true,title:row.title,content:row.content,sourceReferences:row.source_references||[],removed:row.removed,displayOrder:row.display_order,type:row.material_type } : { exists:false }; }
 function validatedLessonMarkdown(value){const markdown=normalizeGeneratedText(value,{markdown:true});if(!markdown)throw new AppError('The edited lesson section cannot be empty.',422);const normalized=normalizeLessonMathContent(markdown);if(normalized.needsReview.length)throw new AppError('The AI edit contained a math expression that needs clarification. The existing lesson was kept.',422);return normalized.content;}
 
+function safeConversation(row, preview='') {
+  return {
+    id: row.id,
+    title: row.title || 'New Conversation',
+    preview: normalizeGeneratedText(preview || row.preview || '', { markdown:false, maxLength:120 }),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function sessionInput(options={}, firstMessage='') {
+  return {
+    conversationId: String(options?.conversationId || '').trim() || null,
+    newConversation: options?.newConversation === true,
+    firstMessage: String(firstMessage || options?.message || options?.prompt || '').trim(),
+    session: null,
+    context: null,
+    createdSessionId: null,
+  };
+}
+
+async function withSessionScope(options, firstMessage, callback) {
+  if (chatSessionScope.getStore()) return callback();
+  const scope=sessionInput(options,firstMessage);
+  return chatSessionScope.run(scope,async()=>{
+    try{
+      const result=await callback();
+      if(scope.session)result.conversation=safeConversation(scope.session,result.message?.content||firstMessage);
+      return result;
+    }catch(error){
+      if(scope.createdSessionId){
+        await pool.query(
+          'DELETE FROM lesson_chat_sessions s WHERE s.id=$1 AND NOT EXISTS(SELECT 1 FROM lesson_chat_messages m WHERE m.session_id=s.id)',
+          [scope.createdSessionId]
+        ).catch(()=>{});
+      }
+      throw error;
+    }
+  });
+}
+
 async function currentSession(lessonId,instructorId,create=false) {
+  const scope=chatSessionScope.getStore();
+  if(scope?.session)return{context:scope.context,session:scope.session};
   const context=await contextService.getApprovedForReasoning(lessonId,instructorId,'Approve the lesson context before using the lesson assistant.');
-  let result=await pool.query('SELECT * FROM lesson_chat_sessions WHERE lesson_id=$1 AND instructor_id=$2 AND context_version_id=$3',[lessonId,instructorId,context.id]);
-  if(!result.rows.length&&create) result=await pool.query(`INSERT INTO lesson_chat_sessions(lesson_id,context_version_id,instructor_id) VALUES($1,$2,$3) ON CONFLICT(lesson_id,context_version_id,instructor_id) DO UPDATE SET updated_at=NOW() RETURNING *`,[lessonId,context.id,instructorId]);
+  if(scope)scope.context=context;
+  let result={rows:[]};
+  if(scope?.conversationId){
+    result=await pool.query(
+      'SELECT * FROM lesson_chat_sessions WHERE id::text=$1 AND lesson_id=$2 AND instructor_id=$3 AND context_version_id=$4',
+      [scope.conversationId,lessonId,instructorId,context.id]
+    );
+    if(!result.rows.length)throw new AppError('AI conversation not found.',404);
+  }else if(!scope?.newConversation){
+    result=await pool.query(
+      'SELECT * FROM lesson_chat_sessions WHERE lesson_id=$1 AND instructor_id=$2 AND context_version_id=$3 ORDER BY updated_at DESC,id DESC LIMIT 1',
+      [lessonId,instructorId,context.id]
+    );
+  }
+  if(!result.rows.length&&create){
+    result=await pool.query(
+      'INSERT INTO lesson_chat_sessions(lesson_id,context_version_id,instructor_id,title) VALUES($1,$2,$3,$4) RETURNING *',
+      [lessonId,context.id,instructorId,conversationTitle(scope?.firstMessage)]
+    );
+    if(scope)scope.createdSessionId=result.rows[0].id;
+  }
+  if(scope)scope.session=result.rows[0]||null;
   return {context,session:result.rows[0]||null};
 }
 async function insertMessage(client,session,lessonId,instructorId,role,content,type='ASK',references=[],metadata={}) {
+  const scope=chatSessionScope.getStore();
+  if(role==='USER'&&scope?.persistedUser&&!scope.persistedUser.consumed&&scope.persistedUser.content===String(content)){
+    scope.persistedUser.consumed=true;
+    return scope.persistedUser.message;
+  }
   const {rows}=await client.query(`INSERT INTO lesson_chat_messages(session_id,lesson_id,instructor_id,role,content,message_type,source_references,metadata) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,[session.id,lessonId,instructorId,role,content,type,JSON.stringify(references),JSON.stringify(metadata)]);
-  await client.query('UPDATE lesson_chat_sessions SET updated_at=NOW() WHERE id=$1',[session.id]); return safeMessage(rows[0]);
+  const updated=await client.query('UPDATE lesson_chat_sessions SET updated_at=NOW() WHERE id=$1 RETURNING updated_at',[session.id]);
+  session.updated_at=updated.rows[0]?.updated_at||session.updated_at;
+  return safeMessage(rows[0]);
 }
 async function messagesForSession(id,limit=100){if(!id)return[];const{rows}=await pool.query(`SELECT * FROM(SELECT * FROM lesson_chat_messages WHERE session_id=$1 ORDER BY created_at DESC,id DESC LIMIT $2)recent ORDER BY created_at,id`,[id,limit]);return rows.map(safeMessage);}
-async function recentConversation(id,limit=16){if(!id)return[];const{rows}=await pool.query('SELECT role,content,message_type,metadata,created_at FROM lesson_chat_messages WHERE session_id=$1 ORDER BY created_at DESC,id DESC LIMIT $2',[id,limit]);return rows.reverse();}
-async function list(lessonId,instructorId){const{session}=await currentSession(lessonId,instructorId);const undo=await pool.query(`SELECT EXISTS(SELECT 1 FROM generated_material_edits e JOIN lesson_context_versions v ON v.id=e.context_version_id WHERE e.lesson_id=$1 AND e.instructor_id=$2 AND v.status='APPROVED' AND e.undone_at IS NULL) can_undo`,[lessonId,instructorId]);return{messages:await messagesForSession(session?.id),canUndo:undo.rows[0].can_undo};}
-function quizClarification(prompt,{difficulty,count}={}){return{message:{role:'ASSISTANT',content:'How many questions would you like, and what difficulty?',messageType:'QUIZ_ACTION',sourceReferences:[],action:'QUIZ_OPTIONS_REQUIRED',createdAt:new Date().toISOString()},requiresQuizOptions:true,quizPrompt:prompt,difficulty:difficulty||null,questionCount:count||null};}
-async function createQuiz(lessonId,instructorId,options={}) {const prompt=String(options.prompt||'Generate a quiz about this lesson.').trim();const difficulty=String(options.difficulty||quizDifficulty(prompt)||(explicitQuizGeneration(prompt)?'MEDIUM':'')).toUpperCase();const count=Number(options.questionCount??questionCount(prompt))||undefined;if(!difficulty||!count)return quizClarification(prompt,{difficulty,count});const{session}=await currentSession(lessonId,instructorId,true);await intelligenceService.generateQuiz(lessonId,instructorId,{difficulty,questionCount:count,prompt});const client=await pool.connect();try{await client.query('BEGIN');await insertMessage(client,session,lessonId,instructorId,'USER',prompt,'QUIZ_ACTION');const assistant=await insertMessage(client,session,lessonId,instructorId,'ASSISTANT',`I generated a ${count}-question ${difficulty.toLowerCase()} quiz draft based on the approved lesson context. Review and edit it before publishing.`,'QUIZ_ACTION',[],{action:'QUIZ_CREATED',difficulty,questionCount:Number(count)});await client.query('COMMIT');return{message:assistant,quizCreated:true};}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}}
+async function recentConversation(id,limit=16){
+  if(!id)return[];
+  const excludeId=chatSessionScope.getStore()?.persistedUser?.message?.id||'';
+  const{rows}=await pool.query(
+    "SELECT role,content,message_type,metadata,created_at FROM lesson_chat_messages WHERE session_id=$1 AND ($3::text='' OR id::text<>$3::text) ORDER BY created_at DESC,id DESC LIMIT $2",
+    [id,limit,excludeId]
+  );
+  return rows.reverse();
+}
+async function conversationRows(lessonId,instructorId,contextId,limit=CHAT_HISTORY_LIMIT){
+  const{rows}=await pool.query(
+    `SELECT s.*,latest.content AS preview
+     FROM lesson_chat_sessions s
+     LEFT JOIN LATERAL (
+       SELECT content FROM lesson_chat_messages
+       WHERE session_id=s.id ORDER BY created_at DESC,id DESC LIMIT 1
+     ) latest ON TRUE
+     WHERE s.lesson_id=$1 AND s.instructor_id=$2 AND s.context_version_id=$3
+     ORDER BY s.updated_at DESC,s.id DESC LIMIT $4`,
+    [lessonId,instructorId,contextId,limit]
+  );
+  return rows;
+}
+async function list(lessonId,instructorId,conversationId){
+  const context=await contextService.getApprovedForReasoning(lessonId,instructorId,'Approve the lesson context before using the lesson assistant.');
+  const rows=await conversationRows(lessonId,instructorId,context.id);
+  let session=conversationId
+    ? (await pool.query('SELECT * FROM lesson_chat_sessions WHERE id::text=$1 AND lesson_id=$2 AND instructor_id=$3 AND context_version_id=$4',[String(conversationId),lessonId,instructorId,context.id])).rows[0]
+    : rows[0];
+  if(conversationId&&!session)throw new AppError('AI conversation not found.',404);
+  const generated=await intelligenceService.currentGeneratedDocument(lessonId,instructorId);
+  const undo=generated.contextVersionId
+    ? await pool.query(`SELECT EXISTS(SELECT 1 FROM generated_material_edits e WHERE e.lesson_id=$1 AND e.instructor_id=$2 AND e.context_version_id=$3 AND e.undone_at IS NULL) can_undo`,[lessonId,instructorId,generated.contextVersionId])
+    : {rows:[{can_undo:false}]};
+  return{conversations:rows.map(row=>safeConversation(row)),activeConversationId:session?.id||null,messages:await messagesForSession(session?.id),canUndo:undo.rows[0].can_undo};
+}
+function quizClarification(prompt,{draft,missingParameters,invalidQuestionCount},message){return{message,requiresQuizOptions:true,quizPrompt:prompt,quizDraft:draft,missingQuizParameters:missingParameters,difficulty:draft.difficulty,questionCount:draft.questionCount,questionType:draft.questionType};}
+async function createQuiz(lessonId,instructorId,options={}) {
+  const prompt=String(options.prompt||'Generate a quiz about this lesson.').trim();
+  return withSessionScope(options,prompt,async()=>{
+    const prepared=prepareQuizDraft(prompt,options.quizDraft,{difficulty:options.difficulty,questionCount:options.questionCount,questionType:options.questionType});
+    if(prepared.missingParameters.length){
+      const{session}=await currentSession(lessonId,instructorId,true);
+      const content=quizClarificationMessage(prepared.missingParameters,prepared.invalidQuestionCount);
+      const client=await pool.connect();
+      try{
+        await client.query('BEGIN');
+        await insertMessage(client,session,lessonId,instructorId,'USER',prompt,'QUIZ_ACTION');
+        const assistant=await insertMessage(client,session,lessonId,instructorId,'ASSISTANT',content,'QUIZ_ACTION',[],{action:'QUIZ_OPTIONS_REQUIRED',quizPrompt:options.quizDraft?.prompt||prompt,quizDraft:prepared.draft,missingQuizParameters:prepared.missingParameters});
+        await client.query('COMMIT');
+        return quizClarification(options.quizDraft?.prompt||prompt,prepared,assistant);
+      }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
+    }
+    const{difficulty,questionCount:count,questionType}=prepared.draft;
+    const generationPrompt=String(options.quizDraft?.prompt||prompt).trim();
+    await currentSession(lessonId,instructorId,false);
+    await intelligenceService.generateQuiz(lessonId,instructorId,{difficulty,questionCount:count,questionType,prompt:generationPrompt});
+    const{session}=await currentSession(lessonId,instructorId,true);
+    const client=await pool.connect();
+    try{
+      await client.query('BEGIN');
+      if(options.skipUserMessage!==true)await insertMessage(client,session,lessonId,instructorId,'USER',prompt,'QUIZ_ACTION');
+      const assistant=await insertMessage(client,session,lessonId,instructorId,'ASSISTANT',`I generated a ${count}-question ${difficulty.toLowerCase()} quiz draft based on the approved lesson context. Review and edit it before publishing.`,'QUIZ_ACTION',[],{action:'QUIZ_CREATED',difficulty,questionCount:Number(count),questionType});
+      await client.query('COMMIT');
+      return{message:assistant,quizCreated:true};
+    }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
+  });
+}
 
 async function generateNotes(lessonId,instructorId,message){
   const operation=/\bre-?generate\b/i.test(message)?'REGENERATE_LESSON':'GENERATE_LESSON';
@@ -224,7 +362,6 @@ async function editQuiz(lessonId,instructorId,message){
   }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
 }
 
-async function currentDraftRows(lessonId,instructorId,contextId,client=pool,lock=false){const{rows}=await client.query(`SELECT * FROM generated_lesson_materials WHERE lesson_id=$1 AND instructor_id=$2 AND context_version_id=$3 AND removed=FALSE ORDER BY COALESCE(display_order,999),generated_at,id${lock?' FOR UPDATE':''}`,[lessonId,instructorId,contextId]);return rows;}
 function conciseEditMessage(operation, target, action, instruction='') {
   const title=normalizeGeneratedLessonTitle(operation.title||target?.title||'lesson section');
   if(action==='REMOVE_SECTION')return `I removed ${title} from the lesson draft as requested.`;
@@ -236,11 +373,7 @@ function conciseEditMessage(operation, target, action, instruction='') {
   return `I ${verb} ${title} and kept the change aligned with the approved lesson context.`;
 }
 
-function wholeLessonIntent(message) {
-  return /\b(whole|entire|all sections|full lesson|lesson-wide)\b/i.test(message);
-}
-
-async function editWholeDocument({lessonId,instructorId,message,context,session,rows,baseRevision,payload}) {
+async function editWholeDocument({lessonId,instructorId,message,documentContext,latestApprovedContext,session,rows,baseRevision,payload}) {
   const materials=rows.map(row=>({section:row.material_type,title:row.title,markdown:row.content?.markdown||''}));
   const result=await geminiInteractive.run(
     ()=>provider.editDocument({context:payload,materials,instruction:message}),
@@ -258,8 +391,10 @@ async function editWholeDocument({lessonId,instructorId,message,context,session,
   const client=await pool.connect();
   try{
     await client.query('BEGIN');
-    await intelligenceService.archiveDuplicateMaterials(client,lessonId,instructorId,context.id);
-    const locked=await currentDraftRows(lessonId,instructorId,context.id,client,true);
+    await intelligenceService.archiveDuplicateMaterials(client,lessonId,instructorId,documentContext.id);
+    const current=await intelligenceService.currentGeneratedDocument(lessonId,instructorId,client,{forUpdate:true});
+    if(current.contextVersionId!==documentContext.id)throw new AppError('The current generated lesson changed while this revision was being prepared. Review the latest document and try again.',409);
+    const locked=current.rows;
     if(intelligenceService.materialRevision(locked)!==baseRevision)throw new AppError('The lesson draft changed while this revision was being prepared. Review the latest document and try again.',409);
     if(locked.length!==sections.size||locked.some(row=>!sections.has(row.material_type)))throw new AppError('The lesson structure changed while this revision was being prepared. Review the latest document and try again.',409);
 
@@ -278,22 +413,28 @@ async function editWholeDocument({lessonId,instructorId,message,context,session,
     await client.query(
       'INSERT INTO generated_material_edits(generated_material_id,lesson_id,context_version_id,instructor_id,edit_instruction,action,previous_snapshot,new_snapshot,provider,provider_model)\n'+
       "VALUES($1,$2,$3,$4,$5,'UPDATE_SECTION',$6,$7,'GEMINI',$8)",
-      [locked[0].id,lessonId,context.id,instructorId,message,JSON.stringify(before),JSON.stringify(after),GEMINI_CHAT_MODEL]
+      [locked[0].id,lessonId,documentContext.id,instructorId,message,JSON.stringify(before),JSON.stringify(after),GEMINI_CHAT_MODEL]
     );
     await insertMessage(client,session,lessonId,instructorId,'USER',message,'EDIT');
     const confirmation='I updated the complete lesson document as requested while preserving its approved lesson context and section structure.';
     const assistant=await insertMessage(client,session,lessonId,instructorId,'ASSISTANT',confirmation,'EDIT',[],{action:'MATERIAL_EDITED',operation:{action:'UPDATE_DOCUMENT',target:'LESSON_DOCUMENT',description:confirmation},changedMaterialId:null});
     await client.query('COMMIT');
     const intelligence=await intelligenceService.list(lessonId,instructorId);
-    return{message:assistant,edited:true,materials:intelligence.materials,document:intelligence.document,changedMaterialId:null,canUndo:true};
+    return{message:assistant,edited:true,materials:intelligence.materials,document:intelligence.document,changedMaterialId:null,canUndo:true,newerApprovedContextAvailable:documentContext.id!==latestApprovedContext.id};
   }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
 }
 
 async function edit(lessonId,instructorId,message,selectedMaterialId){
-  const{context,session}=await currentSession(lessonId,instructorId,true);
-  await intelligenceService.archiveDuplicateMaterials(pool,lessonId,instructorId,context.id);
-  const rows=await currentDraftRows(lessonId,instructorId,context.id);
-  if(!rows.length)throw new AppError('Generate the current lesson document before editing it.',409);
+  const{context:latestApprovedContext,session}=await currentSession(lessonId,instructorId,true);
+  let current=await intelligenceService.currentGeneratedDocument(lessonId,instructorId);
+  if(!current.rows.length)throw new AppError('No generated lesson exists yet. Generate the lesson before editing it.',409);
+  await intelligenceService.archiveDuplicateMaterials(pool,lessonId,instructorId,current.contextVersionId);
+  current=await intelligenceService.currentGeneratedDocument(lessonId,instructorId);
+  const rows=current.rows;
+  if(!rows.length)throw new AppError('No generated lesson exists yet. Generate the lesson before editing it.',409);
+  const documentContext=current.contextVersionId===latestApprovedContext.id
+    ? latestApprovedContext
+    : await contextService.getVersionForReasoning(lessonId,instructorId,current.contextVersionId);
   const baseRevision=intelligenceService.materialRevision(rows);
   let selected=null;
   if(selectedMaterialId){
@@ -304,8 +445,8 @@ async function edit(lessonId,instructorId,message,selectedMaterialId){
     const recentTarget=[...history].reverse().map(item=>item.metadata?.changedMaterialId).find(Boolean);
     if(recentTarget)selected=rows.find(row=>row.id===recentTarget)||null;
   }
-  const payload=approvedPayload(context);
-  if(wholeLessonIntent(message))return editWholeDocument({lessonId,instructorId,message,context,session,rows,baseRevision,payload});
+  const payload=approvedPayload(documentContext);
+  if(wholeLessonEditIntent(message))return editWholeDocument({lessonId,instructorId,message,documentContext,latestApprovedContext,session,rows,baseRevision,payload});
   const allowedSources=new Set(payload.map(item=>item.source));
   const operation=await geminiInteractive.run(
     ()=>provider.edit({
@@ -335,8 +476,10 @@ async function edit(lessonId,instructorId,message,selectedMaterialId){
   let changed;
   try{
     await client.query('BEGIN');
-    await intelligenceService.archiveDuplicateMaterials(client,lessonId,instructorId,context.id);
-    const locked=await currentDraftRows(lessonId,instructorId,context.id,client,true);
+    await intelligenceService.archiveDuplicateMaterials(client,lessonId,instructorId,documentContext.id);
+    const lockedDocument=await intelligenceService.currentGeneratedDocument(lessonId,instructorId,client,{forUpdate:true});
+    if(lockedDocument.contextVersionId!==documentContext.id)throw new AppError('The current generated lesson changed while this revision was being prepared. Review the latest document and try again.',409);
+    const locked=lockedDocument.rows;
     if(intelligenceService.materialRevision(locked)!==baseRevision){
       throw new AppError('The lesson draft changed while this revision was being prepared. Review the latest document and try again.',409);
     }
@@ -355,9 +498,9 @@ async function edit(lessonId,instructorId,message,selectedMaterialId){
       const order=Math.max(-1,...locked.map(row=>Number(row.display_order)||0))+1;
       const refs=[...new Set((operation.sourceReferences||[]).filter(ref=>allowedSources.has(ref)))];
       const inserted=await client.query(
-        'INSERT INTO generated_lesson_materials(lesson_id,context_version_id,instructor_id,material_type,title,content,source_references,provider,provider_version,display_order)\n'+
-        "VALUES($1,$2,$3,$4,$5,$6,$7,'GEMINI',$8,$9) RETURNING *",
-        [lessonId,context.id,instructorId,operation.targetSection,normalizeGeneratedLessonTitle(operation.title||'Additional Explanation'),JSON.stringify({markdown:validatedLessonMarkdown(operation.markdown)}),JSON.stringify(refs),GEMINI_CHAT_MODEL,order]
+        'INSERT INTO generated_lesson_materials(lesson_id,context_version_id,instructor_id,material_type,title,content,source_references,provider,provider_version,outdated,display_order)\n'+
+        "VALUES($1,$2,$3,$4,$5,$6,$7,'GEMINI',$8,$9,$10) RETURNING *",
+        [lessonId,documentContext.id,instructorId,operation.targetSection,normalizeGeneratedLessonTitle(operation.title||'Additional Explanation'),JSON.stringify({markdown:validatedLessonMarkdown(operation.markdown)}),JSON.stringify(refs),GEMINI_CHAT_MODEL,documentContext.id!==latestApprovedContext.id,order]
       );
       target=inserted.rows[0];before={exists:false};after=snapshot(target);
     }else{
@@ -385,7 +528,7 @@ async function edit(lessonId,instructorId,message,selectedMaterialId){
     await client.query(
       'INSERT INTO generated_material_edits(generated_material_id,lesson_id,context_version_id,instructor_id,edit_instruction,action,previous_snapshot,new_snapshot,provider,provider_model)\n'+
       "VALUES($1,$2,$3,$4,$5,$6,$7,$8,'GEMINI',$9)",
-      [target.id,lessonId,context.id,instructorId,message,appliedAction,JSON.stringify(before),JSON.stringify(after),GEMINI_CHAT_MODEL]
+      [target.id,lessonId,documentContext.id,instructorId,message,appliedAction,JSON.stringify(before),JSON.stringify(after),GEMINI_CHAT_MODEL]
     );
     await insertMessage(client,session,lessonId,instructorId,'USER',message,'EDIT');
     changed=target.id;
@@ -396,7 +539,7 @@ async function edit(lessonId,instructorId,message,selectedMaterialId){
     );
     await client.query('COMMIT');
     const intelligence=await intelligenceService.list(lessonId,instructorId);
-    return{message:assistant,edited:true,materials:intelligence.materials,document:intelligence.document,changedMaterialId:changed,canUndo:true};
+    return{message:assistant,edited:true,materials:intelligence.materials,document:intelligence.document,changedMaterialId:changed,canUndo:true,newerApprovedContextAvailable:documentContext.id!==latestApprovedContext.id};
   }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
 }
 async function restoreMaterialSnapshot(client,materialId,previous){
@@ -409,14 +552,16 @@ async function restoreMaterialSnapshot(client,materialId,previous){
     [materialId,previous.title,JSON.stringify(previous.content),JSON.stringify(previous.sourceReferences||[]),Boolean(previous.removed),previous.displayOrder]
   );
 }
-async function undo(lessonId,instructorId){
-  const{context,session}=await currentSession(lessonId,instructorId,true);
+async function undoScoped(lessonId,instructorId){
+  const{session}=await currentSession(lessonId,instructorId,true);
   const client=await pool.connect();
   try{
     await client.query('BEGIN');
+    const current=await intelligenceService.currentGeneratedDocument(lessonId,instructorId,client,{forUpdate:true});
+    if(!current.contextVersionId||!current.rows.length)throw new AppError('There is no generated lesson edit to undo.',409);
     const result=await client.query(
       'SELECT * FROM generated_material_edits WHERE lesson_id=$1 AND instructor_id=$2 AND context_version_id=$3 AND undone_at IS NULL ORDER BY created_at DESC,id DESC FOR UPDATE LIMIT 1',
-      [lessonId,instructorId,context.id]
+      [lessonId,instructorId,current.contextVersionId]
     );
     if(!result.rows.length)throw new AppError('There is no AI edit to undo.',409);
     const item=result.rows[0],previous=item.previous_snapshot;
@@ -435,28 +580,55 @@ async function undo(lessonId,instructorId){
     return{message:assistant,materials:intelligence.materials,document:intelligence.document,changedMaterialId,canUndo:false};
   }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
 }
+async function undo(lessonId,instructorId,options={}){
+  return withSessionScope(options,'Undo last AI edit.',()=>undoScoped(lessonId,instructorId));
+}
 async function send(lessonId,instructorId,body){
   const message=String(body?.message||'').trim();
   if(!message)throw new AppError('Enter a request for the lesson assistant.',400);
   if(message.length>2000)throw new AppError('Keep lesson-assistant messages under 2,000 characters.',400);
-  if(explicitQuizGeneration(message))return createQuiz(lessonId,instructorId,{prompt:message,difficulty:body?.difficulty,questionCount:body?.questionCount});
-  if(quizEditIntent(message,body?.intent))return editQuiz(lessonId,instructorId,message);
-  if(quizIntent(message,body?.intent))return createQuiz(lessonId,instructorId,{prompt:message,difficulty:body?.difficulty,questionCount:body?.questionCount});
-  if(generateNotesIntent(message,body?.intent))return generateNotes(lessonId,instructorId,message);
-  if(editIntent(message,body?.intent)==='EDIT')return edit(lessonId,instructorId,message,body?.selectedMaterialId);
-  const{context,session}=await currentSession(lessonId,instructorId,true);
-  const history=await pool.query('SELECT role,content FROM lesson_chat_messages WHERE session_id=$1 ORDER BY created_at DESC,id DESC LIMIT 20',[session.id]);
-  const payload=approvedPayload(context),allowed=new Set(payload.map(item=>item.source));
-  const result=await geminiInteractive.run(()=>provider.reply({context:payload,history:history.rows.reverse(),message}),{unavailable:'AI is temporarily unavailable. Please try again.',rateLimited:'The AI service is temporarily rate-limited. Please try again shortly.'});
-  const refs=[...new Set((result.sourceReferences||[]).filter(ref=>allowed.has(ref)))];
-  const client=await pool.connect();
-  try{
-    await client.query('BEGIN');
-    await insertMessage(client,session,lessonId,instructorId,'USER',message,'ASK');
-    const assistant=await insertMessage(client,session,lessonId,instructorId,'ASSISTANT',String(result.answer).trim(),'ASK',refs);
-    await client.query('COMMIT');
-    return{message:assistant,edited:false};
-  }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
+  return withSessionScope(body,message,async()=>{
+    const quizOptions={prompt:message,difficulty:body?.difficulty,questionCount:body?.questionCount,questionType:body?.questionType,quizDraft:body?.quizDraft};
+    const quizContinuation=Boolean(body?.quizDraft&&isQuizDraftContinuation(message));
+    const explicitQuiz=explicitQuizGeneration(message);
+    const quizEdit=quizEditIntent(message,body?.intent);
+    const quizRequest=quizIntent(message,body?.intent);
+    const notesRequest=generateNotesIntent(message,body?.intent);
+    const lessonEdit=editIntent(message,body?.intent)==='EDIT';
+    const messageType=quizContinuation||explicitQuiz||quizRequest?'QUIZ_ACTION':quizEdit?'QUIZ_EDIT':notesRequest?'DOCUMENT_ACTION':lessonEdit?'EDIT':'ASK';
+    const{session:persistSession}=await currentSession(lessonId,instructorId,true);
+    const persistedMessage=await insertMessage(pool,persistSession,lessonId,instructorId,'USER',message,messageType);
+    chatSessionScope.getStore().persistedUser={content:message,message:persistedMessage,consumed:false};
+    if(quizContinuation)return createQuiz(lessonId,instructorId,quizOptions);
+    if(explicitQuiz)return createQuiz(lessonId,instructorId,quizOptions);
+    if(quizEdit)return editQuiz(lessonId,instructorId,message);
+    if(quizRequest)return createQuiz(lessonId,instructorId,quizOptions);
+    if(notesRequest)return generateNotes(lessonId,instructorId,message);
+    if(lessonEdit)return edit(lessonId,instructorId,message,body?.selectedMaterialId);
+    const{context,session}=await currentSession(lessonId,instructorId,true);
+    const history=await pool.query('SELECT role,content FROM lesson_chat_messages WHERE session_id=$1 AND id<>$2 ORDER BY created_at DESC,id DESC LIMIT 20',[session.id,persistedMessage.id]);
+    const payload=approvedPayload(context),allowed=new Set(payload.map(item=>item.source));
+    const result=await geminiInteractive.run(()=>provider.reply({context:payload,history:history.rows.reverse(),message}),{unavailable:'AI is temporarily unavailable. Please try again.',rateLimited:'The AI service is temporarily rate-limited. Please try again shortly.'});
+    const refs=[...new Set((result.sourceReferences||[]).filter(ref=>allowed.has(ref)))];
+    const client=await pool.connect();
+    try{
+      await client.query('BEGIN');
+      await insertMessage(client,session,lessonId,instructorId,'USER',message,'ASK');
+      const assistant=await insertMessage(client,session,lessonId,instructorId,'ASSISTANT',String(result.answer).trim(),'ASK',refs);
+      await client.query('COMMIT');
+      return{message:assistant,edited:false};
+    }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
+  });
 }
 
-module.exports={list,send,createQuiz,undo,quizEditPlan};
+async function deleteConversation(lessonId,instructorId,conversationId){
+  const context=await contextService.getApprovedForReasoning(lessonId,instructorId,'Approve the lesson context before using the lesson assistant.');
+  const result=await pool.query(
+    'DELETE FROM lesson_chat_sessions WHERE id::text=$1 AND lesson_id=$2 AND instructor_id=$3 AND context_version_id=$4 RETURNING id',
+    [String(conversationId||''),lessonId,instructorId,context.id]
+  );
+  if(!result.rows.length)throw new AppError('AI conversation not found.',404);
+  return{deletedConversationId:result.rows[0].id};
+}
+
+module.exports={list,send,createQuiz,undo,deleteConversation,quizEditPlan};

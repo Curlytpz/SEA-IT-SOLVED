@@ -95,14 +95,14 @@ export default function HeroSection() {
       <div className={`${landingStyles.container} relative grid min-h-[calc(100svh-72px)] items-center gap-14 py-16 sm:py-20 lg:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)] lg:gap-8 lg:py-24 xl:grid-cols-[minmax(440px,0.78fr)_minmax(0,1.22fr)] xl:gap-4`}>
         <motion.div style={reducedMotion ? undefined : { y: copyY }} className="relative z-20 max-w-[680px] lg:pb-20">
           <motion.p initial={reducedMotion ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reducedMotion ? 0 : 0.52, delay: reducedMotion ? 0 : 0.04, ease: landingMotion.ease }} className="mb-7 flex items-center gap-3 text-xs font-semibold tracking-[0.08em] text-primary sm:text-sm">
-            <span className="w-8 h-px bg-primary" aria-hidden="true" />CLASSROOM INTELLIGENCE, INSTRUCTOR LED
+            <span className="w-8 h-px bg-primary" aria-hidden="true" />CLASSROOM INTELLIGENCE, BUILT FOR FUTURE ENGINEERS.
           </motion.p>
 
           <h1 className="text-[clamp(3rem,10vw,4rem)] font-semibold leading-[0.86] tracking-[-0.07em] text-balance sm:text-[clamp(4rem,8vw,9rem)]">
             <span className="block"><SplitWords text="Capture the" delayStart={0.08} /></span>
             <span className="block"><SplitWords text="lesson." delayStart={0.14} /></span>
-            <span className="block text-primary"><SplitWords text="Extend the" delayStart={0.2} /></span>
-            <span className="block text-primary"><SplitWords text="learning." delayStart={0.26} /></span>
+            <span className="block text-primary"><SplitWords text="Extend the" delayStart={0.4} /></span>
+            <span className="block text-primary"><SplitWords text="learning." delayStart={0.50} /></span>
           </h1>
 
           <motion.p initial={reducedMotion ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reducedMotion ? 0 : 0.58, delay: reducedMotion ? 0 : 0.34, ease: landingMotion.ease }} className="mt-8 max-w-[590px] text-base leading-7 text-secondary-foreground sm:text-lg sm:leading-8">

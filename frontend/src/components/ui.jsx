@@ -73,8 +73,8 @@ export function Alert(props) { return <StatusNotice {...props}/>; }
 
 export function Badge({ status }) {
   const variants = {
-    ACTIVE: 'success', APPROVED: 'success', GRADED: 'success', PUBLISHED: 'success',
-    PENDING: 'warning', PAUSED: 'warning', PROCESSING: 'warning',
+    ACTIVE: 'success', APPROVED: 'success', AVAILABLE: 'success', GRADED: 'success', PUBLISHED: 'success',
+    PENDING: 'warning', PAUSED: 'warning', PROCESSING: 'warning', IN_PROGRESS: 'warning', SUBMITTED: 'warning', SUBMITTED_AWAITING_REVIEW: 'warning',
     REJECTED: 'destructive', SUSPENDED: 'destructive', FAILED: 'destructive',
   };
   return <ShadBadge variant={variants[status] || 'secondary'}>{String(status || '').replaceAll('_', ' ')}</ShadBadge>;

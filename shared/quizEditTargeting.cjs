@@ -64,10 +64,12 @@ function explicitQuizGeneration(message) {
   const text = String(message || '');
   // Existing "create new questions instead" means whole-quiz replacement, not a second draft.
   if (/\bcreate\b[\s\S]{0,30}\bnew\b[\s\S]{0,20}\bquestions?\b[\s\S]{0,15}\binstead\b/i.test(text)) return false;
-  const modifiers = '(?:(?:a|an|new|another|easy|medium|hard)\\s+)*';
-  const count = '(?:\\d+(?:[-\\s]+questions?)?\\s+)?';
+  const number = '(?:\\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)';
+  const questionType = '(?:multiple[-\\s]+choice|problem[-\\s]+solving|solution[-\\s]+required|true\\s*(?:/|or|-)\\s*false)';
+  const modifiers = `(?:(?:a|an|new|another|easy|medium|hard|${questionType})\\s+)*`;
+  const count = `(?:${number}(?:[-\\s]+(?:items?|questions?|problems?))?\\s+)?`;
   const quiz = new RegExp('\\b(?:generate|create|build|make)\\s+(?:(?:me|us)\\s+)?' + modifiers + count + modifiers + 'quiz\\b(?!\\s*(?:number\\s*|#\\s*)?\\d)', 'i');
-  const questions = /\b(?:generate|create|build)\s+(?:(?:me|us)\s+)?(?:new\s+)?\d+[-\s]+questions?\b/i;
+  const questions = new RegExp(`\\b(?:generate|create|build|make)\\s+(?:(?:me|us)\\s+)?(?:new\\s+)?${number}[-\\s]+(?:(?:easy|medium|hard|${questionType})\\s+)*(?:items?|questions?|problems?)\\b`, 'i');
   return quiz.test(text) || questions.test(text);
 }
 

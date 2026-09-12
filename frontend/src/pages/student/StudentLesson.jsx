@@ -102,10 +102,11 @@ export default function StudentLesson() {
       <div className="student-lesson-quizzes">
         <div className="student-section-heading"><div><h2>Lesson quizzes</h2><p>Published assessments and their current availability.</p></div></div>
         {data.quizzes.length ? <div className="student-available-quiz-grid">{data.quizzes.map(quiz => <Card key={quiz.id} className="student-available-quiz">
-          <div className="flex items-start justify-between gap-3"><div><Badge status={quiz.status}/><h3 className="mt-2 font-semibold text-slate-900 dark:text-white">{studentQuizTitle(quiz.title, data.lesson.title)}</h3><p className="mt-1 text-sm text-slate-500">{quiz.questionCount} questions</p></div>{quiz.attempt && ['SUBMITTED','GRADED'].includes(quiz.attempt.status) && <Check className="text-emerald-500"/>}</div>
+          <div className="flex items-start justify-between gap-3"><div><Badge status={quiz.studentStatus === 'SUBMITTED_AWAITING_REVIEW' ? 'SUBMITTED' : quiz.studentStatus}/><h3 className="mt-2 font-semibold text-slate-900 dark:text-white">{studentQuizTitle(quiz.title, data.lesson.title)}</h3><p className="mt-1 text-sm text-slate-500">{quiz.questionCount} questions</p></div>{quiz.attempt && ['SUBMITTED','GRADED'].includes(quiz.attempt.status) && <Check className="text-emerald-500"/>}</div>
           <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{studentQuizInstructions(quiz.instructions, quiz.questionCount)}</p>
+          {quiz.awaitingReview && <p className="mt-3 text-sm font-medium text-warning">Submitted · Awaiting instructor review</p>}
           {!quiz.available && <p className="mt-3 rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">{quiz.availabilityMessage || 'This quiz is currently unavailable.'}</p>}
-          <Btn className="mt-4 w-full" disabled={!quiz.available} loading={quizBusy === quiz.id} onClick={() => openQuiz(quiz)}><Play size={15}/>{!quiz.available ? 'Quiz not available yet' : quiz.attempt?.status === 'IN_PROGRESS' ? 'Resume Quiz' : quiz.attempt ? 'View Result' : 'Start Quiz'}</Btn>
+          <Btn className="mt-4 w-full" disabled={!quiz.available} loading={quizBusy === quiz.id} onClick={() => openQuiz(quiz)}><Play size={15}/>{!quiz.available ? 'Quiz not available yet' : quiz.studentStatus === 'IN_PROGRESS' ? 'Resume Quiz' : quiz.studentStatus === 'SUBMITTED_AWAITING_REVIEW' ? 'View Submission' : quiz.studentStatus === 'GRADED' ? 'View Results' : 'Answer Quiz'}</Btn>
         </Card>)}</div>:<Card className="p-6 text-center text-sm text-slate-500">No published quiz is available.</Card>}
       </div>
     </section>

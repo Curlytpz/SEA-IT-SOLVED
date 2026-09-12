@@ -4,6 +4,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import { PageTransition } from './components/PageTransition';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { lazyWithRecovery } from './utils/lazyWithRecovery';
 import Landing from './pages/Landing';
 
 const Login = lazy(() => import('./pages/Login'));
@@ -28,8 +29,12 @@ const StudentDashboard = lazy(() => import('./pages/student/StudentDashboard'));
 const StudentJoinSection = lazy(() => import('./pages/student/StudentJoinSection'));
 const StudentClasses = lazy(() => import('./pages/student/StudentClasses'));
 const StudentLesson = lazy(() => import('./pages/student/StudentLesson'));
-const StudentQuizAttempt = lazy(() => import('./pages/student/StudentQuizAttempt'));
+const StudentQuizAttempt = lazyWithRecovery(
+  () => import('./pages/student/StudentQuizAttempt'),
+  'student-quiz-attempt',
+);
 const StudentQuizHistory = lazy(() => import('./pages/student/StudentQuizHistory'));
+const NotFound = lazy(() => import('./pages/NotFound'));
 
 function TokenValidator({ children }) {
   const { refreshUser } = useAuth();
@@ -89,11 +94,7 @@ function AppRoutes() {
         <Route path="/student/attempts/:attemptId" element={<ProtectedRoute roles={['STUDENT']}><StudentQuizAttempt /></ProtectedRoute>} />
         <Route path="/student/results" element={<ProtectedRoute roles={['STUDENT']}><StudentQuizHistory /></ProtectedRoute>} />
 
-        <Route path="*" element={<PageTransition className="flex min-h-screen flex-col items-center justify-center gap-3">
-          <div className="text-5xl font-black text-slate-300">404</div>
-          <p className="text-muted-foreground">Page not found.</p>
-          <a href="/" className="text-sm font-medium text-primary hover:text-primary-hover hover:underline">Go home</a>
-        </PageTransition>} />
+        <Route path="*" element={<PageTransition><NotFound /></PageTransition>} />
       </Routes>
     </Suspense>
   </TokenValidator>;

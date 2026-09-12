@@ -4,6 +4,7 @@ import { Alert, Btn, Card } from '../ui';
 import MathExpression from './MathExpression';
 import RecognitionStatusBadge from './RecognitionStatusBadge';
 import UncertaintyBadge from './UncertaintyBadge';
+import GeneratedContent from '../reasoning/GeneratedContent';
 
 function friendlyFailure(recognition) {
   if (recognition?.failureCode === 'NO_RECOGNIZABLE_CONTENT') return 'No recognizable whiteboard content was found.';
@@ -52,10 +53,10 @@ export default function RecognitionCaptureCard({ item, busy, onReprocess }) {
                 <div key={`${block.order}-${index}`} className="rounded-xl border border-slate-200/80 bg-white/60 p-3 dark:border-white/10 dark:bg-white/[.035]">
                   {block.type === 'math'
                     ? <MathExpression latex={block.latex} />
-                    : <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-slate-200">{block.text}</p>}
+                    : <GeneratedContent markdown={block.text} className="recognition-math-content text-sm leading-6 text-slate-700 dark:text-slate-200" reviewIndicator mathFallback/>}
                   {block.uncertain && <div className="mt-2"><UncertaintyBadge reason={block.uncertaintyReason} /></div>}
                 </div>
-              )) : <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-slate-200">{recognition.plainText}</p>}
+              )) : <GeneratedContent markdown={recognition.plainText} className="recognition-math-content text-sm leading-6 text-slate-700 dark:text-slate-200" reviewIndicator mathFallback/>}
               {(uncertainty.length > 0 || result.warnings?.length > 0) && <Alert type="warning" label="Review needed" title="Check highlighted content against the whiteboard image" className="mb-0">{result.warnings?.map((warning, index) => <div key={index}>{warning}</div>)}</Alert>}
             </div>
           )}

@@ -1,40 +1,15 @@
-import { memo, useMemo } from 'react';
+import { memo, useLayoutEffect, useMemo, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeKatex from 'rehype-katex';
 import remarkMath from 'remark-math';
 import { containsQuizSourceReference, normalizeAssistantContent, normalizeGeneratedContent, normalizeQuizDisplayContent, normalizeStudentLessonContent } from '../../utils/generatedContent';
 import { normalizeLessonMathContent } from '../../utils/mathContent';
+import { rehypeMathRenderingContract, remarkMathRenderingContract } from '../../utils/mathRenderingContract';
 
-const REMARK_PLUGINS = [remarkMath];
+const REMARK_PLUGINS = [remarkMath, remarkMathRenderingContract];
 
-function rehypeMathContract(options = {}) {
-  const showReviewFallback = Boolean(options.showReviewFallback);
-  return tree => {
-    const visit = (node, insideDisplay = false) => {
-      if (!node || typeof node !== 'object') return;
-      const classes = Array.isArray(node.properties?.className) ? node.properties.className : [];
-      if (classes.includes('katex-error')) {
-        node.properties = {
-          ...node.properties,
-          className: [...new Set([...classes, showReviewFallback ? 'math-review-needed' : 'math-invalid-hidden'])],
-          title: undefined,
-          role: showReviewFallback ? 'note' : undefined,
-          'aria-label': showReviewFallback ? 'Mathematical expression needs instructor review' : undefined,
-          'aria-hidden': showReviewFallback ? undefined : 'true',
-        };
-        node.children = showReviewFallback ? [{ type: 'text', value: 'Review math' }] : [];
-        return;
-      }
-      const isDisplay = classes.includes('katex-display');
-      if (isDisplay) node.properties.className = [...new Set([...classes, 'math-block', 'math-scroll'])];
-      else if (!insideDisplay && classes.includes('katex')) node.properties.className = [...new Set([...classes, 'math-inline'])];
-      node.children?.forEach(child => visit(child, insideDisplay || isDisplay));
-    };
-    visit(tree);
-  };
-}
-
-function GeneratedContent({ markdown = '', quizText = false, audience = 'internal', assistantText = false, reviewIndicator = false }) {
+function SharedMathMarkdownComponent({ markdown = '', quizText = false, audience = 'internal', assistantText = false, reviewIndicator = false, mathFallback = false, className = '' }) {
+  const rootRef = useRef(null);
   const normalized = useMemo(() => {
     if (audience === 'student') return normalizeStudentLessonContent(markdown);
     if (assistantText) return normalizeAssistantContent(markdown);
@@ -43,16 +18,57 @@ function GeneratedContent({ markdown = '', quizText = false, audience = 'interna
   }, [assistantText, audience, markdown, quizText]);
   const mathResult = useMemo(() => normalizeLessonMathContent(normalized), [normalized]);
   const showReviewIndicator = reviewIndicator && mathResult.needsReview.length > 0 && audience !== 'student';
+  const showReviewFallback = mathFallback || (reviewIndicator && audience !== 'student');
   const rehypePlugins = useMemo(() => [
     [rehypeKatex, { throwOnError: false, errorColor: 'inherit', strict: 'ignore' }],
-    [rehypeMathContract, { showReviewFallback: false }],
-  ], []);
+    [rehypeMathRenderingContract, { showReviewFallback }],
+  ], [showReviewFallback]);
+
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    if (!root) return undefined;
+    let frame = 0;
+    let cancelled = false;
+
+    const classifyWideInlineMath = () => {
+      if (cancelled) return;
+      root.querySelectorAll('.math-inline').forEach(math => {
+        math.classList.remove('is-wide-math');
+        const container = math.closest('p, li, blockquote') || math.parentElement || root;
+        const renderedMath = math.querySelector('.katex') || math;
+        const availableWidth = container.clientWidth;
+        const naturalWidth = Math.ceil(renderedMath.getBoundingClientRect().width || renderedMath.scrollWidth);
+        math.classList.toggle('is-wide-math', availableWidth > 0 && naturalWidth > availableWidth + 1);
+      });
+    };
+    const scheduleClassification = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(classifyWideInlineMath);
+    };
+
+    scheduleClassification();
+    document.fonts?.ready.then(() => { if (!cancelled) scheduleClassification(); });
+    const observer = typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(scheduleClassification);
+    observer?.observe(root);
+
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(frame);
+      observer?.disconnect();
+    };
+  }, [mathResult.content]);
 
   return <div
-    className={`math-content generated-doc-markdown ${mathResult.needsReview.length ? 'has-math-review' : ''}`}
+    ref={rootRef}
+    className={`math-content generated-doc-markdown ${mathResult.needsReview.length ? 'has-math-review' : ''} ${className}`.trim()}
     data-needs-review={mathResult.needsReview.length || undefined}
   >
-    {showReviewIndicator && <div className="math-review-needed" role="note">Review math</div>}
+    {showReviewIndicator && <div className="math-review-needed" role="note">
+      <span>Review math:</span>
+      {mathResult.needsReview.slice(0, 3).map((item, index) => <code key={`${item.original}-${index}`}>{item.original}</code>)}
+    </div>}
     <ReactMarkdown
       remarkPlugins={REMARK_PLUGINS}
       rehypePlugins={rehypePlugins}
@@ -69,4 +85,6 @@ function GeneratedContent({ markdown = '', quizText = false, audience = 'interna
     </ReactMarkdown>
   </div>;
 }
-export default memo(GeneratedContent);
+
+export const SharedMathMarkdown = memo(SharedMathMarkdownComponent);
+export default SharedMathMarkdown;

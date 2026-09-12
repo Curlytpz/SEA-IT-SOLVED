@@ -115,7 +115,7 @@ class GeminiLessonChatProvider extends LessonChatProvider {
   async editDocument({ context, materials, instruction }) {
     const editSystem = `${SYSTEM}\nYou edit the complete GENERATED LESSON DRAFT, never the approved context. Return every supplied current section exactly once, using the same targetSection values and section structure. Apply the professor's lesson-wide instruction to the section content without adding, duplicating, or removing sections. Put rewritten content only in each markdown field. Keep message to one or two concise sentences confirming the overall change; never copy lesson content into message. Preserve valid Markdown and LaTeX.`;
     const result = await this.request(
-      `APPROVED LESSON CONTEXT:\n${JSON.stringify(context)}\n\nCURRENT GENERATED DRAFT SECTIONS:\n${JSON.stringify(materials)}\n\nWHOLE-LESSON EDIT INSTRUCTION:\n${instruction}`,
+      `SOURCE CONTEXT USED BY THE CURRENT GENERATED DRAFT:\n${JSON.stringify(context)}\n\nCURRENT GENERATED DRAFT SECTIONS:\n${JSON.stringify(materials)}\n\nWHOLE-LESSON EDIT INSTRUCTION:\n${instruction}`,
       documentEditSchema, editSystem
     );
     if (!Array.isArray(result.sections) || !result.sections.length || !String(result.message || '').trim()) {
@@ -126,7 +126,7 @@ class GeminiLessonChatProvider extends LessonChatProvider {
   async edit({ context, materials, selectedSection, history, instruction }) {
     const editSystem = `${SYSTEM}\nYou edit only the GENERATED LESSON DRAFT, never the approved context. Resolve the target semantically from section types, titles, current content, the recent conversation, and the visible/recent section when supplied. Return one controlled structured operation. operation describes the requested change, while markdown must contain the complete final section after applying it; never return only an unsafe fragment. Update an existing canonical section instead of adding another section of the same type. Use ADD_SECTION only when the professor explicitly requests a genuinely missing section. Resolve "this section", "this part", "the example above", and similar references from SELECTED OR RECENT SECTION and RECENT CONVERSATION. If no target can be resolved confidently, return CLARIFY with confidence below 0.6. Do not return IDs. Return title as plain text without numbering, Markdown # markers, or emphasis. Keep message to one or two concise sentences confirming the change; never copy the rewritten lesson content into message. In markdown, use unnumbered semantic headings and never combine a list number with a Markdown heading. Preserve valid Markdown and LaTeX.`;
     const result = await this.request(
-      `APPROVED LESSON CONTEXT:\n${JSON.stringify(context)}\n\nCURRENT GENERATED DRAFT SECTIONS:\n${JSON.stringify(materials)}\n\nRECENT CONVERSATION:\n${JSON.stringify(history || [])}\n\nSELECTED OR RECENT SECTION:\n${selectedSection || 'NONE'}\n\nEDIT INSTRUCTION:\n${instruction}`,
+      `SOURCE CONTEXT USED BY THE CURRENT GENERATED DRAFT:\n${JSON.stringify(context)}\n\nCURRENT GENERATED DRAFT SECTIONS:\n${JSON.stringify(materials)}\n\nRECENT CONVERSATION:\n${JSON.stringify(history || [])}\n\nSELECTED OR RECENT SECTION:\n${selectedSection || 'NONE'}\n\nEDIT INSTRUCTION:\n${instruction}`,
       editSchema, editSystem
     );
     if (!editSchema.properties.action.enum.includes(result.action) || !String(result.message || '').trim()) {

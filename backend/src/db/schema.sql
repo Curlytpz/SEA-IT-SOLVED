@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS users (
   auth_version    INTEGER      NOT NULL DEFAULT 0 CHECK (auth_version >= 0),
   role            user_role    NOT NULL,
   status          user_status  NOT NULL DEFAULT 'ACTIVE',
+  successful_login_count INTEGER NOT NULL DEFAULT 0 CHECK (successful_login_count >= 0),
   created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
@@ -657,14 +658,16 @@ CREATE TABLE IF NOT EXISTS lesson_chat_sessions (
   lesson_id UUID NOT NULL REFERENCES lesson_sessions(id) ON DELETE CASCADE,
   context_version_id UUID NOT NULL REFERENCES lesson_context_versions(id) ON DELETE CASCADE,
   instructor_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  title VARCHAR(120) NOT NULL DEFAULT 'New Conversation',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT lesson_chat_sessions_context_unique
-    UNIQUE (lesson_id, context_version_id, instructor_id)
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS lesson_chat_sessions_lesson_idx
   ON lesson_chat_sessions (lesson_id, instructor_id, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS lesson_chat_sessions_context_idx
+  ON lesson_chat_sessions (lesson_id, context_version_id, instructor_id, updated_at DESC);
 
 CREATE TABLE IF NOT EXISTS lesson_chat_messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -829,3 +832,27 @@ ALTER TABLE quiz_attempt_answers ADD COLUMN IF NOT EXISTS ai_review JSONB NULL;
 ALTER TABLE quiz_attempt_answers ADD COLUMN IF NOT EXISTS graded_by UUID NULL REFERENCES users(id) ON DELETE RESTRICT;
 ALTER TABLE quiz_attempt_answers ADD COLUMN IF NOT EXISTS graded_at TIMESTAMPTZ NULL;
 ALTER TABLE quiz_attempt_answers ADD COLUMN IF NOT EXISTS instructor_feedback TEXT NOT NULL DEFAULT '';
+
+-- Post-quiz guided AI tutor. Raw prompts and private grading data are not stored.
+CREATE TABLE IF NOT EXISTS quiz_tutor_reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), attempt_id UUID NOT NULL REFERENCES quiz_attempts(id) ON DELETE CASCADE,
+  student_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status VARCHAR(20) NOT NULL DEFAULT 'PROCESSING' CHECK (status IN ('PROCESSING','READY','FAILED')),
+  report JSONB NULL CHECK (report IS NULL OR jsonb_typeof(report)='object'), model_version VARCHAR(100) NULL,
+  generation_key UUID NULL, failure_code VARCHAR(80) NULL, generated_at TIMESTAMPTZ NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT quiz_tutor_reports_attempt_unique UNIQUE(attempt_id)
+);
+CREATE INDEX IF NOT EXISTS quiz_tutor_reports_student_idx ON quiz_tutor_reports(student_id,updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS quiz_tutor_practices (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), report_id UUID NOT NULL REFERENCES quiz_tutor_reports(id) ON DELETE CASCADE,
+  attempt_id UUID NOT NULL REFERENCES quiz_attempts(id) ON DELETE CASCADE, student_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  practice_order INTEGER NOT NULL CHECK(practice_order>0), topic VARCHAR(255) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'PROCESSING' CHECK(status IN ('PROCESSING','READY','FAILED')),
+  content JSONB NULL CHECK(content IS NULL OR jsonb_typeof(content)='object'), student_answer TEXT NULL, is_correct BOOLEAN NULL,
+  model_version VARCHAR(100) NULL, generation_key UUID NULL, failure_code VARCHAR(80) NULL, generated_at TIMESTAMPTZ NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT quiz_tutor_practices_order_unique UNIQUE(report_id,practice_order)
+);
+CREATE INDEX IF NOT EXISTS quiz_tutor_practices_attempt_idx ON quiz_tutor_practices(attempt_id,practice_order);

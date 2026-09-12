@@ -8,6 +8,7 @@ router.get('/lessons/:lessonId/chat', ...guard, controller.list);
 router.post('/lessons/:lessonId/chat/messages', ...guard, controller.send);
 router.post('/lessons/:lessonId/chat/quiz', ...guard, controller.generateQuiz);
 router.post('/lessons/:lessonId/chat/undo', ...guard, controller.undo);
+router.delete('/lessons/:lessonId/chat/conversations/:conversationId', ...guard, controller.remove);
 
 module.exports = router;
 

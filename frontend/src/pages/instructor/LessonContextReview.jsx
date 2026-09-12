@@ -80,6 +80,7 @@ export default function LessonContextReview() {
   const [confirmApprove, setConfirmApprove] = useState(false);
   const [pdf, setPdf] = useState(null);
   const [selectedMaterialId, setSelectedMaterialId] = useState('');
+  const [documentPageContext, setDocumentPageContext] = useState({ currentPage: 1, pageCount: 0, pageMaterialIds: [] });
   const [changedMaterialId, setChangedMaterialId] = useState('');
   const [documentUpdated, setDocumentUpdated] = useState(false);
   const [documentResetRevision, setDocumentResetRevision] = useState(0);
@@ -549,13 +550,13 @@ export default function LessonContextReview() {
         </div>
         <div className="lesson-ai-workspace">
           <div id="lesson-workspace-document" className={`lesson-ai-pane lesson-ai-document-pane ${workspaceView === 'document' ? 'is-active' : ''} ${documentUpdated ? 'is-document-updated' : ''}`}>
-            <GeneratedLessonDocument materials={intelligence.materials} documentModel={intelligence.document} audience="internal" selectedMaterialId={selectedMaterialId} changedMaterialId={changedMaterialId} editState={documentEditState} onVisibleMaterialChange={setSelectedMaterialId} documentResetKey={`${lessonId}:${documentResetRevision}`}/>
+            <GeneratedLessonDocument materials={intelligence.materials} documentModel={intelligence.document} audience="internal" selectedMaterialId={selectedMaterialId} changedMaterialId={changedMaterialId} editState={documentEditState} onVisibleMaterialChange={setSelectedMaterialId} onPaginationContextChange={setDocumentPageContext} documentResetKey={`${lessonId}:${documentResetRevision}`}/>
             {!intelligence.materials.length && documentEditState.active
               ? <div className="lesson-generation-skeleton" role="status" aria-live="polite" aria-label="Generating lesson notes"><span/><span/><span/><span/><span/></div>
               : !intelligence.materials.length && <div className="lesson-ai-empty-document">Generate lesson notes to create the academic handout.</div>}
           </div>
           <div id="lesson-workspace-assistant" inert={regenerating || undefined} className={`lesson-ai-pane lesson-ai-assistant-pane ${workspaceView === 'assistant' ? 'is-active' : ''}`}>
-            <LessonChatAssistant lessonId={lessonId} lessonTitle={intelligence.document?.title} materials={intelligence.materials} selectedMaterialId={selectedMaterialId} onMaterialsUpdated={updateEditedMaterials} onEditStateChange={updateDocumentEditState} onQuizCreated={() => refreshQuizDraft({ notify: true })} onReviewQuiz={() => refreshQuizDraft({ review: true })} onQuizUpdated={updateEditedQuiz}/>
+            <LessonChatAssistant lessonId={lessonId} lessonTitle={intelligence.document?.title} materials={intelligence.materials} selectedMaterialId={selectedMaterialId} documentPageContext={documentPageContext} onMaterialsUpdated={updateEditedMaterials} onEditStateChange={updateDocumentEditState} onQuizCreated={() => refreshQuizDraft({ notify: true })} onReviewQuiz={() => refreshQuizDraft({ review: true })} onQuizUpdated={updateEditedQuiz}/>
           </div>
         </div>
       </section>

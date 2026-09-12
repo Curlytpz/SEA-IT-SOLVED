@@ -1,5 +1,6 @@
 const asyncHandler=require('../utils/asyncHandler');
 const service=require('../services/phase6.service');
+const tutor=require('../services/quiz-tutor.service');
 const {createLessonExport}=require('../services/lesson-export.service');
 const dashboard=asyncHandler(async(req,res)=>res.json({success:true,data:await service.dashboard(req.user.id)}));
 const lesson=asyncHandler(async(req,res)=>{res.set('Cache-Control','private, no-store');res.json({success:true,data:await service.lessonDetail(req.params.lessonId,req.user.id)});});
@@ -24,4 +25,9 @@ const history=asyncHandler(async(req,res)=>res.json({success:true,data:{attempts
 const quizAnalytics=asyncHandler(async(req,res)=>res.json({success:true,data:await service.quizAnalytics(req.params.quizId,req.user.id)}));
 const sectionAnalytics=asyncHandler(async(req,res)=>res.json({success:true,data:await service.sectionAnalytics(req.params.sectionId,req.user.id)}));
 const systemEvaluation=asyncHandler(async(req,res)=>res.json({success:true,data:await service.systemEvaluation()}));
-module.exports={dashboard,lesson,lessonExport,start,attempt,answer,submit,history,quizAnalytics,sectionAnalytics,systemEvaluation};
+const privateTutorResponse=res=>res.set('Cache-Control','private, no-store');
+const getTutor=asyncHandler(async(req,res)=>privateTutorResponse(res).json({success:true,data:await tutor.getTutor(req.params.attemptId,req.user.id)}));
+const generateTutor=asyncHandler(async(req,res)=>privateTutorResponse(res).json({success:true,data:await tutor.generateTutor(req.params.attemptId,req.user.id)}));
+const generateTutorPractice=asyncHandler(async(req,res)=>privateTutorResponse(res).status(201).json({success:true,data:await tutor.generatePractice(req.params.attemptId,req.user.id)}));
+const checkTutorPractice=asyncHandler(async(req,res)=>privateTutorResponse(res).json({success:true,data:await tutor.checkPractice(req.params.attemptId,req.params.practiceId,req.user.id,req.body?.answer)}));
+module.exports={dashboard,lesson,lessonExport,start,attempt,answer,submit,history,quizAnalytics,sectionAnalytics,systemEvaluation,getTutor,generateTutor,generateTutorPractice,checkTutorPractice};

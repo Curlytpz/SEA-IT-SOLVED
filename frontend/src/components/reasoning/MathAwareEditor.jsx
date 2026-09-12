@@ -6,6 +6,7 @@ import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { normalizeMathEditorContent, serializeMathEditorSegments, splitMathEditorContent } from '../../utils/mathEditorContent';
+import { withSafeInlineMathStyle } from '../../utils/mathRenderingContract';
 import GeneratedContent from './GeneratedContent';
 import './MathAwareEditor.live.css';
 
@@ -95,12 +96,12 @@ function renderLatex(element, latex, emptyLabel = 'New equation') {
   const candidates = [latex, String(latex).replace(/\\\\/g, '\\')];
   for (const candidate of [...new Set(candidates)]) {
     try {
-      katex.render(candidate, element, { displayMode: false, throwOnError: true, strict: 'ignore' });
+      katex.render(withSafeInlineMathStyle(candidate), element, { displayMode: false, throwOnError: true, strict: 'ignore' });
       return;
     } catch { }
   }
   try {
-    katex.render(candidates.at(-1), element, { displayMode: false, throwOnError: false, strict: 'ignore' });
+    katex.render(withSafeInlineMathStyle(candidates.at(-1)), element, { displayMode: false, throwOnError: false, strict: 'ignore' });
   } catch {
     element.textContent = 'Math needs attention';
   }

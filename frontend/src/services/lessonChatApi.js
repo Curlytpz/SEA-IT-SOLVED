@@ -1,7 +1,9 @@
 import api from './api';
 
-export async function getLessonChat(lessonId) {
-  const { data } = await api.get(`/lessons/${lessonId}/chat`);
+export async function getLessonChat(lessonId, conversationId) {
+  const { data } = await api.get(`/lessons/${lessonId}/chat`, {
+    params: conversationId ? { conversationId } : undefined,
+  });
   return data.data;
 }
 
@@ -17,7 +19,12 @@ export async function generateQuizFromLessonChat(lessonId, options) {
   return data.data;
 }
 
-export async function undoLastLessonEdit(lessonId) {
-  const { data } = await api.post(`/lessons/${lessonId}/chat/undo`);
+export async function undoLastLessonEdit(lessonId, payload = {}) {
+  const { data } = await api.post(`/lessons/${lessonId}/chat/undo`, payload);
+  return data.data;
+}
+
+export async function deleteLessonChatConversation(lessonId, conversationId) {
+  const { data } = await api.delete(`/lessons/${lessonId}/chat/conversations/${conversationId}`);
   return data.data;
 }

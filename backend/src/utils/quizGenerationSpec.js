@@ -7,7 +7,7 @@ const TYPES = {
 };
 
 // Parse only new-quiz specifications. Existing-question targeting is intentionally untouched.
-function quizGenerationSpec(prompt = '', count) {
+function quizGenerationSpec(prompt = '', count, structuredQuestionType = null) {
   const types = Array(count).fill(null), counts = {};
   let remaining = String(prompt || ''), specified = false;
   const assign = (position, type) => {
@@ -42,6 +42,13 @@ function quizGenerationSpec(prompt = '', count) {
       if(slot<0)throw new AppError('Question counts and positions cannot fit in this quiz.',422);
       types[slot]=type;
     }
+  }
+  const requestedType = String(structuredQuestionType || '').toUpperCase();
+  if (requestedType && requestedType !== 'MIXED') {
+    if (!Object.prototype.hasOwnProperty.call(TYPES, requestedType)) throw new AppError('The requested quiz question type is not supported.', 422);
+    if (types.some(type => type && type !== requestedType)) throw new AppError('The structured question type conflicts with the requested quiz layout.', 422);
+    for (let index=0;index<types.length;index++) types[index]=requestedType;
+    specified = true;
   }
   // Respect exact counts, even if MCQ itself has a specified count.
   const filler = ['MULTIPLE_CHOICE','TRUE_FALSE'].find(type=>counts[type]==null);

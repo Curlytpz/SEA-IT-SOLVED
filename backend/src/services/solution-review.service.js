@@ -23,6 +23,7 @@ const reviewSchema = z.object({
     step: z.string().trim().max(1000), issue: z.string().trim().min(1).max(1500), suggestion: z.string().trim().max(1500),
   }).strict()).max(12),
   suggested_feedback: z.string().trim().max(4000),
+  suggested_score: z.number().finite().min(0),
   confidence: z.number().min(0).max(1),
 }).strict();
 

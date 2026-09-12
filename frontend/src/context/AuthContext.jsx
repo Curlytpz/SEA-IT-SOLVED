@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback } from 'react';
 import api from '../services/api';
+import { clearStudentDashboardGreetingSession } from '../utils/dashboardGreeting';
 
 const AuthContext = createContext(null);
 
@@ -17,6 +18,7 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await api.post('/auth/login', { email, password, expectedRole });
       const { user: u, token } = data.data;
+      clearStudentDashboardGreetingSession(u.id);
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(u));
       setUser(u);
@@ -31,10 +33,11 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(() => {
+    clearStudentDashboardGreetingSession(user?.id);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setUser(null);
-  }, []);
+  }, [user?.id]);
 
   // Refresh user from /api/auth/me (called on app load to validate stored token)
   const refreshUser = useCallback(async () => {

@@ -1,6 +1,7 @@
 const pool = require('../db/pool');
 const AppError = require('../utils/AppError');
 const { studentSolution } = require('../utils/quizProblemSettings');
+const { deriveStudentQuizState, summarizeStudentQuizzes } = require('../utils/studentQuizState');
 const { ANALYTICS_PERFORMANCE_THRESHOLD_PERCENT } = require('../config/env');
 const { buildLessonDocument } = require('./lesson-document.service');
 
@@ -60,23 +61,52 @@ async function enrolledQuiz(quizId, studentId, client = pool) {
 }
 
 async function dashboard(studentId) {
-  const { rows } = await pool.query(`SELECT l.id,l.title,l.topic,l.started_at,l.ended_at,s.id section_id,s.section_name,
-    sub.code subject_code,sub.name subject_name,u.first_name||' '||u.last_name instructor_name,
-    EXISTS(SELECT 1 FROM generated_lesson_materials gm JOIN lesson_context_versions cv ON cv.id=gm.context_version_id
-      WHERE gm.lesson_id=l.id AND gm.published_at IS NOT NULL AND gm.published_snapshot IS NOT NULL AND cv.status IN ('APPROVED','ARCHIVED')) has_materials,
-    (SELECT COUNT(*)::int FROM lesson_quizzes q WHERE q.lesson_id=l.id AND q.status='PUBLISHED') available_quizzes,
-    (SELECT COUNT(*)::int FROM quiz_attempts a WHERE a.lesson_id=l.id AND a.student_id=$1 AND a.status IN('SUBMITTED','GRADED')) completed_quizzes
-    FROM enrollments e JOIN sections s ON s.id=e.section_id JOIN subjects sub ON sub.id=s.subject_id
-    JOIN users u ON u.id=s.instructor_id JOIN lesson_sessions l ON l.section_id=s.id
-    WHERE e.student_id=$1 AND e.status='APPROVED' AND u.status='ACTIVE' AND l.status='COMPLETED'
-      AND (EXISTS(SELECT 1 FROM generated_lesson_materials gm WHERE gm.lesson_id=l.id AND gm.published_at IS NOT NULL AND gm.published_snapshot IS NOT NULL)
-        OR EXISTS(SELECT 1 FROM lesson_quizzes q WHERE q.lesson_id=l.id AND q.status IN('PUBLISHED','DISABLED','CLOSED'))
-        OR EXISTS(SELECT 1 FROM quiz_attempts a WHERE a.lesson_id=l.id AND a.student_id=$1))
-    ORDER BY COALESCE(l.ended_at,l.created_at) DESC`, [studentId]);
+  const [lessonResult, quizResult] = await Promise.all([
+    pool.query(`SELECT l.id,l.title,l.topic,l.started_at,l.ended_at,s.id section_id,s.section_name,
+      sub.code subject_code,sub.name subject_name,u.first_name||' '||u.last_name instructor_name,
+      EXISTS(SELECT 1 FROM generated_lesson_materials gm JOIN lesson_context_versions cv ON cv.id=gm.context_version_id
+        WHERE gm.lesson_id=l.id AND gm.published_at IS NOT NULL AND gm.published_snapshot IS NOT NULL AND cv.status IN ('APPROVED','ARCHIVED')) has_materials
+      FROM enrollments e JOIN sections s ON s.id=e.section_id JOIN subjects sub ON sub.id=s.subject_id
+      JOIN users u ON u.id=s.instructor_id JOIN lesson_sessions l ON l.section_id=s.id
+      WHERE e.student_id=$1 AND e.status='APPROVED' AND u.status='ACTIVE' AND l.status='COMPLETED'
+        AND (EXISTS(SELECT 1 FROM generated_lesson_materials gm WHERE gm.lesson_id=l.id AND gm.published_at IS NOT NULL AND gm.published_snapshot IS NOT NULL)
+          OR EXISTS(SELECT 1 FROM lesson_quizzes q WHERE q.lesson_id=l.id AND q.status IN('PUBLISHED','DISABLED','CLOSED'))
+          OR EXISTS(SELECT 1 FROM quiz_attempts a WHERE a.lesson_id=l.id AND a.student_id=$1))
+      ORDER BY COALESCE(l.ended_at,l.created_at) DESC`, [studentId]),
+    pool.query(`SELECT q.id,q.lesson_id,q.title,q.instructions,q.status quiz_status,q.published_at,
+      l.title lesson_title,s.id section_id,s.section_name,sub.code subject_code,
+      a.id attempt_id,a.status attempt_status,a.submitted_at,a.score,a.max_score,a.percentage,
+      (SELECT COUNT(*)::int FROM lesson_quiz_questions qq WHERE qq.quiz_id=q.id) question_count
+      FROM lesson_quizzes q JOIN lesson_sessions l ON l.id=q.lesson_id
+      JOIN sections s ON s.id=l.section_id JOIN subjects sub ON sub.id=s.subject_id
+      JOIN users u ON u.id=s.instructor_id JOIN enrollments e ON e.section_id=s.id
+      LEFT JOIN quiz_attempts a ON a.quiz_id=q.id AND a.student_id=$1
+      WHERE e.student_id=$1 AND e.status='APPROVED' AND u.status='ACTIVE' AND l.status='COMPLETED'
+        AND q.status IN('PUBLISHED','DISABLED','CLOSED')
+      ORDER BY COALESCE(q.published_at,q.created_at) DESC`, [studentId]),
+  ]);
+  const quizzes = quizResult.rows.map(row => {
+    const state = deriveStudentQuizState({ quizStatus:row.quiz_status, attemptStatus:row.attempt_status });
+    return { id:row.id,lessonId:row.lesson_id,title:row.title,instructions:row.instructions,quizStatus:row.quiz_status,publishedAt:row.published_at,
+      lessonTitle:row.lesson_title,section:{id:row.section_id,name:row.section_name,subjectCode:row.subject_code},questionCount:row.question_count,
+      ...state,attemptsUsed:row.attempt_id?1:0,maxAttempts:1,retakesSupported:false,
+      attempt:row.attempt_id?{id:row.attempt_id,status:row.attempt_status,submittedAt:row.submitted_at,
+        score:row.attempt_status==='GRADED'?number(row.score):null,maxScore:number(row.max_score),percentage:row.attempt_status==='GRADED'?number(row.percentage):null}:null };
+  });
+  const quizSummary = summarizeStudentQuizzes(quizzes);
+  const quizzesByLesson = new Map();
+  for (const quiz of quizzes) {
+    if (!quizzesByLesson.has(quiz.lessonId)) quizzesByLesson.set(quiz.lessonId, []);
+    quizzesByLesson.get(quiz.lessonId).push(quiz);
+  }
   const history = await quizHistory(studentId, 5);
-  return { lessons: rows.map(row => ({ id:row.id,title:row.title,topic:row.topic,startedAt:row.started_at,endedAt:row.ended_at,
-    section:{id:row.section_id,name:row.section_name,subjectCode:row.subject_code,subjectName:row.subject_name,instructorName:row.instructor_name},
-    hasMaterials:row.has_materials,availableQuizzes:row.available_quizzes,completedQuizzes:row.completed_quizzes })), recentResults: history };
+  return { summary:{availableLessons:lessonResult.rows.length,...quizSummary},
+    lessons:lessonResult.rows.map(row => { const lessonQuizzes=quizzesByLesson.get(row.id)||[],lessonSummary=summarizeStudentQuizzes(lessonQuizzes);return { id:row.id,title:row.title,topic:row.topic,startedAt:row.started_at,endedAt:row.ended_at,
+      section:{id:row.section_id,name:row.section_name,subjectCode:row.subject_code,subjectName:row.subject_name,instructorName:row.instructor_name},
+      hasMaterials:row.has_materials,availableQuizzes:lessonSummary.pendingQuizzes,pendingQuizzes:lessonSummary.pendingQuizzes,
+      submittedQuizzes:lessonSummary.submittedQuizzes,completedQuizzes:lessonSummary.completedQuizzes,
+      awaitingReviewQuizzes:lessonSummary.awaitingReviewQuizzes,gradedQuizzes:lessonSummary.gradedQuizzes,totalQuizzes:lessonSummary.totalQuizzes,
+      quizzes:lessonQuizzes };}),quizzes,recentResults:history };
 }
 
 async function publishedLessonData(lessonId, studentId) {
@@ -115,9 +145,10 @@ async function lessonDetail(lessonId, studentId) {
       (SELECT COUNT(*)::int FROM lesson_quiz_questions qq WHERE qq.quiz_id=q.id) question_count
       FROM lesson_quizzes q LEFT JOIN quiz_attempts a ON a.quiz_id=q.id AND a.student_id=$2
       WHERE q.lesson_id=$1 AND q.status IN('PUBLISHED','DISABLED','CLOSED') ORDER BY q.published_at DESC`, [lessonId, studentId]);
-  return { ...published, quizzes:quizzes.rows.map(row=>({id:row.id,title:row.title,instructions:row.instructions,status:row.status === 'CLOSED' ? 'DISABLED' : row.status,publishedAt:row.published_at,
+  return { ...published, quizzes:quizzes.rows.map(row=>{const state=deriveStudentQuizState({quizStatus:row.status,attemptStatus:row.attempt_status});return {id:row.id,title:row.title,instructions:row.instructions,status:row.status === 'CLOSED' ? 'DISABLED' : row.status,publishedAt:row.published_at,
       available:row.status === 'PUBLISHED',availabilityMessage:row.status === 'PUBLISHED' ? '' : 'This quiz is currently unavailable. Please wait for your instructor to enable it.',
-      questionCount:row.question_count,attempt:row.attempt_id?{id:row.attempt_id,status:row.attempt_status,score:row.attempt_status==='GRADED'?number(row.score):null,maxScore:number(row.max_score),percentage:row.attempt_status==='GRADED'?number(row.percentage):null,submittedAt:row.submitted_at}:null})) };
+      ...state,attemptsUsed:row.attempt_id?1:0,maxAttempts:1,retakesSupported:false,questionCount:row.question_count,
+      attempt:row.attempt_id?{id:row.attempt_id,status:row.attempt_status,score:row.attempt_status==='GRADED'?number(row.score):null,maxScore:number(row.max_score),percentage:row.attempt_status==='GRADED'?number(row.percentage):null,submittedAt:row.submitted_at}:null};}) };
 }
 
 async function attemptPayload(attemptId, studentId, client = pool) {

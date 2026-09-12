@@ -9,9 +9,9 @@ const PAPER_RATIO = 11 / 8.5;
 const LETTER_MEASURE_WIDTH = 794;
 const MOBILE_READER_QUERY = '(max-width: 639px)';
 const MIN_PAGINATED_PAPER_WIDTH = 420;
-const MATH_BLOCK_SAFE_GAP = 12;
-const BLOCK_ROUNDING_SAFE_GAP = 2;
-const MAX_GROUPED_ROWS = 6;
+const MATH_BLOCK_SAFE_GAP = 16;
+const BLOCK_ROUNDING_SAFE_GAP = 8;
+const MAX_GROUPED_ROWS = 3;
 
 function formatDocumentEquation(latex = '') {
   if (latex.length < 88) return latex;
@@ -54,36 +54,67 @@ function canonicalBlockMarkdown(block) {
 
 function semanticMarkdownGroups(blocks = []) {
   const groups = [];
+
   for (let index = 0; index < blocks.length; index += 1) {
     const block = blocks[index];
-    if (block.type === 'math-derivation' && Array.isArray(block.expressions)) {
-      block.expressions.filter(Boolean).forEach(expression => groups.push({
-        markdown: `$$\n${formatDocumentEquation(expression)}\n$$`,
-        type: 'math-block',
-      }));
+
+    // Keep individual equations as separate pagination units.
+    if (
+      block.type === 'math-derivation' &&
+      Array.isArray(block.expressions)
+    ) {
+      block.expressions
+        .filter(Boolean)
+        .forEach(expression => {
+          groups.push({
+            markdown: `$$\n${formatDocumentEquation(expression)}\n$$`,
+            type: 'math-block',
+          });
+        });
+
       continue;
     }
+
     const markdown = canonicalBlockMarkdown(block).trim();
+
     if (!markdown) continue;
+
+    // Keep lists/tables in smaller chunks so the paginator
+    // has more opportunities to fill the remaining page space.
     if (['bullet', 'number', 'table-row'].includes(block.type)) {
       const lines = [markdown];
-      while (blocks[index + 1]?.type === block.type && lines.length < MAX_GROUPED_ROWS) {
+
+      while (
+        blocks[index + 1]?.type === block.type &&
+        lines.length < MAX_GROUPED_ROWS
+      ) {
         index += 1;
-        lines.push(canonicalBlockMarkdown(blocks[index]).trim());
+        lines.push(
+          canonicalBlockMarkdown(blocks[index]).trim()
+        );
       }
-      groups.push({ markdown: lines.join('\n'), type: block.type });
+
+      groups.push({
+        markdown: lines.join('\n'),
+        type: block.type,
+      });
+
       continue;
     }
-    const next = blocks[index + 1];
-    const keepHeading = ['heading', 'subheading'].includes(block.type) && next && next.type !== 'math-review';
-    const keepDefinitionWithMath = block.type === 'paragraph' && markdown.length <= 180 && ['math-block', 'math-derivation'].includes(next?.type);
-    if (keepHeading || keepDefinitionWithMath) {
-      index += 1;
-      groups.push({ markdown: `${markdown}\n\n${canonicalBlockMarkdown(next).trim()}`, type: `${block.type}-group` });
-      continue;
-    }
-    groups.push({ markdown, type: block.type });
+
+    /*
+     * Do NOT merge the heading with the next paragraph here.
+     *
+     * Let shouldKeepWithNext() handle heading placement during
+     * pagination instead. This gives the paginator two measured
+     * blocks instead of one large atomic block.
+     */
+    groups.push({
+      markdown,
+      type: block.type,
+    });
   }
+
   return groups;
 }
 
@@ -135,45 +166,7 @@ function DocumentEditSkeleton({ compact = false }) {
 }
 
 function DocumentMathContent({ markdown, audience }) {
-  const rootRef = useRef(null);
-
-  useLayoutEffect(() => {
-    const root = rootRef.current;
-    if (!root) return undefined;
-    let frame = 0;
-    let lastWidth = 0;
-    let cancelled = false;
-
-    const classifyWideInlineMath = () => {
-      if (cancelled) return;
-      root.querySelectorAll('.math-inline').forEach(math => {
-        math.classList.remove('is-wide-math');
-        const availableWidth = math.parentElement?.clientWidth || root.clientWidth;
-        const naturalWidth = math.scrollWidth;
-        math.classList.toggle('is-wide-math', availableWidth > 0 && naturalWidth > availableWidth + 1);
-      });
-    };
-    const scheduleClassification = () => {
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(classifyWideInlineMath);
-    };
-    scheduleClassification();
-    document.fonts?.ready.then(() => { if (!cancelled) scheduleClassification(); });
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(entries => {
-      const width = entries[0]?.contentRect.width || 0;
-      if (Math.abs(width - lastWidth) < 0.5) return;
-      lastWidth = width;
-      scheduleClassification();
-    });
-    observer?.observe(root);
-    return () => {
-      cancelled = true;
-      window.cancelAnimationFrame(frame);
-      observer?.disconnect();
-    };
-  }, [audience, markdown]);
-
-  return <div ref={rootRef} className="generated-document-math-fit">
+  return <div className="generated-document-math-fit">
     <GeneratedContent markdown={markdown} audience={audience}/>
   </div>;
 }
@@ -219,7 +212,13 @@ function Paper({ blocks, pageNumber, pageCount, geometry, print = false, continu
   const displayScale = continuous || print ? 1 : Math.max(1, numericWidth / LETTER_MEASURE_WIDTH);
   return <article
     className={`generated-document-paper ${print ? 'generated-document-print-page' : continuous ? 'generated-document-continuous-page' : `generated-document-screen-page ${mobileReader ? `generated-document-mobile-page is-${pageMotion || 'initial'}` : ''}`}`}
-    style={{ width: geometry.width, height: continuous || mobileReader ? undefined : geometry.height, minHeight: continuous ? undefined : geometry.height, padding: `${geometry.paddingTop}px ${geometry.paddingX}px ${bottomInset}px`, '--document-paper-scale': displayScale }}
+    style={{
+  width: geometry.width,
+  height: continuous ? undefined : geometry.height,
+  minHeight: continuous ? undefined : geometry.height,
+  padding: `${geometry.paddingTop}px ${geometry.paddingX}px ${bottomInset}px`,
+  '--document-paper-scale': displayScale
+}}
     aria-label={continuous ? 'Lesson document' : `Lesson document page ${pageNumber} of ${pageCount}`}
   >
     <div className="generated-document-flow">
@@ -236,13 +235,10 @@ function samePagination(left, right) {
 }
 
 function shouldKeepWithNext(block) {
-  const markdown = block?.markdown || '';
-  const isHeading = /^\s*#{2,6}\s+/m.test(markdown);
-  const listItems = markdown.split('\n').filter(line => /^\s*(?:[-*+]|\d+[.)])\s+/.test(line));
-  const isShortList = listItems.length > 0 && listItems.length <= 4;
-  return block?.kind === 'section' || isHeading || isShortList;
-}
+  const markdown = block?.markdown?.trim() || '';
 
+  return /^#{2,6}\s+/.test(markdown);
+}
 function measuredBlockHeight(node) {
   const layout = node.getBoundingClientRect();
   let visualTop = layout.top;
@@ -261,7 +257,7 @@ function measuredBlockHeight(node) {
   return Math.ceil(renderedHeight + visualOverflow + mathSafety + BLOCK_ROUNDING_SAFE_GAP);
 }
 
-export default function GeneratedLessonDocument({ materials = [], documentModel, documentMeta, audience = 'internal', selectedMaterialId, changedMaterialId, editState, onVisibleMaterialChange, documentResetKey }) {
+export default function GeneratedLessonDocument({ materials = [], documentModel, documentMeta, audience = 'internal', selectedMaterialId, changedMaterialId, editState, onVisibleMaterialChange, onPaginationContextChange, documentResetKey }) {
   const blocks = useMemo(() => buildBlocks(materials, documentMeta, documentModel), [materials, documentMeta, documentModel]);
   const hostRef = useRef(null);
   const measureRef = useRef(null);
@@ -279,16 +275,16 @@ export default function GeneratedLessonDocument({ materials = [], documentModel,
     return {
       width,
       height: width * PAPER_RATIO,
-      paddingX: Math.max(22, Math.min(80, width * 0.082)),
-      paddingTop: Math.max(32, Math.min(64, width * 0.08)),
-      paddingBottom: Math.max(56, Math.min(80, width * 0.1)),
+      paddingX: Math.max(18, Math.min(64, width * 0.065)),
+      paddingTop: Math.max(24, Math.min(52, width * 0.065)),
+      paddingBottom: Math.max(42, Math.min(64, width * 0.075)),
       footerHeight: Math.max(28, Math.min(36, width * 0.045)),
       bottomSafeArea: PAGE_BOTTOM_SAFE_AREA,
     };
   }, [paperWidth]);
   const mobileStudentReader = audience === 'student' && mobileViewport;
   const continuousReader = !mobileStudentReader && (mobileViewport || paperWidth < MIN_PAGINATED_PAPER_WIDTH);
-  const useCanonicalMeasurement = continuousReader || mobileStudentReader;
+  const useCanonicalMeasurement = continuousReader;
   const measurementGeometry = useMemo(() => useCanonicalMeasurement ? {
     width: LETTER_MEASURE_WIDTH,
     height: LETTER_MEASURE_WIDTH * PAPER_RATIO,
@@ -389,10 +385,14 @@ export default function GeneratedLessonDocument({ materials = [], documentModel,
     setCurrentPage(0);
   }, [documentResetKey]);
   useEffect(() => {
-    if (!onVisibleMaterialChange) return;
     const visibleMaterialId = pages[currentPage]?.find(block => block.materialId)?.materialId || '';
-    onVisibleMaterialChange(visibleMaterialId);
-  }, [currentPage, onVisibleMaterialChange, pages]);
+    onVisibleMaterialChange?.(visibleMaterialId);
+    onPaginationContextChange?.({
+      currentPage: currentPage + 1,
+      pageCount: pages.length,
+      pageMaterialIds: pages.map(page => [...new Set(page.map(block => block.materialId).filter(Boolean))]),
+    });
+  }, [currentPage, onPaginationContextChange, onVisibleMaterialChange, pages]);
 
   const visiblePageDotIndexes = useMemo(() => {
     const visibleCount = Math.min(7, pages.length);
@@ -459,8 +459,13 @@ export default function GeneratedLessonDocument({ materials = [], documentModel,
     >
       {(continuousReader ? blocks.length > 0 : pages[currentPage]) && <Paper key={continuousReader ? 'continuous' : currentPage} blocks={continuousReader ? blocks : pages[currentPage]} pageNumber={currentPage + 1} pageCount={pages.length} geometry={geometry} continuous={continuousReader} mobileReader={mobileStudentReader} pageMotion={pageMotion} selectedMaterialId={selectedMaterialId} changedMaterialId={changedMaterialId} editState={editState} audience={audience}/>} 
       <div
-        ref={measureRef}
-        className="generated-document-measure generated-document-paper"
+        div
+  ref={measureRef}
+  className={`generated-document-measure generated-document-paper ${
+    mobileStudentReader
+      ? 'generated-document-screen-page generated-document-mobile-page'
+      : ''
+  }`}
         style={{ width: measurementGeometry.width, height: 'auto', minHeight: 0, padding: `${measurementGeometry.paddingTop}px ${measurementGeometry.paddingX}px ${measurementGeometry.paddingBottom + measurementGeometry.footerHeight + measurementGeometry.bottomSafeArea}px`, '--document-paper-scale': measurementPaperScale }}
         aria-hidden
       >

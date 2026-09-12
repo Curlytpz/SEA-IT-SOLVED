@@ -33,7 +33,7 @@ export default function QuizSolutionUpload({ attemptId, question, submitted, onU
     {(question.tip || question.formula) && <section aria-label="Stored assistance"><p className="mb-2 text-sm font-medium text-slate-500">Need a little help?</p><div className="grid gap-3 sm:grid-cols-2">
       {[[question.tip,'View Tip',Lightbulb],[question.formula,'View Formula',Sigma]].filter(([text]) => text).map(([text,label,Icon]) => <StoredHelp key={label} text={text} label={label} Icon={Icon}/>)}
     </div></section>}
-    <section className="min-w-0 rounded-xl border border-slate-200 bg-stone-50/70 p-4 sm:p-5 dark:border-slate-700 dark:bg-slate-900">
+    <section className="min-w-0 rounded-xl border border-border bg-surface-subtle p-4 sm:p-5">
       <h3 className="font-semibold">Your handwritten solution</h3><p className="mt-1 text-sm leading-6 text-slate-500">Take a photo or upload an image of your handwritten work.</p>
       {error && <Alert>{error}</Alert>}
       {question.solution && <div className="mt-4"><ProtectedCaptureImage url={question.solution.imageUrl} alt="Your saved handwritten solution" className="max-h-72 w-full rounded-lg object-contain"/><p className="mt-2 flex items-center gap-2 text-sm font-medium text-emerald-700"><Check size={16}/>Solution saved</p></div>}
@@ -53,7 +53,7 @@ export default function QuizSolutionUpload({ attemptId, question, submitted, onU
 function StoredHelp({text,label,Icon}){
   const [open,setOpen]=useState(false);
   const reduced=useReducedMotion();
-  return <details onToggle={event=>setOpen(event.currentTarget.open)} className="rounded-xl border border-primary/15 bg-primary-subtle p-4 dark:border-slate-700 dark:bg-slate-800">
+  return <details onToggle={event=>setOpen(event.currentTarget.open)} className="rounded-xl border border-primary/20 bg-primary-subtle p-4">
     <summary className="cursor-pointer text-sm font-semibold text-primary-subtle-foreground dark:text-primary"><Icon size={16} className="mr-2 inline" aria-hidden="true"/>{label}</summary>
     {open&&<motion.div initial={{opacity:reduced?1:0,y:reduced?0:3}} animate={{opacity:1,y:0}} transition={{duration:reduced?0:.18}} className="mt-3"><GeneratedContent markdown={text} audience="student"/></motion.div>}
   </details>;

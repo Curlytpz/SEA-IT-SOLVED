@@ -392,4 +392,19 @@ async function getApprovedForReasoning(lessonId, instructorId, missingMessage = 
   return safeVersion(version.rows[0], chunks.rows);
 }
 
-module.exports = { buildDraft, tryBuildDraft, get, saveDraft, approve, reopen, getApprovedForReasoning };
+async function getVersionForReasoning(lessonId, instructorId, contextVersionId) {
+  await ownedLesson(lessonId, instructorId);
+  const version = await pool.query(
+    `SELECT * FROM lesson_context_versions
+     WHERE id=$1 AND lesson_id=$2 AND instructor_id=$3 AND status IN ('APPROVED','ARCHIVED')`,
+    [contextVersionId, lessonId, instructorId]
+  );
+  if (!version.rows.length) throw new AppError('The source context for this generated lesson is unavailable.', 409);
+  const chunks = await pool.query(
+    `SELECT * FROM lesson_context_chunks WHERE context_version_id=$1 AND removed=FALSE
+     ORDER BY chunk_order`, [contextVersionId]
+  );
+  return safeVersion(version.rows[0], chunks.rows);
+}
+
+module.exports = { buildDraft, tryBuildDraft, get, saveDraft, approve, reopen, getApprovedForReasoning, getVersionForReasoning };

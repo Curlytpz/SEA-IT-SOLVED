@@ -114,12 +114,12 @@ export default function DashboardLayout({ children }) {
       <div aria-hidden="true" className={`fixed inset-0 z-40 bg-slate-950/45 transition-opacity [transition-duration:260ms] [transition-timing-function:cubic-bezier(.22,1,.36,1)] lg:hidden ${open?'opacity-100':'pointer-events-none opacity-0'}`} onClick={()=>setOpen(false)} />
 
       <aside ref={drawerRef} role={!desktop ? "dialog" : undefined} aria-modal={!desktop && open ? "true" : undefined} aria-label={!desktop ? "Main navigation" : undefined} aria-hidden={!desktop && !open ? "true" : undefined} inert={!desktop && !open ? true : undefined} className={`dashboard-sidebar fixed inset-y-0 left-0 z-50 flex flex-col border-r border-border bg-sidebar text-sidebar-foreground shadow-xl transition-transform [transition-duration:320ms] [transition-timing-function:cubic-bezier(.22,1,.36,1)] lg:z-30 lg:w-64 lg:translate-x-0 ${open?'translate-x-0':'-translate-x-full'}`}>
-        <div className="flex h-20 items-center justify-between border-b border-border px-5">
+        <div className="dashboard-sidebar-header flex h-20 shrink-0 items-center justify-between border-b border-border px-5">
           <BrandLogo tagline />
           <button ref={closeRef} type="button" onClick={()=>{setOpen(false);menuRef.current?.focus();}} aria-label="Close navigation" className="grid h-11 w-11 place-items-center rounded-xl text-muted-foreground transition-colors duration-200 hover:bg-primary-subtle hover:text-primary-subtle-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"><X size={19}/></button>
         </div>
 
-        <div className="mx-3 mt-4 rounded-2xl border border-border bg-surface p-3.5 shadow-sm">
+        <div className="dashboard-sidebar-profile mx-3 mt-4 shrink-0 rounded-2xl border border-border bg-surface p-3.5 shadow-sm">
           <div className="flex items-center gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/15 text-primary ring-1 ring-inset ring-primary/20"><RoleIcon size={19}/></span>
             <div className="min-w-0">
@@ -129,7 +129,7 @@ export default function DashboardLayout({ children }) {
           </div>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-3 py-5" aria-label="Main navigation">
+        <nav className="dashboard-sidebar-nav min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-5" aria-label="Main navigation">
           <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[.2em] text-muted-foreground">Workspace</p>
           <div className="space-y-1">
             {links.map(({to,label,icon:NavIcon})=><NavLink key={to} to={to} end={to.split('/').length<=2}
@@ -139,7 +139,7 @@ export default function DashboardLayout({ children }) {
           </div>
         </nav>
 
-        <div className="space-y-2 border-t border-border p-3">
+        <div className="dashboard-sidebar-footer shrink-0 space-y-2 border-t border-border p-3">
           <ThemeToggle />
           <button type="button" onClick={signOut} className="group flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-xs font-semibold text-muted-foreground transition-colors duration-200 hover:bg-destructive/10 hover:text-destructive focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive">
             <LogOut size={17} className="transition-transform group-hover:translate-x-0.5"/>Sign out

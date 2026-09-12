@@ -19,6 +19,12 @@ export default defineConfig({
 
   server: {
     port: 5173,
+
+    allowedHosts: [
+      'localhost',
+      'steel-democracy-say-deborah.trycloudflare.com',
+    ],
+
     proxy: {
       '/api': {
         target: 'http://localhost:4000',

@@ -104,12 +104,23 @@ function validateLatex(value) {
   }
 }
 
+function readableMathFallback(value, delimiters) {
+  const source = String(value || '').trim();
+  if (!source) return '';
+  if (delimiters === '$$') {
+    return `\n\n\`\`\`latex\n${source.replace(/\`\`\`/g, '\` \` \`')}\n\`\`\`\n\n`;
+  }
+  const longestFence = Math.max(0, ...([...source.matchAll(/\`+/g)].map(match => match[0].length)));
+  const fence = '`'.repeat(Math.max(1, longestFence + 1));
+  return `${fence}${source.replace(/\r?\n+/g, ' ')}${fence}`;
+}
+
 function recordMathFragment(rawValue, state, delimiters = '$') {
   const latex = repairStructuralEscapes(rawValue);
   if (!latex) return '';
   if (!validateLatex(latex)) {
     state.needsReview.push({ original: String(rawValue || ''), reason: 'KATEX_PARSE_ERROR' });
-    return '';
+    return readableMathFallback(rawValue, delimiters);
   }
   return delimiters === '$$' ? `$$\n${latex}\n$$` : `$${latex}$`;
 }

@@ -18,7 +18,7 @@ const chat = require('../src/services/lesson-chat.service');
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
 const file = { buffer: PNG, size: PNG.length, mimetype: 'image/png', originalname: 'work.png' };
 const normalized = { plainText: 'Apply the power rule.', mathExpressions: [{ latex: "f'(x)=2x", display: true }], warnings: [] };
-const advisory = { assessment: 'LIKELY_CORRECT', summary: 'ADVISORY_PRIVATE', strengths: ['Power rule'], possible_errors: [], suggested_feedback: 'Explain your reasoning.', confidence: 0.8 };
+const advisory = { assessment: 'LIKELY_CORRECT', summary: 'ADVISORY_PRIVATE', strengths: ['Power rule'], possible_errors: [], suggested_feedback: 'Explain your reasoning.', suggested_score: 7.5, confidence: 0.8 };
 const status = code => error => error.statusCode === code;
 
 async function main() {
@@ -34,6 +34,7 @@ async function main() {
   Reasoning.prototype.reviewSolution = async input => {
     aiCalls++;
     assert.equal(input.activity.expectedSolutionOrRubric, 'HIDDEN_RUBRIC');
+    assert.equal(input.activity.maxPoints,10);
     assert(input.studentSolution.extractedText.length <= 12000);
     assert(input.approvedLessonContextExcerpt.length <= env.SOLUTION_REVIEW_CONTEXT_MAX_CHARS);
     return advisory;
@@ -212,9 +213,12 @@ async function main() {
     assert.equal((await q2row()).recognition_status,'READY');
     await solutions.analyze(first.id,instructor);
     assert.equal(aiCalls,1); assert.equal((await q2row()).points_awarded,null); assert.equal((await q2row()).graded_at,null);
+    assert.equal((await q2row()).ai_review.suggested_score,7.5);
+    assert.equal((await q2row()).ai_review.max_score,10);
     assert.equal((await attempts.attemptPayload(ids.attempt,student)).attempt.status,'SUBMITTED');
     assert(!JSON.stringify(await attempts.attemptPayload(ids.attempt,student)).includes('ADVISORY_PRIVATE'));
     await assert.rejects(()=>solutions.analyze(first.id,instructor,{review:async()=>({...advisory,officialScore:10})}),status(422));
+    await assert.rejects(()=>solutions.analyze(first.id,instructor,{review:async()=>({...advisory,suggested_score:11})}),status(422));
     await assert.rejects(()=>solutions.analyze(first.id,instructor,{review:async()=>{throw new Error('simulated AI failure');}}),/simulated AI failure/);
     assert.equal((await q2row()).ai_review.summary,'ADVISORY_PRIVATE');
     await assert.rejects(()=>solutions.analyze(first.id,otherInstructor),status(404));
@@ -224,6 +228,15 @@ async function main() {
     await assert.rejects(()=>solutions.grade(first.id,instructor,{pointsAwarded:11}),status(422));
     await assert.rejects(()=>solutions.grade(first.id,instructor,{pointsAwarded:''}),status(422));
     await solutions.grade(first.id,instructor,{pointsAwarded:7,instructorFeedback:'Show the power-rule statement.'});
+    const officialBeforeReprocess=await q2row();
+    const reprocessed=await solutions.analyze(first.id,instructor,{review:async()=>({...advisory,summary:'REPROCESSED_ADVISORY_PRIVATE',suggested_score:6})});
+    const officialAfterReprocess=await q2row();
+    assert.equal(reprocessed.aiReview.summary,'REPROCESSED_ADVISORY_PRIVATE');
+    assert.equal(officialAfterReprocess.points_awarded,officialBeforeReprocess.points_awarded);
+    assert.equal(officialAfterReprocess.instructor_feedback,officialBeforeReprocess.instructor_feedback);
+    assert.equal(officialAfterReprocess.graded_by,officialBeforeReprocess.graded_by);
+    assert.equal(officialAfterReprocess.graded_at.toISOString(),officialBeforeReprocess.graded_at.toISOString());
+    console.log('PASS advisory reprocess replaces only AI suggestion after grading; official decision preserved');
     result=await attempts.attemptPayload(ids.attempt,student);
     assert.equal(result.attempt.status,'SUBMITTED'); assert.equal(result.attempt.score,null);
     assert.equal(result.questions[1].pointsAwarded,7);

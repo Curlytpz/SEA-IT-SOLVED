@@ -76,6 +76,28 @@ function materialRevision(rows) {
     .join('|');
 }
 
+async function currentGeneratedDocument(lessonId, instructorId, client = pool, { forUpdate = false } = {}) {
+  const contextResult = await client.query(
+    `SELECT gm.context_version_id
+     FROM generated_lesson_materials gm
+     JOIN lesson_context_versions version ON version.id=gm.context_version_id
+     WHERE gm.lesson_id=$1 AND gm.instructor_id=$2
+       AND version.status IN ('APPROVED','ARCHIVED')
+     ORDER BY version.version_number DESC,gm.updated_at DESC,gm.generated_at DESC,gm.id DESC
+     LIMIT 1`,
+    [lessonId, instructorId]
+  );
+  const contextVersionId = contextResult.rows[0]?.context_version_id || null;
+  if (!contextVersionId) return { contextVersionId: null, rows: [] };
+  const result = await client.query(
+    `SELECT * FROM generated_lesson_materials
+     WHERE lesson_id=$1 AND instructor_id=$2 AND context_version_id=$3 AND removed=FALSE
+     ORDER BY COALESCE(display_order,999),generated_at,id${forUpdate ? ' FOR UPDATE' : ''}`,
+    [lessonId, instructorId, contextVersionId]
+  );
+  return { contextVersionId, rows: result.rows };
+}
+
 function sourceLabel(chunk) {
   const source = chunk.source || {};
   if (chunk.type === 'WHITEBOARD') return `Whiteboard Page ${source.pageNumber}`;
@@ -153,7 +175,7 @@ function generationOptions(options = {}) {
   const difficulty = String(options.difficulty || '').trim().toUpperCase();
   const questionCount = Number(options.questionCount ?? 10);
   if (!QUIZ_DIFFICULTIES.has(difficulty)) throw new AppError('Choose a quiz difficulty: EASY, MEDIUM, or HARD.', 400);
-  if (!Number.isInteger(questionCount) || questionCount < 5 || questionCount > 20) throw new AppError('Question count must be a whole number from 5 to 20.', 400);
+  if (!Number.isInteger(questionCount) || questionCount < 1 || questionCount > 20) throw new AppError('Question count must be a whole number from 1 to 20.', 400);
   return { difficulty, questionCount };
 }
 
@@ -372,7 +394,7 @@ function safeQuiz(row, questions = []) {
 async function generateQuiz(lessonId, instructorId, options = {}) {
   const { context, payload } = await approvedPayload(lessonId, instructorId);
   const { difficulty, questionCount } = generationOptions(options);
-  const specification = quizGenerationSpec(options.prompt || '', questionCount);
+  const specification = quizGenerationSpec(options.prompt || '', questionCount, options.questionType);
   const allowedSources = new Set(payload.map(item => item.source));
   const result = await geminiInteractive.run(
     async ({ attempt }) => normalizeQuiz(
@@ -894,4 +916,4 @@ async function publishQuiz(quizId, instructorId) {
   }
 }
 
-module.exports = { generateMaterials, publishMaterials, generateQuiz, list, updateQuiz, updateQuestion, replaceQuizQuestions, applyQuizEdit, deleteQuestion, publishQuiz, closeQuiz, setQuizStatus, deleteQuiz, archiveDuplicateMaterials, materialRevision };
+module.exports = { generateMaterials, publishMaterials, generateQuiz, list, updateQuiz, updateQuestion, replaceQuizQuestions, applyQuizEdit, deleteQuestion, publishQuiz, closeQuiz, setQuizStatus, deleteQuiz, archiveDuplicateMaterials, materialRevision, currentGeneratedDocument };

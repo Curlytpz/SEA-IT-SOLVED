@@ -3,6 +3,7 @@ import { BookOpen } from '../icons';
 import MathExpression from './MathExpression';
 import RecognitionStatusBadge from './RecognitionStatusBadge';
 import UncertaintyBadge from './UncertaintyBadge';
+import GeneratedContent from '../reasoning/GeneratedContent';
 
 function failureText(recognition){return recognition?.failureMessage||'The complete lesson could not be compiled. Please try again.';}
 
@@ -21,7 +22,7 @@ export default function CompiledLessonRecognition({ recognition, selectedPage, o
         <div className="mb-3 flex gap-2 overflow-x-auto pb-1" aria-label="Compiled page navigation">{pages.map(page=><button key={page.captureId||page.pageNumber} type="button" onClick={()=>onSelectPage(page.pageNumber)} className={`min-h-11 shrink-0 rounded-lg px-3 text-xs font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selectedPage===page.pageNumber?'bg-primary text-primary-foreground':'bg-secondary text-muted-foreground hover:bg-primary-subtle hover:text-primary-subtle-foreground'}`}>Page {page.pageNumber}</button>)}</div>
         <div className="max-h-[680px] space-y-4 overflow-y-auto overscroll-contain pr-1 sm:pr-2">{pages.map(page=><article key={page.captureId||page.pageNumber} id={`recognized-page-${page.pageNumber}`} className={`rounded-2xl border p-3 sm:p-4 ${selectedPage===page.pageNumber?'border-primary/40 bg-primary-subtle':'border-border bg-card/45'}`}>
           <h3 className="mb-3 text-sm font-bold text-slate-900 dark:text-white">Page {page.pageNumber}</h3>
-          <div className="space-y-2">{page.blocks?.length?page.blocks.map((block,index)=><div key={`${block.order}-${index}`} className="rounded-xl bg-white/70 p-3 dark:bg-white/[.045]">{block.type==='math'?<MathExpression latex={block.latex}/>:<p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700 dark:text-slate-200">{block.text}</p>}{block.uncertain&&<div className="mt-2"><UncertaintyBadge reason={block.uncertaintyReason}/></div>}</div>):<p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700 dark:text-slate-200">{page.plainText||'No visible content recognized.'}</p>}</div>
+          <div className="space-y-2">{page.blocks?.length?page.blocks.map((block,index)=><div key={`${block.order}-${index}`} className="rounded-xl bg-white/70 p-3 dark:bg-white/[.045]">{block.type==='math'?<MathExpression latex={block.latex}/>:<GeneratedContent markdown={block.text} className="recognition-math-content text-sm leading-6 text-slate-700 dark:text-slate-200" reviewIndicator mathFallback/>}{block.uncertain&&<div className="mt-2"><UncertaintyBadge reason={block.uncertaintyReason}/></div>}</div>):<GeneratedContent markdown={page.plainText||'No visible content recognized.'} className="recognition-math-content text-sm leading-6 text-slate-700 dark:text-slate-200" reviewIndicator mathFallback/>}</div>
           {page.warnings?.map((warning,index)=><p key={index} className="mt-2 text-xs text-amber-600 dark:text-amber-300">{warning}</p>)}
         </article>)}</div>
         {result.warnings?.length>0&&<Alert type="warning" className="mt-4 mb-0">{result.warnings.join(' ')}</Alert>}

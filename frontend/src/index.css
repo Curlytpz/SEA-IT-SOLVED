@@ -4781,8 +4781,20 @@ mask-position:
 }
 
 @media (hover: none), (pointer: coarse) {
-  .landing-interactive-wordmark.is-giant .landing-interactive-wordmark-reveal {
-    opacity: 1;
+  .landing-interactive-wordmark.is-giant {
+    width: calc(100% - 1rem);
+    margin-inline: auto;
+    overflow: visible;
+  }
+
+  .landing-interactive-wordmark.is-giant
+    .landing-interactive-wordmark-content {
+    filter:
+      drop-shadow(0 0 5px hsl(var(--primary) / .45))
+      drop-shadow(0 0 14px hsl(var(--primary) / .28))
+      drop-shadow(0 0 30px hsl(var(--primary) / .14)) !important;
+
+    opacity: .9 !important;
   }
 }
 
@@ -4795,6 +4807,9 @@ mask-position:
   background:
     radial-gradient(circle at 50% 100%, hsl(var(--primary) / .13), transparent 47%),
     hsl(var(--sidebar));
+
+  overflow: visible;
+  padding-inline: 1rem;
 }
 
 .landing-footer-wordmark {

@@ -1,11 +1,10 @@
-import { motion, useReducedMotion } from 'framer-motion';
 import { ArrowRight, BookOpenCheck, Download, FileText, LockKeyhole } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import MathExpression from '../recognition/MathExpression';
 import GlowCard from './GlowCard';
-import { landingMotion, landingStyles } from './landingStyles';
+import { landingStyles } from './landingStyles';
 
-function StudentLessonPreview({ reducedMotion }) {
+function StudentLessonPreview() {
   return (
     <GlowCard
       tone="light"
@@ -41,13 +40,7 @@ function StudentLessonPreview({ reducedMotion }) {
           </div>
         </article>
 
-        <motion.aside
-          initial={reducedMotion ? false : { opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={landingMotion.viewport}
-          transition={reducedMotion ? { duration: 0 } : { ...landingMotion.reveal, delay: 0.16 }}
-          className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1"
-        >
+        <aside className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
           <div className="rounded-xl border border-border bg-card p-4">
             <div className="flex items-center justify-between gap-3">
               <span className="text-[10px] font-semibold text-primary-subtle-foreground">LESSON QUIZ</span>
@@ -78,24 +71,17 @@ function StudentLessonPreview({ reducedMotion }) {
               <LockKeyhole size={12} /> Available only to enrolled students
             </p>
           </div>
-        </motion.aside>
+        </aside>
       </div>
     </GlowCard>
   );
 }
 
 export default function StudentExperience() {
-  const reducedMotion = useReducedMotion();
-
   return (
     <section id="students" className={`landing-section-light ${landingStyles.section} overflow-clip border-y border-border bg-background text-foreground`}>
       <div className={`${landingStyles.container} grid items-center gap-12 lg:grid-cols-[0.35fr_0.65fr] lg:gap-16 xl:gap-24`}>
-        <motion.header
-          initial={reducedMotion ? false : { opacity: 0, x: -24 }}
-          whileInView={{ opacity: 1, x: 0 }}
-          viewport={landingMotion.viewport}
-          transition={reducedMotion ? { duration: 0 } : landingMotion.reveal}
-        >
+        <header data-landing-reveal>
           <p className={landingStyles.eyebrowDark}>Learn</p>
           <h2 className={`${landingStyles.heading} mt-5 max-w-[11ch]`}>Approved mathematics, ready when students need it.</h2>
           <p className={`${landingStyles.bodyDark} mt-7 max-w-[29rem]`}>
@@ -106,17 +92,11 @@ export default function StudentExperience() {
               Create Student Account <ArrowRight size={17} />
             </Link>
           </div>
-        </motion.header>
+        </header>
 
-        <motion.div
-          initial={reducedMotion ? false : { opacity: 0, y: 22, scale: 0.985 }}
-          whileInView={{ opacity: 1, y: 0, scale: 1 }}
-          viewport={landingMotion.viewport}
-          transition={reducedMotion ? { duration: 0 } : landingMotion.reveal}
-          className="min-w-0"
-        >
-          <StudentLessonPreview reducedMotion={reducedMotion} />
-        </motion.div>
+        <div data-landing-product className="min-w-0">
+          <StudentLessonPreview />
+        </div>
       </div>
     </section>
   );

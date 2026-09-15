@@ -1,4 +1,3 @@
-import { motion, useReducedMotion } from 'framer-motion';
 import {
   BarChart3,
   BookOpenCheck,
@@ -14,7 +13,7 @@ import landingWhiteboard from '../../assets/landing-whiteboard.jpg';
 import MathExpression from '../recognition/MathExpression';
 import GlowCard from './GlowCard';
 import GlowCardGrid from './GlowCardGrid';
-import { landingMotion, landingStyles } from './landingStyles';
+import { landingStyles } from './landingStyles';
 
 const SUPPORTING_FEATURES = [
   {
@@ -52,15 +51,6 @@ const SECONDARY_FEATURES = [
   },
 ];
 
-const cardVariant = {
-  hidden: { opacity: 0, y: 24 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.55, ease: [0.16, 1, 0.3, 1] },
-  },
-};
-
 function CapabilityIcon({ icon: Icon }) {
   return (
     <span className="capability-icon grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/[0.045] text-primary">
@@ -70,36 +60,23 @@ function CapabilityIcon({ icon: Icon }) {
 }
 
 export default function FeatureGrid() {
-  const reducedMotion = useReducedMotion();
-
   return (
     <section id="features" className={`landing-section-dark landing-noise relative overflow-clip bg-background text-foreground ${landingStyles.section}`}>
       <div aria-hidden="true" className="pointer-events-none absolute right-[-16rem] top-12 h-[620px] w-[620px] rounded-full" style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.11), transparent 68%)' }} />
 
       <div className={`${landingStyles.container} relative grid items-start gap-14 lg:grid-cols-[0.36fr_0.64fr] lg:gap-16 xl:gap-24`}>
-        <motion.header
-          initial={reducedMotion ? false : { opacity: 0, x: -24 }}
-          whileInView={{ opacity: 1, x: 0 }}
-          viewport={landingMotion.viewport}
-          transition={reducedMotion ? { duration: 0 } : landingMotion.reveal}
-        >
+        <header data-landing-reveal>
           <p className={landingStyles.eyebrowLight}>Everything you need</p>
           <h2 className={`${landingStyles.heading} mt-5 max-w-[11ch]`}>Built around the real mathematics lesson workflow.</h2>
           <p className={`${landingStyles.bodyLight} mt-7 max-w-[31rem]`}>
             One connected system preserves classroom evidence, keeps academic review visible, and carries approved learning into every student experience.
           </p>
-        </motion.header>
+        </header>
 
         <GlowCardGrid className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="contents">
-            <motion.div
-              variants={cardVariant}
-              initial={reducedMotion ? false : 'hidden'}
-              whileInView="visible"
-              viewport={landingMotion.viewport}
-              className="sm:col-span-2"
-            >
-              <GlowCard trackPointer={false} className="min-h-[390px] rounded-[22px] border-border bg-sidebar">
+            <div data-landing-card className="sm:col-span-2">
+              <GlowCard tilt className="min-h-[390px] rounded-[22px] border-border bg-sidebar">
                 <header className="flex flex-wrap items-center gap-3 px-5 border-b min-h-16 border-border sm:px-7">
                   <CapabilityIcon icon={Camera} />
                   <div>
@@ -114,7 +91,7 @@ export default function FeatureGrid() {
                 <div className="grid min-h-[320px] lg:grid-cols-[1.12fr_0.88fr]">
                   <div className="relative grid min-h-[230px] place-items-center overflow-hidden border-b border-border bg-background p-3 lg:border-b-0 lg:border-r sm:p-5">
                     <div aria-hidden="true" className="absolute inset-0" style={{ background: 'radial-gradient(circle at 54% 30%, hsl(var(--primary) / 0.09), transparent 58%)' }} />
-                    <img src={landingWhiteboard} alt="Captured calculus whiteboard awaiting instructor review" className="relative z-10 max-h-[310px] w-full object-contain" />
+                    <img src={landingWhiteboard} alt="Captured calculus whiteboard awaiting instructor review" width="720" height="360" loading="lazy" decoding="async" className="relative z-10 max-h-[310px] w-full object-contain" />
                     <span className="absolute left-4 top-4 z-20 rounded-lg border border-white/10 bg-background/90 px-3 py-2 text-[10px] font-semibold text-foreground">Corrected whiteboard capture</span>
                   </div>
 
@@ -134,32 +111,20 @@ export default function FeatureGrid() {
                   </article>
                 </div>
               </GlowCard>
-            </motion.div>
+            </div>
 
             {SUPPORTING_FEATURES.map(({ icon, label, description }) => (
-              <motion.div
-                key={label}
-                variants={cardVariant}
-                initial={reducedMotion ? false : 'hidden'}
-                whileInView="visible"
-                viewport={landingMotion.viewport}
-              >
-                <GlowCard trackPointer={false} className="h-full min-h-[190px] p-6 sm:p-7">
+              <div key={label} data-landing-card>
+                <GlowCard tilt className="h-full min-h-[190px] p-6 sm:p-7">
                   <CapabilityIcon icon={icon} />
                   <h3 className="mt-6 text-sm font-semibold text-foreground">{label}</h3>
                   <p className="mt-2.5 text-[13px] leading-6 text-muted-foreground">{description}</p>
                 </GlowCard>
-              </motion.div>
+              </div>
             ))}
 
-            <motion.div
-              variants={cardVariant}
-              initial={reducedMotion ? false : 'hidden'}
-              whileInView="visible"
-              viewport={landingMotion.viewport}
-              className="sm:col-span-2"
-            >
-              <GlowCard trackPointer={false} className="rounded-[22px]">
+            <div data-landing-card className="sm:col-span-2">
+              <GlowCard tilt className="rounded-[22px]">
                 <div className="grid divide-y divide-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">
                   {SECONDARY_FEATURES.map(({ icon, label, description }) => (
                     <article key={label} className="flex min-w-0 gap-4 p-6 sm:p-7">
@@ -172,7 +137,7 @@ export default function FeatureGrid() {
                   ))}
                 </div>
               </GlowCard>
-            </motion.div>
+            </div>
           </div>
         </GlowCardGrid>
       </div>

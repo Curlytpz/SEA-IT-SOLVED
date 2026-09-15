@@ -2544,7 +2544,10 @@ pre {
 
 #how-it-works,
 #instructors,
-#students {
+#students,
+#product,
+#features,
+#top {
   scroll-margin-top: 5.75rem;
 }
 
@@ -4347,10 +4350,6 @@ pre {
 .dark .lesson-generation-overlay { border-color:hsl(var(--input)); background:hsl(var(--surface-elevated) / .96); color:hsl(var(--foreground)); }
 @media (prefers-reduced-motion: reduce) { .lesson-generation-skeleton span { animation: none; opacity: .72; } }
 
-@media (prefers-reduced-motion: reduce) {
-  /* Framer Motion handles landing-page reduced motion via useReducedMotion(). */
-}
-
 /* Shared landing panel depth and pointer spotlight. GlowCard and GlowCardGrid
    provide the coordinates; touch and reduced-motion users keep stable panels. */
 .glow-card {
@@ -4504,6 +4503,420 @@ pre {
   }
 }
 
+/* Landing scroll narrative. GSAP owns scroll-linked transforms while these
+   rules preserve readable, usable layouts before JS and with reduced motion. */
+.landing-hero {
+  overflow: clip;
+}
+
+.landing-wave-background {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  contain: paint;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.landing-wave-canvas {
+  position: absolute;
+  top: -8%;
+  left: 50%;
+  width: max(1560px, 138vw);
+  height: 116%;
+  overflow: visible;
+  transform: translateX(-50%);
+}
+
+.landing-wave :where(use) {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.landing-wave {
+  mix-blend-mode: screen;
+}
+
+.landing-wave-haze {
+  stroke-width: clamp(112px, 9vw, 164px);
+  opacity: .15;
+}
+
+.landing-wave-body {
+  stroke-width: clamp(72px, 6vw, 108px);
+  opacity: .48;
+}
+
+.landing-wave-core {
+  stroke-width: clamp(28px, 2.6vw, 48px);
+  opacity: .24;
+}
+
+.landing-wave--middle {
+  opacity: .44;
+}
+
+.landing-wave--near {
+  opacity: .5;
+}
+
+.landing-wave-background.is-compact .landing-wave-canvas {
+  top: -45%;
+  height: 190%;
+  opacity: .82;
+}
+
+.landing-statement {
+  position: relative;
+  min-height: 155svh;
+  overflow: clip;
+  background:
+    radial-gradient(circle at 76% 46%, hsl(var(--primary) / .12), transparent 34rem),
+    linear-gradient(180deg, hsl(var(--sidebar)), hsl(var(--background)) 45%, hsl(var(--sidebar)));
+  color: hsl(var(--foreground));
+}
+
+.landing-statement-sticky {
+  position: sticky;
+  top: 72px;
+  display: grid;
+  min-height: calc(100svh - 72px);
+  align-items: center;
+  overflow: hidden;
+  padding-block: clamp(5rem, 12vw, 10rem);
+}
+
+.landing-statement-copy {
+  display: flex;
+  max-width: 15ch;
+  flex-wrap: wrap;
+  gap: .03em .2em;
+  margin-top: 1.6rem;
+  font-size: clamp(3.1rem, 8.1vw, 8.8rem);
+  font-weight: 650;
+  letter-spacing: -.065em;
+  line-height: .9;
+  text-wrap: balance;
+}
+
+.landing-scroll-word {
+  display: inline-block;
+  will-change: transform, opacity, filter;
+}
+
+.landing-scroll-word.is-accent {
+  color: hsl(var(--primary));
+}
+
+.landing-workflow {
+  background:
+    linear-gradient(180deg, hsl(var(--background)), hsl(var(--surface-subtle)) 50%, hsl(var(--background)));
+}
+
+.landing-workflow-desktop {
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.landing-workflow-copy:not(:first-child),
+.landing-workflow-visual:not(:first-child),
+.landing-workflow-glow:not(:first-child),
+.landing-workflow-desktop .landing-workflow-notice {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.landing-workflow-notice {
+  z-index: 30;
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  gap: .5rem;
+  border: 1px solid hsl(var(--primary) / .22);
+  border-radius: 999px;
+  background: hsl(var(--background) / .9);
+  padding: .42rem .72rem;
+  color: hsl(var(--primary-subtle-foreground));
+  font-size: .66rem;
+  font-weight: 750;
+  letter-spacing: .04em;
+  box-shadow: 0 16px 38px -25px hsl(var(--foreground) / .38);
+  backdrop-filter: blur(2.5px);
+}
+
+.landing-workflow-panel {
+  position: relative;
+  min-width: 0;
+}
+
+.landing-workflow-panel > .landing-workflow-notice {
+  position: absolute;
+  top: 0;
+  margin: 0;
+  transform: translateY(-50%);
+}
+
+.landing-workflow-desktop .landing-workflow-panel > .landing-workflow-notice {
+  right: 1.25rem;
+}
+
+.landing-workflow-mobile-panel > .landing-workflow-notice {
+  left: .25rem;
+}
+
+.landing-workflow-mobile-step,
+.landing-workflow-mobile-visual {
+  min-width: 0;
+}
+
+.landing-interactive-wordmark {
+  --wordmark-light-x: 50%;
+  --wordmark-light-y: 50%;
+
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: .75rem;
+}
+
+.landing-interactive-wordmark-content {
+  position: relative;
+  z-index: 1;
+  display: inherit;
+  width: 100%;
+}
+
+.landing-interactive-wordmark-light {
+  position: absolute;
+  z-index: 2;
+  top: -60%;
+  bottom: -60%;
+  left: var(--wordmark-light-x);
+  width: min(42%, 12rem);
+  background: linear-gradient(90deg, transparent, hsl(var(--primary) / .26), hsl(var(--foreground) / .17), transparent);
+  content: '';
+  filter: blur(2.5px);
+  opacity: 0.65;
+  pointer-events: none;
+  transform: translateX(-50%) skewX(-13deg);
+  transition: opacity 320ms ease;
+}
+
+.landing-interactive-wordmark:hover .landing-interactive-wordmark-light {
+  opacity: .72;
+}
+
+.landing-interactive-wordmark.is-giant {
+  display: block;
+  overflow: visible;
+  border-radius: 0;
+}
+
+.landing-interactive-wordmark.is-giant .landing-interactive-wordmark-content {
+  filter: blur(clamp(1.5px, .18vw, 2.5px));
+  opacity: .62;
+  transition: filter 520ms ease, opacity 520ms ease;
+}
+
+.landing-interactive-wordmark-reveal {
+  --wordmark-slash-width: clamp(5rem, 8vw, 8.5rem);
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  display: block;
+  width: 100%;
+  opacity: 0;
+  pointer-events: none;
+-webkit-mask-image: linear-gradient( 106deg, transparent 5%, rgb(0 0 0 / .08) 25%, rgb(0 0 0 / .65) 40%, #000 47%, #000 53%, rgb(0 0 0 / .65) 60%,rgb(0 0 0 / .08) 75%,transparent 95%);
+  mask-image: linear-gradient( 106deg,transparent 5%, rgb(0 0 0 / .08) 25%, rgb(0 0 0 / .65) 40%,#000 47%,#000 53%,rgb(0 0 0 / .65) 60%,rgb(0 0 0 / .08) 75%,transparent 95%);
+-webkit-mask-position:
+  var(--wordmark-light-x) var(--wordmark-light-y);
+mask-position:
+  var(--wordmark-light-x) var(--wordmark-light-y);
+
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+
+  -webkit-mask-size: var(--wordmark-slash-width) 220%;
+  mask-size: var(--wordmark-slash-width) 220%;
+
+  transition: opacity 300ms ease;
+  will-change: mask-position, opacity;
+}
+
+.landing-interactive-wordmark-reveal {
+--wordmark-slash-width: clamp(8rem, 12vw, 14rem);
+
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  display: block;
+  width: 100%;
+  opacity: 0;
+  pointer-events: none;
+
+  -webkit-mask-image: linear-gradient(
+    106deg,
+    transparent 0%,
+    transparent 31%,
+    rgba(0, 0, 0, .18) 39%,
+    #000 47%,
+    #000 53%,
+    rgba(0, 0, 0, .18) 61%,
+    transparent 69%,
+    transparent 100%
+  );
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .landing-interactive-wordmark.is-giant:hover
+    .landing-interactive-wordmark-reveal {
+    opacity: 1;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .landing-interactive-wordmark.is-giant .landing-interactive-wordmark-reveal {
+    opacity: 1;
+  }
+}
+
+.landing-footer {
+  position: relative;
+  overflow: clip;
+}
+
+.landing-footer-wordmark-shell {
+  background:
+    radial-gradient(circle at 50% 100%, hsl(var(--primary) / .13), transparent 47%),
+    hsl(var(--sidebar));
+}
+
+.landing-footer-wordmark {
+  font-size: clamp(3.15rem, 12.8vw, 13.5rem);
+  background: linear-gradient(112deg, hsl(var(--foreground)) 5%, hsl(var(--primary-subtle-foreground)) 54%, hsl(var(--foreground)) 92%);
+  background-clip: text;
+  color: transparent;
+  user-select: none;
+}
+
+.landing-final-cta::after {
+  position: absolute;
+  inset: auto 12% 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, hsl(var(--primary) / .48), transparent);
+  content: '';
+}
+
+@media (max-width: 1023px) {
+  .landing-statement {
+    min-height: 125svh;
+  }
+
+  .landing-statement-sticky {
+    min-height: calc(100svh - 72px);
+  }
+
+  .landing-statement-copy {
+    max-width: 12ch;
+    font-size: clamp(2.8rem, 12vw, 5.6rem);
+  }
+}
+
+@media (max-width: 639px) {
+  .landing-wave-canvas {
+    top: -12%;
+    width: max(1180px, 230vw);
+    height: 124%;
+  }
+
+  .landing-wave {
+    filter: blur(10px) saturate(108%);
+  }
+
+  .landing-wave--near {
+    filter: blur(8px) saturate(110%);
+  }
+
+  .landing-wave-haze {
+    stroke-width: 118px;
+    opacity: .13;
+  }
+
+  .landing-wave-body {
+    stroke-width: 72px;
+    opacity: .4;
+  }
+
+  .landing-wave-core {
+    stroke-width: 28px;
+    opacity: .2;
+  }
+
+  .landing-wave-background.is-compact .landing-wave-canvas {
+    top: -54%;
+    width: max(1120px, 245vw);
+    height: 210%;
+  }
+
+  .landing-statement {
+    min-height: 112svh;
+  }
+
+  .landing-statement-copy {
+    font-size: clamp(2.65rem, 13.2vw, 4.1rem);
+  }
+
+  .landing-footer-wordmark {
+    font-size: clamp(2.6rem, 14.7vw, 5rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-scroll-word {
+    opacity: 1 !important;
+    visibility: visible !important;
+    filter: none !important;
+    transform: none !important;
+    will-change: auto;
+  }
+
+  .landing-statement {
+    min-height: auto;
+  }
+
+  .landing-statement-sticky {
+    position: relative;
+    top: auto;
+    min-height: auto;
+  }
+
+  .landing-interactive-wordmark-light {
+    display: none;
+    transition: none;
+  }
+
+  .landing-interactive-wordmark-reveal {
+    transition: none;
+    will-change: auto;
+  }
+}
+
+@media (min-width: 1024px) and (prefers-reduced-motion: reduce) {
+  .landing-workflow-mobile {
+    display: block !important;
+  }
+
+  .landing-workflow-desktop {
+    display: none !important;
+  }
+}
+
 @media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
   .glow-card {
     transform: none !important;
@@ -4518,6 +4931,16 @@ pre {
 
   .capability-icon {
     transition: none;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) and (prefers-reduced-motion: no-preference) {
+  .glow-card {
+    transition: transform 140ms ease !important;
+  }
+
+  .glow-card:active {
+    transform: scale(.992) !important;
   }
 }
 

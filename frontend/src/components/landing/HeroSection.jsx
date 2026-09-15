@@ -1,18 +1,12 @@
 import { useRef } from 'react';
-import {
-  motion,
-  useReducedMotion,
-  useScroll,
-  useTransform,
-} from 'framer-motion';
 import { ArrowRight, Check } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import landingWhiteboard from '../../assets/landing-whiteboard.jpg';
-import AmbientMathScene from './AmbientMathScene';
 import GlowCard from './GlowCard';
 import MagneticButton from './MagneticButton';
-import SplitWords from './SplitWords';
-import { landingMotion, landingStyles } from './landingStyles';
+import WaveBackground from './WaveBackground';
+import { useLandingGsap } from './animation/useLandingAnimations';
+import { landingStyles } from './landingStyles';
 
 const STATUS_ITEMS = [
   ['Camera', 'Ready'],
@@ -38,7 +32,7 @@ function ProductWindow() {
       <div className="grid min-h-[300px] bg-background sm:min-h-[440px] lg:grid-cols-[minmax(0,1fr)_210px]">
         <div className="relative grid min-w-0 overflow-hidden place-items-center bg-background">
           <div aria-hidden="true" className="absolute inset-0" style={{ background: 'radial-gradient(circle at 60% 30%, hsl(var(--primary) / 0.09), transparent 56%)' }} />
-          <img src={landingWhiteboard} alt="Classroom whiteboard filled with handwritten calculus examples" className="relative z-10 h-full max-h-[440px] w-full object-contain" />
+          <img src={landingWhiteboard} alt="Classroom whiteboard filled with handwritten calculus examples" width="720" height="360" fetchPriority="high" decoding="async" className="relative z-10 h-full max-h-[440px] w-full object-contain" />
           <span className="absolute left-3 top-3 z-20 rounded-full border border-white/10 bg-background/90 px-3 py-1.5 text-[10px] font-semibold text-foreground shadow-lg sm:left-4 sm:top-4">Corrected whiteboard view</span>
           <span className="absolute bottom-3 right-3 z-20 hidden items-center gap-1.5 rounded-full border border-primary/25 bg-sidebar/90 px-3 py-1.5 text-[10px] font-semibold text-primary sm:inline-flex">
             <Check size={11} aria-hidden="true" /> Calibration applied
@@ -69,64 +63,80 @@ function ProductWindow() {
 }
 
 export default function HeroSection() {
-  const reducedMotion = useReducedMotion();
   const sectionRef = useRef(null);
-  const { scrollYProgress } = useScroll({ target: sectionRef, offset: ['start start', 'end start'] });
-  const copyY = useTransform(scrollYProgress, [0, 0.28, 1], [0, 0, -18]);
-  const visualY = useTransform(scrollYProgress, [0, 0.24, 1], [0, 0, -36]);
-  const visualScale = useTransform(scrollYProgress, [0, 0.24, 1], [1, 1, 0.99]);
-  const atmosphereY = useTransform(scrollYProgress, [0, 0.2, 1], [0, 0, 60]);
+  const copyRef = useRef(null);
+  const visualRef = useRef(null);
+
+  useLandingGsap(sectionRef, ({ gsap, desktop, reduce }) => {
+    const revealItems = gsap.utils.toArray('[data-hero-reveal]');
+    if (reduce) {
+      gsap.set([...revealItems, visualRef.current], { clearProps: 'all', autoAlpha: 1 });
+      return undefined;
+    }
+
+    gsap.timeline({ defaults: { ease: 'power3.out' } })
+      .fromTo(revealItems, { autoAlpha: 0, y: 24, filter: 'blur(9px)' }, { autoAlpha: 1, y: 0, filter: 'blur(0px)', duration: .82, stagger: .085 })
+      .fromTo(visualRef.current, { autoAlpha: 0, y: 34, scale: .97, filter: 'blur(8px)' }, { autoAlpha: 1, y: 0, scale: 1, filter: 'blur(0px)', duration: .95 }, .14);
+
+    gsap.timeline({
+      scrollTrigger: {
+        trigger: sectionRef.current,
+        start: 'top top',
+        end: 'bottom top',
+        scrub: desktop ? .85 : .55,
+      },
+    })
+      .to(copyRef.current, { y: desktop ? -28 : -12, ease: 'none' }, 0)
+      .to(visualRef.current, { y: desktop ? -52 : -22, scale: desktop ? .985 : .995, ease: 'none' }, 0);
+
+    return undefined;
+  }, []);
 
   return (
-    <section ref={sectionRef} className="relative landing-section-dark isolate bg-sidebar text-foreground">
-      <div aria-hidden="true" className="absolute inset-0 overflow-hidden pointer-events-none">
-        <AmbientMathScene compact />
-        <motion.div
-          style={{
-            ...(reducedMotion ? {} : { y: atmosphereY }),
-            background: 'radial-gradient(circle, hsl(var(--primary) / 0.19), hsl(var(--ambient-1) / 0.07) 42%, transparent 70%)',
-          }}
-          className="absolute -right-[16rem] -top-[22rem] h-[54rem] w-[54rem] rounded-full blur-2xl"
-        />
-        <div className="absolute left-[-15rem] top-[32%] h-[34rem] w-[34rem] rounded-full" style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.11), transparent 68%)' }} />
-        <div className="absolute inset-0 opacity-[0.08] [background-image:linear-gradient(rgba(45,212,191,0.22)_1px,transparent_1px),linear-gradient(90deg,rgba(45,212,191,0.22)_1px,transparent_1px)] [background-size:72px_72px] [mask-image:linear-gradient(to_bottom,black,transparent_78%)]" />
-      </div>
+    <section id="top" ref={sectionRef} className="relative landing-hero landing-noise landing-section-dark isolate bg-sidebar text-foreground">
+      <WaveBackground interactive />
 
-      <div className={`${landingStyles.container} relative grid min-h-[calc(100svh-72px)] items-center gap-14 py-16 sm:py-20 lg:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)] lg:gap-8 lg:py-24 xl:grid-cols-[minmax(440px,0.78fr)_minmax(0,1.22fr)] xl:gap-4`}>
-        <motion.div style={reducedMotion ? undefined : { y: copyY }} className="relative z-20 max-w-[680px] lg:pb-20">
-          <motion.p initial={reducedMotion ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reducedMotion ? 0 : 0.52, delay: reducedMotion ? 0 : 0.04, ease: landingMotion.ease }} className="mb-7 flex items-center gap-3 text-xs font-semibold tracking-[0.08em] text-primary sm:text-sm">
-            <span className="w-8 h-px bg-primary" aria-hidden="true" />CLASSROOM INTELLIGENCE, BUILT FOR FUTURE ENGINEERS.
-          </motion.p>
+      <div className={`${landingStyles.container} relative grid min-h-[calc(100svh-72px)] items-center gap-14 py-16 sm:py-20 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-12 lg:py-24 xl:grid-cols-[minmax(0,0.94fr)_minmax(0,1.06fr)] xl:gap-16`}>
+        <div ref={copyRef} className="relative z-20 min-w-0 max-w-[680px] lg:pb-12">
+          <p data-hero-reveal className="mb-7 flex items-center gap-3 text-xs font-semibold tracking-[0.08em] text-primary sm:text-sm">
+            <span className="w-8 h-px bg-primary" aria-hidden="true" />SEA-IT-SOLVED · AI-ASSISTED WORKSPACE
+          </p>
 
-          <h1 className="text-[clamp(3rem,10vw,4rem)] font-semibold leading-[0.86] tracking-[-0.07em] text-balance sm:text-[clamp(4rem,8vw,9rem)]">
-            <span className="block"><SplitWords text="Capture the" delayStart={0.08} /></span>
-            <span className="block"><SplitWords text="lesson." delayStart={0.14} /></span>
-            <span className="block text-primary"><SplitWords text="Extend the" delayStart={0.4} /></span>
-            <span className="block text-primary"><SplitWords text="learning." delayStart={0.50} /></span>
-          </h1>
+          <h1 className="max-w-full text-[clamp(3rem,10vw,4rem)] font-semibold leading-[0.86] tracking-[-0.07em] text-balance sm:text-[clamp(4rem,8vw,7rem)] lg:text-[clamp(4rem,5.2vw,6rem)] xl:text-[clamp(4.75rem,5vw,6.25rem)]">
+              <span data-hero-reveal className="block">Classroom</span>
+  <span data-hero-reveal className="block">intelligence,</span>
 
-          <motion.p initial={reducedMotion ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reducedMotion ? 0 : 0.58, delay: reducedMotion ? 0 : 0.34, ease: landingMotion.ease }} className="mt-8 max-w-[590px] text-base leading-7 text-secondary-foreground sm:text-lg sm:leading-8">
+  <span data-hero-reveal className="block mt-7 text-primary">
+    built for future
+  </span>
+
+  <span data-hero-reveal className="block text-primary">
+    engineers.
+  </span>
+</h1>
+
+          <p data-hero-reveal className="mt-8 max-w-[590px] text-base leading-7 text-secondary-foreground sm:text-lg sm:leading-8">
             Capture classroom mathematics, review recognized context, and turn instructor-approved lessons into notes, quizzes, and continued learning after class.
-          </motion.p>
+          </p>
 
-          <motion.div initial={reducedMotion ? false : { opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reducedMotion ? 0 : 0.56, delay: reducedMotion ? 0 : 0.42, ease: landingMotion.ease }} className="flex flex-col gap-3 mt-9 sm:flex-row">
+          <div data-hero-reveal className="flex flex-col gap-3 mt-9 sm:flex-row">
             <MagneticButton strength={14} className="w-full sm:w-auto">
               <Link to="/register/student" className={`${landingStyles.primaryButton} group w-full sm:w-auto`}>Get Started<ArrowRight size={17} className="transition-transform duration-300 group-hover:translate-x-1" aria-hidden="true" /></Link>
             </MagneticButton>
             <Link to="/login" className={`${landingStyles.darkSecondaryButton} w-full sm:w-auto`}>Sign In</Link>
-          </motion.div>
+          </div>
 
-          <motion.p initial={reducedMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reducedMotion ? 0 : 0.5, delay: reducedMotion ? 0 : 0.5 }} className="mt-6 text-xs leading-5 text-muted-foreground sm:text-sm">
+          <p data-hero-reveal className="mt-6 text-xs leading-5 text-muted-foreground sm:text-sm">
             Whiteboard capture · Human review · Math-aware learning
-          </motion.p>
-        </motion.div>
+          </p>
+        </div>
 
-        <motion.div initial={reducedMotion ? false : { opacity: 0, y: 24, scale: 0.99 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: reducedMotion ? 0 : 0.68, delay: reducedMotion ? 0 : 0.18, ease: landingMotion.ease }} className="relative z-10 w-full min-w-0">
-          <motion.div style={reducedMotion ? undefined : { y: visualY, scale: visualScale }} className="relative [perspective:1400px]">
+        <div ref={visualRef} className="relative z-10 w-full min-w-0">
+          <div className="relative [perspective:1400px]">
             <div aria-hidden="true" className="absolute -inset-5 rounded-[36px] blur-xl" style={{ background: 'radial-gradient(circle at 50% 50%, hsl(var(--primary) / 0.13), transparent 70%)' }} />
             <ProductWindow />
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
       </div>
 
       <div aria-hidden="true" className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-b from-transparent to-background" />

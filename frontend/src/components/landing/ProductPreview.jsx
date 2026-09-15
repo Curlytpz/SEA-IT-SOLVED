@@ -113,12 +113,7 @@ export default function ProductPreview() {
       </div>
 
       <div className={`${landingStyles.container} relative grid items-center gap-10 lg:grid-cols-[0.34fr_0.66fr] lg:gap-14 xl:gap-20`}>
-        <motion.header
-          initial={reducedMotion ? false : { opacity: 0, x: -26 }}
-          whileInView={{ opacity: 1, x: 0 }}
-          viewport={landingMotion.viewport}
-          transition={reducedMotion ? { duration: 0 } : landingMotion.reveal}
-        >
+        <header data-landing-reveal>
           <p className={landingStyles.eyebrowLight}>Generate</p>
           <h2 className={`${landingStyles.heading} mt-5 max-w-[10ch]`}> AI helps build it. You decide what stays.</h2>
           <p className={`${landingStyles.bodyLight} mt-7 max-w-[31rem]`}>
@@ -127,15 +122,9 @@ export default function ProductPreview() {
           <div className="mt-9 hidden items-center gap-3 text-xs text-muted-foreground lg:flex">
             <span className="h-px w-10 bg-primary" /> One connected authoring flow
           </div>
-        </motion.header>
+        </header>
 
-        <motion.div
-          initial={reducedMotion ? false : { opacity: 0, y: 22, scale: 0.985 }}
-          whileInView={{ opacity: 1, y: 0, scale: 1 }}
-          viewport={landingMotion.viewport}
-          transition={reducedMotion ? { duration: 0 } : landingMotion.reveal}
-          className="min-w-0"
-        >
+        <div data-landing-product className="min-w-0">
           <GlowCard tilt className="rounded-[22px] border-border bg-card shadow-[0_45px_130px_-60px_rgba(0,0,0,0.78)]">
             <div className="flex min-h-14 items-center gap-3 border-b border-border px-3 sm:px-5">
               <div className="hidden gap-1.5 sm:flex" aria-hidden="true">
@@ -195,7 +184,7 @@ export default function ProductPreview() {
             <span>Illustrative SEA-IT-SOLVED workspace</span>
             <span className="hidden sm:inline">Human-reviewed · Math-aware · Editable</span>
           </div>
-        </motion.div>
+        </div>
       </div>
     </section>
   );

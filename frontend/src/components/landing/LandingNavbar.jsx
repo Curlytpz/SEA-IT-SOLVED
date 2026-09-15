@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion, useReducedMotion, useScroll } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { ArrowUpRight, Menu, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import MagneticButton from './MagneticButton';
+import InteractiveWordmark from './animation/InteractiveWordmark';
+import { useLandingGsap } from './animation/useLandingAnimations';
 import { landingMotion, landingStyles } from './landingStyles';
 import { BrandLogo } from '../brand/BrandLogo';
 
@@ -19,7 +21,9 @@ export function BrandLink({ className = '', tone = 'light', tagline = false }) {
       className={`group inline-flex min-h-11 items-center rounded-xl text-inherit focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${className}`}
       aria-label="SEA-IT-SOLVED home"
     >
-      <BrandLogo size="md" tone={tone} tagline={tagline} />
+      <InteractiveWordmark>
+        <BrandLogo size="md" tone={tone} tagline={tagline} />
+      </InteractiveWordmark>
     </Link>
   );
 }
@@ -27,10 +31,21 @@ export function BrandLink({ className = '', tone = 'light', tagline = false }) {
 export default function LandingNavbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const reducedMotion = useReducedMotion();
-  const { scrollYProgress } = useScroll();
+  const headerRef = useRef(null);
+  const progressRef = useRef(null);
   const mobileScrollTimer = useRef(null);
 
   useEffect(() => () => window.clearTimeout(mobileScrollTimer.current), []);
+
+  useLandingGsap(headerRef, ({ gsap, reduce }) => {
+    if (reduce || !progressRef.current) return undefined;
+    gsap.fromTo(progressRef.current, { scaleX: 0 }, {
+      scaleX: 1,
+      ease: 'none',
+      scrollTrigger: { start: 0, end: 'max', scrub: 0.2 },
+    });
+    return undefined;
+  }, []);
 
   function scrollToSection(href) {
     const target = document.querySelector(href);
@@ -60,7 +75,7 @@ export default function LandingNavbar() {
   }
 
   return (
-    <header className="landing-section-dark sticky top-0 z-50 border-b border-border bg-background/90 text-foreground shadow-[0_14px_36px_-32px_rgba(0,0,0,0.72)] backdrop-blur-xl">
+    <header ref={headerRef} className="landing-section-dark sticky top-0 z-50 border-b border-border bg-background/90 text-foreground shadow-[0_14px_36px_-32px_rgba(0,0,0,0.72)] backdrop-blur-xl">
       <div className={`${landingStyles.container} flex min-h-[72px] items-center justify-between gap-4`}>
         <BrandLink />
 
@@ -87,7 +102,7 @@ export default function LandingNavbar() {
         </div>
       </div>
 
-      {!reducedMotion && <motion.div aria-hidden="true" style={{ scaleX: scrollYProgress }} className="h-px w-full origin-left bg-gradient-to-r from-primary via-primary-hover to-primary/45" />}
+      {!reducedMotion && <div ref={progressRef} aria-hidden="true" className="h-px w-full origin-left bg-gradient-to-r from-primary via-primary-hover to-primary/45" />}
 
       <AnimatePresence initial={false}>
         {menuOpen && (

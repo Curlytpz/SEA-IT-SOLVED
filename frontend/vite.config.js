@@ -22,7 +22,7 @@ export default defineConfig({
 
     allowedHosts: [
       'localhost',
-      'steel-democracy-say-deborah.trycloudflare.com',
+      'recreational-detail-trek-deluxe.trycloudflare.com',
     ],
 
     proxy: {

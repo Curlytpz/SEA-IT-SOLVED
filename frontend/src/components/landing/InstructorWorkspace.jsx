@@ -1,10 +1,9 @@
-import { motion, useReducedMotion } from 'framer-motion';
 import { ArrowRight, CheckCircle2, FileAudio, FileText, Image } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import landingWhiteboard from '../../assets/landing-whiteboard.jpg';
 import MathExpression from '../recognition/MathExpression';
 import GlowCard from './GlowCard';
-import { landingMotion, landingStyles } from './landingStyles';
+import { landingStyles } from './landingStyles';
 
 const SOURCES = [
   { label: 'Whiteboard 01', meta: 'Included', Icon: Image, active: true },
@@ -44,7 +43,7 @@ function ReviewWorkspace() {
         <div className="grid items-stretch lg:grid-cols-[1.05fr_0.95fr]">
           <div className="landing-section-dark flex min-w-0 border-b border-border bg-sidebar p-3 lg:min-h-[420px] lg:border-b-0 lg:border-r sm:p-4">
             <div className="relative grid min-h-[300px] w-full flex-1 place-items-center overflow-hidden rounded-xl bg-background lg:min-h-0">
-              <img src={landingWhiteboard} alt="Captured classroom calculus whiteboard" className="object-contain w-full h-full" />
+              <img src={landingWhiteboard} alt="Captured classroom calculus whiteboard" width="720" height="360" loading="lazy" decoding="async" className="h-full w-full object-contain" />
               <span className="absolute left-3 top-3 rounded-md bg-background/90 px-2.5 py-1.5 text-[10px] font-semibold text-foreground">Corrected capture</span>
             </div>
           </div>
@@ -74,40 +73,26 @@ function ReviewWorkspace() {
 }
 
 export default function InstructorWorkspace() {
-  const reducedMotion = useReducedMotion();
-
   return (
     <section id="instructors" className={`landing-section-light relative overflow-clip bg-background text-foreground ${landingStyles.section}`}>
       <div aria-hidden="true" className="absolute -right-44 top-36 h-[420px] w-[420px] rounded-full" style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.08), transparent 68%)' }} />
       <div className={landingStyles.container}>
-        <motion.div
-          initial={reducedMotion ? false : 'hidden'}
-          whileInView="visible"
-          viewport={landingMotion.viewport}
-          variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.12 } } }}
-          className="grid gap-8 lg:grid-cols-[0.72fr_1.28fr] lg:items-center"
-        >
-          <motion.div variants={{ hidden: { opacity: 0, y: 24 }, visible: { opacity: 1, y: 0, transition: landingMotion.reveal } }}>
+        <div data-landing-reveal className="grid gap-8 lg:grid-cols-[0.72fr_1.28fr] lg:items-center">
+          <div>
             <p className={landingStyles.eyebrowDark}>Instructor experience</p>
             <h2 className={`mt-5 max-w-[10ch] ${landingStyles.heading}`}>Human judgment stays in the loop.</h2>
-          </motion.div>
-          <motion.div variants={{ hidden: { opacity: 0, y: 24 }, visible: { opacity: 1, y: 0, transition: landingMotion.reveal } }} className="lg:justify-self-end">
+          </div>
+          <div className="lg:justify-self-end">
             <p className={`max-w-[620px] ${landingStyles.bodyDark}`}>Captured evidence becomes useful only after academic review. Instructors can inspect recognition, correct mathematics, choose sources, and decide what students receive.</p>
             <Link to="/register/instructor" className={`mt-7 ${landingStyles.lightSecondaryButton}`}>
               Explore the instructor workflow <ArrowRight size={17} />
             </Link>
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
 
-        <motion.div
-          initial={reducedMotion ? false : { opacity: 0, y: 22, scale: 0.985 }}
-          whileInView={{ opacity: 1, y: 0, scale: 1 }}
-          viewport={landingMotion.viewport}
-          transition={reducedMotion ? { duration: 0 } : landingMotion.reveal}
-          className="mt-10 lg:mt-12"
-        >
+        <div data-landing-product className="mt-10 lg:mt-12">
           <ReviewWorkspace />
-        </motion.div>
+        </div>
       </div>
     </section>
   );

@@ -4,6 +4,7 @@ import DashboardLayout from '../../layouts/DashboardLayout';
 import { Alert, Badge, Btn, Card, EmptyState, LoadingState, PageHeader } from '../../components/ui';
 import { ArrowLeft, BookOpen, Check, Download, Play } from '../../components/icons';
 import GeneratedLessonDocument from '../../components/reasoning/GeneratedLessonDocument';
+import GeneratedContent from '../../components/reasoning/GeneratedContent';
 import { downloadStudentLesson, getStudentLesson, startQuizAttempt } from '../../services/phase6Api';
 import { studentQuizInstructions, studentQuizTitle } from '../../utils/quizDisplay';
 
@@ -84,7 +85,7 @@ export default function StudentLesson() {
   const hasMaterials = (data.document?.sections?.length ?? data.materials.length) > 0;
   return <DashboardLayout><div className="student-lesson-page">
     <Link to="/student" className="mb-4 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-slate-600 dark:text-slate-300"><ArrowLeft size={17}/>Back to learning</Link>
-    <PageHeader title={data.lesson.title} subtitle={`${data.lesson.subjectCode} • ${data.lesson.sectionName} • ${data.lesson.instructorName}`}><Badge status={data.lesson.status}/></PageHeader>
+    <PageHeader title={<GeneratedContent markdown={data.lesson.title} audience="student" inline/>} subtitle={`${data.lesson.subjectCode} • ${data.lesson.sectionName} • ${data.lesson.instructorName}`}><Badge status={data.lesson.status}/></PageHeader>
     {error && <Alert onClose={() => setError('')}>{error}</Alert>}
 
     <section className="student-lesson-content">
@@ -102,8 +103,8 @@ export default function StudentLesson() {
       <div className="student-lesson-quizzes">
         <div className="student-section-heading"><div><h2>Lesson quizzes</h2><p>Published assessments and their current availability.</p></div></div>
         {data.quizzes.length ? <div className="student-available-quiz-grid">{data.quizzes.map(quiz => <Card key={quiz.id} className="student-available-quiz">
-          <div className="flex items-start justify-between gap-3"><div><Badge status={quiz.studentStatus === 'SUBMITTED_AWAITING_REVIEW' ? 'SUBMITTED' : quiz.studentStatus}/><h3 className="mt-2 font-semibold text-slate-900 dark:text-white">{studentQuizTitle(quiz.title, data.lesson.title)}</h3><p className="mt-1 text-sm text-slate-500">{quiz.questionCount} questions</p></div>{quiz.attempt && ['SUBMITTED','GRADED'].includes(quiz.attempt.status) && <Check className="text-emerald-500"/>}</div>
-          <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{studentQuizInstructions(quiz.instructions, quiz.questionCount)}</p>
+          <div className="flex items-start justify-between gap-3"><div><Badge status={quiz.studentStatus === 'SUBMITTED_AWAITING_REVIEW' ? 'SUBMITTED' : quiz.studentStatus}/><h3 className="mt-2 font-semibold text-slate-900 dark:text-white"><GeneratedContent markdown={studentQuizTitle(quiz.title, data.lesson.title)} quizText audience="student" inline/></h3><p className="mt-1 text-sm text-slate-500">{quiz.questionCount} questions</p></div>{quiz.attempt && ['SUBMITTED','GRADED'].includes(quiz.attempt.status) && <Check className="text-emerald-500"/>}</div>
+          <GeneratedContent markdown={studentQuizInstructions(quiz.instructions, quiz.questionCount)} quizText audience="student" className="mt-3 text-sm text-slate-600 dark:text-slate-300"/>
           {quiz.awaitingReview && <p className="mt-3 text-sm font-medium text-warning">Submitted · Awaiting instructor review</p>}
           {!quiz.available && <p className="mt-3 rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">{quiz.availabilityMessage || 'This quiz is currently unavailable.'}</p>}
           <Btn className="mt-4 w-full" disabled={!quiz.available} loading={quizBusy === quiz.id} onClick={() => openQuiz(quiz)}><Play size={15}/>{!quiz.available ? 'Quiz not available yet' : quiz.studentStatus === 'IN_PROGRESS' ? 'Resume Quiz' : quiz.studentStatus === 'SUBMITTED_AWAITING_REVIEW' ? 'View Submission' : quiz.studentStatus === 'GRADED' ? 'View Results' : 'Answer Quiz'}</Btn>

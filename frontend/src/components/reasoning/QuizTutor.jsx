@@ -33,7 +33,7 @@ function PracticeQuestion({ attemptId, practice, onUpdate, onGenerateAnother, pr
 
   const correctIndex=result?practice.choices.findIndex(item=>item===result.correctAnswer):-1;
   return <article className="quiz-tutor-practice-card">
-    <header><p>Practice {practice.order}</p><span>{practice.topic}</span></header>
+    <header><p>Practice {practice.order}</p><span><GeneratedContent markdown={practice.topic} quizText audience="student" inline/></span></header>
     <div className="quiz-tutor-practice-question"><GeneratedContent markdown={practice.question} quizText audience="student" mathFallback/></div>
     <div className="quiz-tutor-options" role="group" aria-label={`Practice ${practice.order} answer choices`}>{practice.choices.map((item, index) => <button key={`${practice.id}-${index}`} type="button" disabled={Boolean(result) || checking} aria-pressed={choice===item} onClick={() => setChoice(item)} className={choice===item?'is-selected':''}>
       <span className="quiz-tutor-option-radio" aria-hidden="true"><i/></span><strong>{String.fromCharCode(65 + index)}.</strong><GeneratedContent markdown={item} quizText audience="student" mathFallback/>
@@ -55,11 +55,11 @@ function MistakeCard({ mistake, question }) {
   return <article className="rounded-xl border border-border bg-card p-4 sm:p-5">
     <p className="text-xs font-bold uppercase tracking-wide text-primary-subtle-foreground">Question {mistake.questionOrder}</p>
     <h3 className="mt-2 text-base font-bold text-foreground">What went wrong</h3>
-    <p className="mt-1 text-sm leading-6 text-muted-foreground">{mistake.mistakeSummary}</p>
+    <GeneratedContent markdown={mistake.mistakeSummary} quizText audience="student" className="mt-1 text-sm leading-6 text-muted-foreground"/>
     <h4 className="mt-4 text-sm font-bold text-foreground">Key concept</h4>
     <div className="mt-1 text-sm leading-6 text-muted-foreground"><GeneratedContent markdown={mistake.keyConcept} quizText audience="student"/></div>
     <h4 className="mt-4 text-sm font-bold text-foreground">Try this approach</h4>
-    <ol className="mt-2 space-y-2 text-sm leading-6 text-muted-foreground">{mistake.recommendedSteps.map((step, index) => <li key={`${mistake.questionId}-${index}`} className="flex gap-3"><span className="font-bold text-primary-subtle-foreground">{index + 1}.</span><span>{step}</span></li>)}</ol>
+    <ol className="mt-2 space-y-2 text-sm leading-6 text-muted-foreground">{mistake.recommendedSteps.map((step, index) => <li key={`${mistake.questionId}-${index}`} className="flex min-w-0 gap-3"><span className="font-bold text-primary-subtle-foreground">{index + 1}.</span><GeneratedContent markdown={step} quizText audience="student" className="min-w-0"/></li>)}</ol>
     <div className="mt-4 text-sm leading-6 text-muted-foreground"><GeneratedContent markdown={mistake.explanation} quizText audience="student"/></div>
     {hasSolution && <details className="mt-5 border-t border-border pt-4 group">
       <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold text-primary-subtle-foreground"><span>View Correct Solution</span><ChevronDown size={17} className="transition-transform group-open:rotate-180"/></summary>
@@ -149,11 +149,11 @@ export default function QuizTutor({ attemptId, attempt, questions }) {
     </div>
 
     {tutor?.status === 'READY' && <div className="border-t border-border bg-surface-subtle/50 p-5 sm:p-6">
-      <section><h3 className="text-base font-bold text-foreground">Your review</h3><p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{tutor.report.summary}</p>
-        {tutor.report.weakTopics?.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{tutor.report.weakTopics.map(topic => <span key={topic} className="rounded-full border border-primary/20 bg-primary-subtle px-3 py-1 text-xs font-semibold text-primary-subtle-foreground">{topic}</span>)}</div>}
+      <section><h3 className="text-base font-bold text-foreground">Your review</h3><GeneratedContent markdown={tutor.report.summary} quizText audience="student" className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground"/>
+        {tutor.report.weakTopics?.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{tutor.report.weakTopics.map(topic => <span key={topic} className="rounded-full border border-primary/20 bg-primary-subtle px-3 py-1 text-xs font-semibold text-primary-subtle-foreground"><GeneratedContent markdown={topic} quizText audience="student" inline/></span>)}</div>}
       </section>
       <div className="mt-6 grid gap-4 lg:grid-cols-2">{tutor.report.mistakes.map(mistake => <MistakeCard key={mistake.questionId} mistake={mistake} question={questions.find(item => item.id === mistake.questionId)}/>)}</div>
-      {tutor.report.recommendedReview?.length > 0 && <section className="mt-6 rounded-xl border border-border bg-card p-4 sm:p-5"><h3 className="text-sm font-bold text-foreground">Recommended Review</h3><ul className="mt-2 grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">{tutor.report.recommendedReview.map(topic => <li key={topic}>• {topic}</li>)}</ul></section>}
+      {tutor.report.recommendedReview?.length > 0 && <section className="mt-6 rounded-xl border border-border bg-card p-4 sm:p-5"><h3 className="text-sm font-bold text-foreground">Recommended Review</h3><ul className="mt-2 grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">{tutor.report.recommendedReview.map(topic => <li key={topic}>• <GeneratedContent markdown={topic} quizText audience="student" inline/></li>)}</ul></section>}
       <section className="quiz-tutor-practice-section"><div className="quiz-tutor-practice-heading"><div><h3>Focused practice</h3><p>Practice questions remaining: {tutor.practiceRemaining}</p></div>{practiceStatus==='idle'&&tutor.practiceRemaining>0&&<Btn onClick={createPractice}>Generate Practice</Btn>}</div>
         <div className="quiz-tutor-active-practice">
           {practiceStatus==='loading'&&<PracticeSkeleton/>}

@@ -13,5 +13,10 @@ const image = asyncHandler(async (req, res) => {
 });
 const attempts = asyncHandler(async (req,res) => res.json({success:true,data:await service.reviewAttempts(req.params.quizId,req.user.id)}));
 const sectionReviews = asyncHandler(async (req,res) => res.json({success:true,data:await service.sectionReviews(req.params.sectionId,req.user.id)}));
-const queue = asyncHandler(async (req,res) => res.json({success:true,data:await service.reviewQueue(req.user.id)}));
+const queue = asyncHandler(async (req,res) => {
+  const [pendingReviews,totalSubmissions] = await Promise.all([
+    service.reviewQueue(req.user.id), service.reviewSubmissionCount(req.user.id),
+  ]);
+  res.json({success:true,data:pendingReviews,meta:{totalSubmissions}});
+});
 module.exports = { attempts, sectionReviews, queue, upload, list, recognize, analyze, grade, image };

@@ -6,6 +6,7 @@ import api from '../../services/api';
 import { BookOpen, ChevronDown, Plus } from '../../components/icons';
 import { ContentTransition } from '../../components/PageTransition';
 import { getStudentLearning } from '../../services/phase6Api';
+import GeneratedContent from '../../components/reasoning/GeneratedContent';
 
 export default function StudentClasses() {
   const [sections, setSections] = useState([]);
@@ -82,7 +83,7 @@ export default function StudentClasses() {
                     : section.section.instructorStatus && section.section.instructorStatus !== 'ACTIVE'
                       ? <p className="text-sm text-muted-foreground">Lesson content is unavailable while this section is inactive.</p>
                       : sectionLessons.length
-                        ? <div><p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Available lessons</p><div className="grid gap-2">{sectionLessons.map(lesson => <Link key={lesson.id} to={`/student/lessons/${lesson.id}`} className="rounded-lg border border-border bg-card px-3 py-3 transition-colors hover:border-primary/40 hover:bg-primary-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><span className="block font-semibold text-foreground">{lesson.title}</span><span className="mt-1 block text-xs text-muted-foreground">{lesson.availableQuizzes} available quiz{lesson.availableQuizzes === 1 ? '' : 'zes'}</span></Link>)}</div></div>
+                        ? <div><p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Available lessons</p><div className="grid gap-2">{sectionLessons.map(lesson => <Link key={lesson.id} to={`/student/lessons/${lesson.id}`} className="rounded-lg border border-border bg-card px-3 py-3 transition-colors hover:border-primary/40 hover:bg-primary-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><span className="block font-semibold text-foreground"><GeneratedContent markdown={lesson.title} audience="student" inline/></span><span className="mt-1 block text-xs text-muted-foreground">{lesson.availableQuizzes} available quiz{lesson.availableQuizzes === 1 ? '' : 'zes'}</span></Link>)}</div></div>
                         : <p className="text-sm text-muted-foreground">No published lessons are available in this section yet.</p>}
                 </div>}
               </Card>;

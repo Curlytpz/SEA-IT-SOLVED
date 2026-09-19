@@ -79,7 +79,7 @@ function StudentLessonPreview() {
 
 export default function StudentExperience() {
   return (
-    <section id="students" className={`landing-section-light ${landingStyles.section} overflow-clip border-y border-border bg-background text-foreground`}>
+    <section id="students" className={`landing-section-dark ${landingStyles.section} overflow-clip border-y border-border bg-background text-foreground`}>
       <div className={`${landingStyles.container} grid items-center gap-12 lg:grid-cols-[0.35fr_0.65fr] lg:gap-16 xl:gap-24`}>
         <header data-landing-reveal>
           <p className={landingStyles.eyebrowDark}>Learn</p>

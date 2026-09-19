@@ -498,7 +498,7 @@ export default function LessonContextReview() {
     </PageHeader>}
     {context.status === 'APPROVED' && !workspaceMode && <>
       <Card className="mb-6 max-w-3xl p-5 sm:p-6">
-        <div className="mb-5 flex items-start gap-3"><CircleCheck size={24} className="shrink-0 text-emerald-600" aria-hidden="true"/><div><h1 className="text-xl font-bold text-slate-900 dark:text-white">Approved Lesson Context</h1><p className="mt-1 text-sm text-slate-500">{lesson?.title} · Approved sources remain frozen until a new version is reviewed.</p></div></div>
+        <div className="mb-5 flex items-start gap-3"><CircleCheck size={24} className="shrink-0 text-emerald-600" aria-hidden="true"/><div><h1 className="text-xl font-bold text-slate-900 dark:text-white">Approved Lesson Context</h1><p className="mt-1 text-sm text-slate-500"><GeneratedContent markdown={lesson?.title} inline/> · Approved sources remain frozen until a new version is reviewed.</p></div></div>
         <dl className="grid gap-4 sm:grid-cols-3">
           <div><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">Approved version</dt><dd className="mt-1 text-lg font-bold text-slate-900 dark:text-white">{context.versionNumber}</dd></div>
           <div><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">Included sources</dt><dd className="mt-1 text-lg font-bold text-slate-900 dark:text-white">{includedCount}</dd></div>
@@ -586,7 +586,7 @@ export default function LessonContextReview() {
         ? <div className="space-y-3">
             <p>This quiz has student attempts and recorded results. Force deleting it will permanently remove:</p>
             <ul className="list-disc space-y-1 pl-5"><li>the quiz</li><li>student attempts for this quiz</li><li>submitted answers</li><li>quiz scores/results</li><li>analytics derived from this quiz</li></ul>
-            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-lg bg-red-50 px-3 py-2 dark:bg-red-500/10"><dt className="font-semibold">Attempts:</dt><dd>{quizAction.attemptCount}</dd><dt className="font-semibold">Quiz:</dt><dd>{studentQuizTitle(quizAction.quiz.title)}</dd></dl>
+             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-lg bg-red-50 px-3 py-2 dark:bg-red-500/10"><dt className="font-semibold">Attempts:</dt><dd>{quizAction.attemptCount}</dd><dt className="font-semibold">Quiz:</dt><dd><GeneratedContent markdown={studentQuizTitle(quizAction.quiz.title)} quizText inline/></dd></dl>
             <p className="font-semibold text-red-700 dark:text-red-200">This action cannot be undone.</p>
             <label className="block text-sm font-semibold text-slate-800 dark:text-slate-100">Type DELETE to confirm
               <input
@@ -600,8 +600,8 @@ export default function LessonContextReview() {
             {quizAction.error && <Alert type="error" className="mb-0">{quizAction.error}</Alert>}
           </div>
         : quizAction.action === 'delete'
-          ? <div>This will permanently delete “{studentQuizTitle(quizAction.quiz.title)}” ({quizAction.quiz.questions.length} {quizAction.quiz.questions.length === 1 ? 'question' : 'questions'}, {quizAction.quiz.status.toLowerCase()}) and remove it from the student dashboard. This cannot be undone.{quizAction.error && <Alert type="error" className="mb-0 mt-3">{quizAction.error}</Alert>}</div>
-          : `“${studentQuizTitle(quizAction.quiz.title)}” will remain visible to students, but they will not be able to start, open, or submit it until you enable it again.`}
+           ? <div>This will permanently delete “<GeneratedContent markdown={studentQuizTitle(quizAction.quiz.title)} quizText inline/>” ({quizAction.quiz.questions.length} {quizAction.quiz.questions.length === 1 ? 'question' : 'questions'}, {quizAction.quiz.status.toLowerCase()}) and remove it from the student dashboard. This cannot be undone.{quizAction.error && <Alert type="error" className="mb-0 mt-3">{quizAction.error}</Alert>}</div>
+           : <div>“<GeneratedContent markdown={studentQuizTitle(quizAction.quiz.title)} quizText inline/>” will remain visible to students, but they will not be able to start, open, or submit it until you enable it again.</div>}
       confirmLabel={quizAction.action === 'force-delete' ? 'Force Delete Quiz' : quizAction.action === 'delete' ? 'Delete Quiz' : 'Disable Quiz'}
       confirmVariant="danger"
       confirmDisabled={quizAction.action === 'force-delete' && quizAction.confirmation !== 'DELETE'}
@@ -710,7 +710,7 @@ function QuizEditor({ lessonId, navigationState, quiz, expanded, busy, onToggle,
     <h2 className="quiz-disclosure-heading">
       <button id={toggleId} type="button" className="quiz-disclosure-toggle" aria-expanded={expanded} aria-controls={contentId} onClick={onToggle}>
         <span className="quiz-disclosure-copy">
-          <strong>{studentQuizTitle(quiz.title)}</strong>
+           <strong><GeneratedContent markdown={studentQuizTitle(quiz.title)} quizText inline/></strong>
           <span>
             {quiz.questions.length} {quiz.questions.length === 1 ? 'question' : 'questions'}
             <span aria-hidden="true"> · </span>{difficulty}
@@ -741,7 +741,7 @@ function QuizEditor({ lessonId, navigationState, quiz, expanded, busy, onToggle,
     </div>}
     {expanded && <div id={contentId} className="quiz-disclosure-content" role="region" aria-labelledby={toggleId}>
       <div className="quiz-disclosure-toolbar">
-        <p>{quiz.instructions}</p>
+        <GeneratedContent markdown={quiz.instructions} quizText/>
         <div>
           {quiz.status !== 'DRAFT' && lessonId && <Link to={`/instructor/quizzes/${quiz.id}/analytics`} state={{ ...navigationState, from: `/instructor/lessons/${lessonId}/review?view=workspace`, quizId: quiz.id }}><Btn variant="secondary">View Analytics</Btn></Link>}
         </div>

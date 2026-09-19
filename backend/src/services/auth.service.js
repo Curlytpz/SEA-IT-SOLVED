@@ -121,9 +121,7 @@ async function registerInstructor({ firstName, lastName, email, password }) {
     ]
   );
 
-  // No token issued — instructor must wait for admin approval.
-  // They can log in to see the "awaiting approval" screen, but
-  // all instructor-resource endpoints require status=ACTIVE (see authorizeActive).
+  // No token is issued until this instructor is approved and signs in.
   return { user: buildSafeUser(rows[0]) };
 }
 
@@ -160,14 +158,21 @@ async function login({ email, password, expectedRole }) {
     );
   }
 
+  if (user.role === 'INSTRUCTOR' && user.status === 'PENDING') {
+    throw new AppError('Your instructor account is awaiting admin approval.', 403, { code: 'INSTRUCTOR_PENDING' });
+  }
   // These are hard stops at login time in addition to the per-request
   // checks in authenticate.js. authenticate.js catches token-reuse after
   // suspension; these catch it at the login attempt itself.
   if (user.status === 'REJECTED') {
-    throw new AppError('Your account has been rejected. Contact the administrator.', 403);
+    throw user.role === 'INSTRUCTOR'
+      ? new AppError('Your instructor account was not approved.', 403, { code: 'INSTRUCTOR_REJECTED' })
+      : new AppError('Your account has been rejected. Contact the administrator.', 403);
   }
   if (user.status === 'SUSPENDED') {
-    throw new AppError('Your account has been suspended. Contact the administrator.', 403);
+    throw new AppError('Your account has been suspended. Contact the administrator.', 403, {
+      code: user.role === 'INSTRUCTOR' ? 'INSTRUCTOR_SUSPENDED' : undefined,
+    });
   }
 
   // Record only a genuinely successful login. This happens after password,
@@ -176,15 +181,15 @@ async function login({ email, password, expectedRole }) {
   const successfulLogin = await pool.query(
     `UPDATE users
      SET successful_login_count = successful_login_count + 1
-     WHERE id = $1
+     WHERE id = $1 AND role = $2 AND status = 'ACTIVE'
      RETURNING *`,
-    [user.id]
+    [user.id, user.role]
   );
   const authenticatedUser = successfulLogin.rows[0];
+  if (!authenticatedUser) {
+    throw new AppError('Your account access changed. Please try signing in again.', 403);
+  }
 
-  // PENDING instructors CAN log in and receive a token.
-  // The token is valid for /api/auth/me (to show the awaiting-approval screen)
-  // but ALL instructor resource endpoints require status=ACTIVE via authorizeActive().
   const token = signToken({ id: authenticatedUser.id, role: authenticatedUser.role, authVersion: Number(authenticatedUser.auth_version) || 0 });
   return { user: buildSafeUser(authenticatedUser), token };
 }

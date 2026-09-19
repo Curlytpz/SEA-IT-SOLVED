@@ -1,6 +1,6 @@
 const ROLE_GREETINGS = {
-  INSTRUCTOR: 'Welcome back, Professor',
-  ADMIN: 'Welcome back, Administrator',
+  INSTRUCTOR: 'Welcome, Professor',
+  ADMIN: 'Welcome, Administrator',
 };
 
 export const RETURNING_STUDENT_MESSAGES = Object.freeze([

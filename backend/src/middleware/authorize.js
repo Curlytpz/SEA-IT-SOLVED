@@ -4,9 +4,7 @@ const AppError = require('../utils/AppError');
  * authorize(...roles)
  *
  * Checks only that req.user.role is in the allowed list.
- * Use this for routes where PENDING status is acceptable
- * (e.g. the admin dashboard — admins are always ACTIVE, but the check
- * is explicit here).
+ * Use this for routes that need only a role check after authenticate.
  *
  * For any route that should be inaccessible to PENDING instructors,
  * use authorizeActive() instead.
@@ -29,15 +27,9 @@ const authorize = (...roles) => (req, res, next) => {
  * Checks BOTH role AND that the account status is ACTIVE.
  *
  * This is the correct guard for all instructor-facing endpoints.
- * A PENDING instructor has role=INSTRUCTOR but status=PENDING, so they
- * pass a plain authorize('INSTRUCTOR') check — that is the bug this
- * function fixes. authorizeActive('INSTRUCTOR') requires BOTH conditions.
- *
- * Why not handle this in authenticate?
- *   Because authenticate must allow PENDING instructors through for
- *   GET /api/auth/me so the frontend can read their status and display
- *   the "awaiting approval" screen. Active-status enforcement belongs
- *   at the resource-authorization layer, not the identity layer.
+ * authorizeActive('INSTRUCTOR') requires BOTH role and current ACTIVE status.
+ * authenticate also rejects pending instructors for /auth/me and mixed-role
+ * endpoints; this check remains a resource-level defense.
  *
  * Must be called AFTER authenticate.
  */

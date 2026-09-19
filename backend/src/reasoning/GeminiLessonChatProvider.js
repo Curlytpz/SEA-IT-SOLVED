@@ -1,11 +1,13 @@
 const LessonChatProvider = require('./LessonChatProvider');
 const { mapProviderError } = require('../recognition/ProviderErrorMapper');
+const mathOutputConvention = require('./mathOutputConvention');
 
 const SYSTEM = `Use the approved lesson context as the authoritative lesson source.
 If asked what the professor taught, answer only from that approved context.
 Integrate additional mathematical explanation naturally and keep provenance in sourceReferences rather than student-facing prose.
 Never invent professor statements, board work, transcript content, uploaded-image content, PDF content, or lesson events.
-Use only supplied human-readable source labels. Never return database identifiers.`;
+Use only supplied human-readable source labels. Never return database identifiers.
+${mathOutputConvention}`;
 
 const references = { type: 'array', items: { type: 'string' } };
 const answerSchema = {

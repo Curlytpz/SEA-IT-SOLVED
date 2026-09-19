@@ -17,6 +17,7 @@
     "verify-gmail-smtp-email": "node scripts/verifyGmailSmtpEmail.js",
     "verify-gmail-smtp-delivery": "node scripts/verifyGmailSmtpDelivery.js",
     "verify-login-feedback": "node scripts/verifyLoginFeedback.js",
+    "verify-instructor-approval": "node scripts/verifyInstructorApproval.js",
     "verify-student-first-login": "node scripts/verifyStudentFirstLoginGreeting.js",
     "verify-context-reopen": "node scripts/verifyLessonContextReopen.js",
     "verify-transcript-context": "node scripts/verifyTranscriptContextReview.js",

@@ -684,14 +684,6 @@ audio { width: 100%; max-width: 100%; }
 }
   .generated-document-mobile-page.is-next { animation:generated-paper-next-enter 220ms var(--motion-soft) both; }
   .generated-document-mobile-page.is-previous { animation:generated-paper-previous-enter 220ms var(--motion-soft) both; }
-  .generated-document-mobile-page .generated-doc-markdown table {
-    display:block;
-    width:100%;
-    max-width:100%;
-    overflow-x:auto;
-    overscroll-behavior-inline:contain;
-    -webkit-overflow-scrolling:touch;
-  }
   .student-lesson-page,
   .student-lesson-content,
   .student-lesson-material { min-width:0; max-width:100%; overflow-x:clip; }
@@ -1799,6 +1791,31 @@ a:focus-visible, button:focus-visible, [role="button"]:focus-visible { outline: 
   overflow-wrap: break-word;
   word-break: normal;
 }
+.math-content.math-content-inline {
+  display: inline;
+  width: auto;
+  max-width: 100%;
+}
+.math-content .math-table-scroll {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+.math-content .math-table-scroll table {
+  min-width: 100%;
+  border-collapse: collapse;
+}
+.math-content .math-table-scroll :where(th, td) {
+  border-bottom: 1px solid hsl(var(--border));
+  padding: .45em .65em;
+  text-align: start;
+}
+.math-content .math-table-scroll:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
 .math-content > *,
 .math-content :where(p, li) {
   min-width: 0;
@@ -2538,8 +2555,256 @@ pre {
 /* Public landing and authentication experience */
 .landing-page {
   min-height: 100%;
+  position: relative;
+  isolation: isolate;
   color-scheme: dark;
-  background: hsl(var(--background));
+  --landing-ambient-base: #0a1612;
+  background: var(--landing-ambient-base);
+}
+
+.landing-page > main,
+.landing-page > .landing-footer {
+  position: relative;
+  z-index: 1;
+}
+
+/* Section-anchored aurora: layered diagonal light, never a radial spotlight. */
+.landing-page > main > :where(#top, .landing-statement, #how-it-works, #instructors, #product, #students, #features, .landing-final-cta) {
+  position: relative;
+  isolation: isolate;
+  background: var(--landing-ambient-base);
+}
+
+.landing-page > main > :where(#top, .landing-statement, #how-it-works, #instructors, #product, #students, #features, .landing-final-cta)::before,
+.landing-page > main > :where(#top, .landing-statement, #how-it-works, #instructors, #product, #students, #features, .landing-final-cta)::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  transform-origin: center;
+}
+
+.landing-page > main > :where(#top, .landing-statement, #how-it-works, #instructors, #product, #students, #features, .landing-final-cta)::before {
+  top: var(--aurora-top, 30%);
+  left: var(--aurora-left, -55%);
+  width: var(--aurora-width, 210%);
+  height: var(--aurora-height, clamp(20rem, 26vw, 34rem));
+  background:
+    linear-gradient(103deg, transparent 3%, rgba(13, 148, 136, .04) 17%, rgba(13, 148, 136, .20) 36%, rgba(13, 148, 136, .17) 65%, rgba(13, 148, 136, .04) 84%, transparent 98%),
+    linear-gradient(96deg, transparent 6%, rgba(20, 184, 166, .03) 21%, rgba(20, 184, 166, .11) 40%, rgba(20, 184, 166, .13) 61%, rgba(20, 184, 166, .03) 81%, transparent 96%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 30%, #000 63%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 30%, #000 63%, transparent);
+  filter: blur(clamp(54px, 4.5vw, 84px));
+  opacity: var(--aurora-strength, .68);
+  transform: rotate(var(--aurora-angle, -12deg));
+  animation: landing-aurora-float var(--aurora-duration, 24s) ease-in-out var(--aurora-delay, -4s) infinite alternate;
+}
+
+.landing-page > main > :where(#top, .landing-statement, #how-it-works, #instructors, #product, #students, #features, .landing-final-cta)::after {
+  top: var(--aurora-highlight-top, 35%);
+  left: var(--aurora-highlight-left, -50%);
+  width: var(--aurora-highlight-width, 200%);
+  height: var(--aurora-highlight-height, clamp(7rem, 9vw, 12rem));
+  background: linear-gradient(99deg, transparent 0%, rgba(45, 212, 191, .045) 16%, rgba(45, 212, 191, .30) 33%, rgba(45, 212, 191, .32) 70%, rgba(45, 212, 191, .05) 86%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 23%, #000 75%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 23%, #000 75%, transparent);
+  filter: blur(clamp(22px, 1.8vw, 34px));
+  opacity: var(--aurora-highlight-strength, .55);
+  transform: rotate(var(--aurora-highlight-angle, -10deg));
+  animation: landing-aurora-highlight-float var(--aurora-highlight-duration, 27s) ease-in-out var(--aurora-highlight-delay, -11s) infinite alternate-reverse;
+}
+
+/* Reverse sweeps favor the upper-right and leave the copy side darker. */
+.landing-page > main > :where(.landing-statement, #instructors)::before {
+  background:
+    linear-gradient(81deg, transparent 2%, rgba(13, 148, 136, .02) 18%, rgba(13, 148, 136, .10) 40%, rgba(13, 148, 136, .21) 68%, rgba(13, 148, 136, .04) 87%, transparent 99%),
+    linear-gradient(88deg, transparent 5%, rgba(20, 184, 166, .02) 23%, rgba(20, 184, 166, .07) 45%, rgba(20, 184, 166, .15) 67%, rgba(20, 184, 166, .03) 84%, transparent 97%);
+}
+
+.landing-page > main > :where(.landing-statement, #instructors)::after {
+  background: linear-gradient(84deg, transparent 0%, rgba(45, 212, 191, .03) 21%, rgba(45, 212, 191, .14) 45%, rgba(45, 212, 191, .36) 73%, rgba(45, 212, 191, .05) 89%, transparent 100%);
+}
+
+@keyframes landing-aurora-float {
+  from {
+    transform: translate3d(-9px, 7px, 0) rotate(calc(var(--aurora-angle, -12deg) - 1deg)) scale(1.01, .99);
+    opacity: calc(var(--aurora-strength, .68) - .05);
+  }
+  to {
+    transform: translate3d(12px, -8px, 0) rotate(calc(var(--aurora-angle, -12deg) + 1deg)) scale(1.025, 1.015);
+    opacity: var(--aurora-strength, .68);
+  }
+}
+
+@keyframes landing-aurora-highlight-float {
+  from {
+    transform: translate3d(7px, -6px, 0) rotate(calc(var(--aurora-highlight-angle, -10deg) + 1deg)) scale(.99, 1.01);
+    opacity: calc(var(--aurora-highlight-strength, .55) - .05);
+  }
+  to {
+    transform: translate3d(-11px, 7px, 0) rotate(calc(var(--aurora-highlight-angle, -10deg) - 1deg)) scale(1.02, .99);
+    opacity: var(--aurora-highlight-strength, .55);
+  }
+}
+
+.landing-page > main > #top {
+  --aurora-left: -64%;
+  --aurora-top: 54%;
+  --aurora-width: 218%;
+  --aurora-height: clamp(21rem, 27vw, 35rem);
+  --aurora-angle: -12deg;
+  --aurora-strength: .7;
+  --aurora-duration: 26s;
+  --aurora-highlight-left: -62%;
+  --aurora-highlight-top: 65%;
+  --aurora-highlight-angle: -9deg;
+  --aurora-highlight-strength: .54;
+  --aurora-highlight-duration: 22s;
+}
+
+.landing-page > main > .landing-statement {
+  --aurora-left: -47%;
+  --aurora-top: 2%;
+  --aurora-width: 215%;
+  --aurora-angle: -14deg;
+  --aurora-strength: .60;
+  --aurora-duration: 29s;
+  --aurora-delay: -9s;
+  --aurora-highlight-left: -44%;
+  --aurora-highlight-top: 4%;
+  --aurora-highlight-angle: -11deg;
+  --aurora-highlight-strength: .58;
+  --aurora-highlight-duration: 25s;
+}
+
+.landing-page > main > #how-it-works {
+  --aurora-left: -61%;
+  --aurora-top: 17%;
+  --aurora-width: 214%;
+  --aurora-height: clamp(18rem, 23vw, 30rem);
+  --aurora-angle: -12deg;
+  --aurora-strength: .7;
+  --aurora-duration: 23s;
+  --aurora-delay: -6s;
+  --aurora-highlight-left: -57%;
+  --aurora-highlight-top: 22%;
+  --aurora-highlight-angle: -9deg;
+  --aurora-highlight-strength: .55;
+  --aurora-highlight-duration: 28s;
+}
+
+.landing-page > main > #instructors {
+  --aurora-left: -45%;
+  --aurora-top: 3%;
+  --aurora-width: 208%;
+  --aurora-height: clamp(18rem, 24vw, 30rem);
+  --aurora-angle: -15deg;
+  --aurora-strength: .7;
+  --aurora-duration: 27s;
+  --aurora-delay: -12s;
+  --aurora-highlight-left: -43%;
+  --aurora-highlight-top: 5%;
+  --aurora-highlight-angle: -12deg;
+  --aurora-highlight-strength: .62;
+  --aurora-highlight-duration: 21s;
+}
+
+/* Product and Features are existing sections between the requested story beats. */
+.landing-page > main > #product {
+  --aurora-left: -55%;
+  --aurora-top: 25%;
+  --aurora-width: 205%;
+  --aurora-angle: -8deg;
+  --aurora-strength: .42;
+  --aurora-duration: 30s;
+  --aurora-highlight-left: -51%;
+  --aurora-highlight-top: 31%;
+  --aurora-highlight-strength: .22;
+}
+
+.landing-page > main > #students {
+  --aurora-left: -63%;
+  --aurora-top: 37%;
+  --aurora-width: 222%;
+  --aurora-height: clamp(22rem, 29vw, 37rem);
+  --aurora-angle: -13deg;
+  --aurora-strength: .68;
+  --aurora-duration: 25s;
+  --aurora-delay: -13s;
+  --aurora-highlight-left: -60%;
+  --aurora-highlight-top: 45%;
+  --aurora-highlight-angle: -10deg;
+  --aurora-highlight-strength: .56;
+  --aurora-highlight-duration: 29s;
+}
+
+.landing-page > main > #features {
+  --aurora-left: -53%;
+  --aurora-top: 29%;
+  --aurora-width: 206%;
+  --aurora-angle: -10deg;
+  --aurora-strength: .4;
+  --aurora-duration: 28s;
+  --aurora-highlight-left: -49%;
+  --aurora-highlight-top: 34%;
+  --aurora-highlight-strength: .2;
+}
+
+.landing-page > main > .landing-final-cta {
+  --aurora-left: -51%;
+  --aurora-top: 11%;
+  --aurora-width: 204%;
+  --aurora-height: clamp(22rem, 28vw, 36rem);
+  --aurora-angle: -7deg;
+  --aurora-strength: .28;
+  --aurora-duration: 24s;
+  --aurora-delay: -7s;
+  --aurora-highlight-left: -54%;
+  --aurora-highlight-top: 43%;
+  --aurora-highlight-angle: -11deg;
+  --aurora-highlight-strength: .65;
+  --aurora-highlight-duration: 28s;
+  background-color: var(--landing-ambient-base);
+  background-image: linear-gradient(90deg, transparent, hsl(var(--primary) / .48), transparent);
+  background-position: center bottom;
+  background-size: 76% 1px;
+  background-repeat: no-repeat;
+}
+
+.landing-page > .landing-footer {
+  isolation: isolate;
+  background: var(--landing-ambient-base);
+}
+
+.landing-page > .landing-footer::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: -7rem;
+  left: -42%;
+  width: 190%;
+  height: 13rem;
+  pointer-events: none;
+  background: linear-gradient(97deg, transparent 5%, rgba(13, 148, 136, .035) 30%, rgba(20, 184, 166, .07) 58%, transparent 94%);
+  filter: blur(76px);
+  transform: rotate(-7deg);
+}
+
+@media (max-width: 639px) {
+  .landing-page > main > :where(#top, .landing-statement, #how-it-works, #instructors, #product, #students, #features, .landing-final-cta)::before {
+    filter: blur(50px) brightness(.88);
+  }
+
+  .landing-page > main > :where(#top, .landing-statement, #how-it-works, #instructors, #product, #students, #features, .landing-final-cta)::after {
+    filter: blur(24px) brightness(.94);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-page > main > :where(#top, .landing-statement, #how-it-works, #instructors, #product, #students, #features, .landing-final-cta)::before,
+  .landing-page > main > :where(#top, .landing-statement, #how-it-works, #instructors, #product, #students, #features, .landing-final-cta)::after {
+    animation: none;
+  }
 }
 
 #how-it-works,
@@ -4414,16 +4679,6 @@ pre {
   mask-composite: exclude;
 }
 
-.landing-noise::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E");
-  background-size: 200px 200px;
-  pointer-events: none;
-}
-
 @media (hover: hover) and (pointer: fine) {
   .glow-card:hover {
     --glow-lift: -3px;
@@ -4572,11 +4827,9 @@ pre {
   position: relative;
   min-height: 155svh;
   overflow: clip;
-  background:
-    radial-gradient(circle at 76% 46%, hsl(var(--primary) / .12), transparent 34rem),
-    linear-gradient(180deg, hsl(var(--sidebar)), hsl(var(--background)) 45%, hsl(var(--sidebar)));
   color: hsl(var(--foreground));
 }
+
 
 .landing-statement-sticky {
   position: sticky;
@@ -4586,6 +4839,11 @@ pre {
   align-items: center;
   overflow: hidden;
   padding-block: clamp(5rem, 12vw, 10rem);
+}
+
+.landing-statement-content {
+  position: relative;
+  z-index: 1;
 }
 
 .landing-statement-copy {
@@ -4610,11 +4868,6 @@ pre {
   color: hsl(var(--primary));
 }
 
-.landing-workflow {
-  background:
-    linear-gradient(180deg, hsl(var(--background)), hsl(var(--surface-subtle)) 50%, hsl(var(--background)));
-}
-
 .landing-workflow-desktop {
   width: 100%;
   min-height: 100vh;
@@ -4623,7 +4876,6 @@ pre {
 
 .landing-workflow-copy:not(:first-child),
 .landing-workflow-visual:not(:first-child),
-.landing-workflow-glow:not(:first-child),
 .landing-workflow-desktop .landing-workflow-notice {
   opacity: 0;
   visibility: hidden;
@@ -4804,9 +5056,7 @@ mask-position:
 }
 
 .landing-footer-wordmark-shell {
-  background:
-    radial-gradient(circle at 50% 100%, hsl(var(--primary) / .13), transparent 47%),
-    hsl(var(--sidebar));
+  background: var(--landing-ambient-base);
 
   overflow: visible;
   padding-inline: 1rem;
@@ -4818,14 +5068,6 @@ mask-position:
   background-clip: text;
   color: transparent;
   user-select: none;
-}
-
-.landing-final-cta::after {
-  position: absolute;
-  inset: auto 12% 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, hsl(var(--primary) / .48), transparent);
-  content: '';
 }
 
 @media (max-width: 1023px) {

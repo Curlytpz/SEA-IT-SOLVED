@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import DashboardLayout from '../../layouts/DashboardLayout';
 import { Alert, Badge, Card, EmptyState, LoadingState, PageHeader } from '../../components/ui';
 import { Chart } from '../../components/icons';
+import GeneratedContent from '../../components/reasoning/GeneratedContent';
 import { getQuizHistory } from '../../services/phase6Api';
 import { studentQuizTitle } from '../../utils/quizDisplay';
 
@@ -26,7 +27,7 @@ export default function StudentQuizHistory() {
     {loading ? <LoadingState text="Loading quiz results…"/> : !attempts.length
       ? <EmptyState icon={<Chart/>} title="No submitted quizzes" body="Your quiz results will appear here after submission."/>
       : <div className="student-history-grid">{attempts.map(attempt => <Link key={attempt.id} to={'/student/attempts/' + attempt.id}><Card className="student-history-card">
-          <div className="student-history-heading"><div><span className="student-subject-label">{attempt.subjectCode}</span><h2 className="mt-3 font-bold text-slate-900 dark:text-white">{studentQuizTitle(attempt.quizTitle,attempt.lessonTitle)}</h2><p className="mt-1 text-sm text-slate-500">{attempt.lessonTitle} <span aria-hidden="true">·</span> {attempt.sectionName}</p></div><Badge status={attempt.status}/></div>
+          <div className="student-history-heading"><div><span className="student-subject-label">{attempt.subjectCode}</span><h2 className="mt-3 font-bold text-slate-900 dark:text-white"><GeneratedContent markdown={studentQuizTitle(attempt.quizTitle,attempt.lessonTitle)} quizText audience="student" inline/></h2><p className="mt-1 text-sm text-slate-500"><GeneratedContent markdown={attempt.lessonTitle} audience="student" inline/> <span aria-hidden="true">·</span> {attempt.sectionName}</p></div><Badge status={attempt.status}/></div>
           <div className="student-history-details">
             <div><p className="text-xs font-semibold text-slate-500">Score</p><p className="mt-1 text-2xl font-bold tabular-nums text-slate-900 dark:text-white">{attempt.score ?? '—'}<span className="text-base font-medium text-slate-400"> / {attempt.maxScore}</span></p></div>
             <div><p className="text-xs font-semibold text-slate-500">Result</p><p className={'mt-1 text-sm font-semibold ' + (attempt.status === 'SUBMITTED' ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300')}>{attempt.status === 'SUBMITTED' ? 'Awaiting professor review' : attempt.percentage + '%'}</p></div>

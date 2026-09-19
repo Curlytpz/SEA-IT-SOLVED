@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { INSTRUCTOR_ACCESS_NOTICE_KEY, isInstructorAccessCode } from '../utils/instructorAccess';
 
 const api = axios.create({
   baseURL: '/api',
@@ -12,17 +13,19 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// On 401, clear auth state so the user is redirected to login
+// Expired tokens and server-revoked instructor access both end the local session.
 api.interceptors.response.use(
   (res) => res,
   (err) => {
     const requestUrl = String(err.config?.url || '');
     const isLoginRequest = /(?:^|\/)auth\/login(?:\?|$)/.test(requestUrl);
-    if (err.response?.status === 401 && !isLoginRequest) {
+    const accessCode = err.response?.data?.code;
+    const instructorAccessDenied = err.response?.status === 403 && isInstructorAccessCode(accessCode);
+    if (!isLoginRequest && (err.response?.status === 401 || instructorAccessDenied)) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      // Let the app's ProtectedRoute redirect to /login
-      window.location.href = '/login';
+      if (instructorAccessDenied) sessionStorage.setItem(INSTRUCTOR_ACCESS_NOTICE_KEY, accessCode);
+      window.location.replace(instructorAccessDenied ? '/login?role=instructor' : '/login');
     }
     return Promise.reject(err);
   }

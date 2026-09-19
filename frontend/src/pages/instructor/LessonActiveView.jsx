@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../layouts/DashboardLayout';
 import { LoadingState, Alert, Btn, Badge, ConfirmModal, Card } from '../../components/ui';
 import LessonEditModal from '../../components/LessonEditModal';
+import GeneratedContent from '../../components/reasoning/GeneratedContent';
 import LessonCapturePanel from '../../components/hardware/LessonCapturePanel';
 import LessonAudioPanel from '../../components/hardware/LessonAudioPanel';
 import AudioUploadFailureModal from '../../components/hardware/AudioUploadFailureModal';
@@ -225,9 +226,9 @@ export default function LessonActiveView() {
                 {lesson?.status==='ACTIVE' && <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-300"><span className="pulse-dot inline-block h-2 w-2 rounded-full bg-emerald-500"/>LIVE</span>}
                 {lesson?.status==='PAUSED' && <span className="text-xs font-semibold text-amber-600 dark:text-amber-300">Timer paused</span>}
               </div>
-              <h1 className="text-xl font-bold text-slate-900 dark:text-white sm:text-2xl">{lesson?.title}</h1>
+              <h1 className="text-xl font-bold text-slate-900 dark:text-white sm:text-2xl"><GeneratedContent markdown={lesson?.title} inline/></h1>
               <p className="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">{lesson?.subjectCode} — {lesson?.subjectName} <span className="mx-1.5 text-slate-300 dark:text-slate-600">•</span> {lesson?.sectionName}</p>
-              {lesson?.topic&&<p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{lesson.topic}</p>}
+              {lesson?.topic&&<p className="mt-2 text-sm text-slate-500 dark:text-slate-400"><GeneratedContent markdown={lesson.topic} inline/></p>}
             </div>
             <div className="shrink-0 sm:text-right">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{preparingSession?'Session Time':lesson?.status==='COMPLETED'?'Net Duration':'Elapsed'}</p>

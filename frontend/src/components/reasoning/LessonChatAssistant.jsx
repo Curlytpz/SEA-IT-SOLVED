@@ -652,7 +652,7 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
               <AiAssistantAvatar state="idle" size="sm"/>
               <div className="lesson-chat-quiz-options-content">
                 <strong>{missingQuizParameters.length === 1 ? 'Choose quiz detail' : 'Choose quiz details'}</strong>
-                <p>{quizOptions.instruction}</p>
+                 <GeneratedContent markdown={quizOptions.instruction} assistantText/>
                 {missingQuizParameters.includes('difficulty') && <div className="lesson-chat-quiz-option-group" role="group" aria-label="Quiz difficulty">
                   <span>Difficulty</span>
                   <div>{['EASY', 'MEDIUM', 'HARD'].map(value => <button key={value} type="button" aria-pressed={quizOptions.difficulty === value} disabled={sending} onClick={() => setQuizOptions(current => ({ ...current, difficulty: value }))}>{value[0] + value.slice(1).toLowerCase()}</button>)}</div>

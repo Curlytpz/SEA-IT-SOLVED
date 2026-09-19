@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { instructorAccessCodeForStatus } from '../utils/instructorAccess';
 
 /**
  * ProtectedRoute
@@ -11,18 +13,21 @@ import { useAuth } from '../context/AuthContext';
  * 2. Role guard — if `roles` is provided, the user's role must be included.
  *    Wrong-role users are sent to their own dashboard root.
  *
- * 3. Active-status guard for INSTRUCTOR — if `requireActive` is true (the
- *    default for instructor sub-routes), a PENDING instructor is redirected
- *    to /instructor where InstructorDashboard shows the awaiting-approval
- *    screen. This prevents manually navigating to /instructor/sections or
- *    /instructor/sections/:id while pending.
+ * 3. Active-status guard for INSTRUCTOR — every instructor route requires
+ *    server-approved status; a stale local account is signed out before
+ *    any instructor page can render.
  *
  * NOTE: This is a UX convenience only. The backend independently enforces
  * status=ACTIVE on all instructor resource endpoints via authorizeActive().
  * A user who bypasses this component still gets HTTP 403 from the API.
  */
 export default function ProtectedRoute({ children, roles, requireActive = false }) {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const unapprovedInstructor = requireActive && user?.role === 'INSTRUCTOR' && user.status !== 'ACTIVE';
+
+  useEffect(() => {
+    if (unapprovedInstructor) logout();
+  }, [unapprovedInstructor, logout]);
 
   // Not logged in
   if (!user) {
@@ -37,10 +42,8 @@ export default function ProtectedRoute({ children, roles, requireActive = false 
     return <Navigate to="/login" replace />;
   }
 
-  // PENDING instructor trying to reach an active-only instructor route
-  if (requireActive && user.role === 'INSTRUCTOR' && user.status !== 'ACTIVE') {
-    // Redirect to the dashboard root, which renders the awaiting-approval banner
-    return <Navigate to="/instructor" replace />;
+  if (unapprovedInstructor) {
+    return <Navigate to="/login?role=instructor" state={{ instructorAccessCode: instructorAccessCodeForStatus(user.status) }} replace />;
   }
 
   return children;

@@ -61,8 +61,7 @@ function CapabilityIcon({ icon: Icon }) {
 
 export default function FeatureGrid() {
   return (
-    <section id="features" className={`landing-section-dark landing-noise relative overflow-clip bg-background text-foreground ${landingStyles.section}`}>
-      <div aria-hidden="true" className="pointer-events-none absolute right-[-16rem] top-12 h-[620px] w-[620px] rounded-full" style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.11), transparent 68%)' }} />
+    <section id="features" className={`landing-section-dark relative overflow-clip bg-background text-foreground ${landingStyles.section}`}>
 
       <div className={`${landingStyles.container} relative grid items-start gap-14 lg:grid-cols-[0.36fr_0.64fr] lg:gap-16 xl:gap-24`}>
         <header data-landing-reveal>

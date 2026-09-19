@@ -236,10 +236,22 @@ async function reviewQueue(instructorId) {
     FROM quiz_attempts a JOIN lesson_quizzes q ON q.id=a.quiz_id JOIN lesson_sessions l ON l.id=q.lesson_id
     JOIN sections s ON s.id=a.section_id JOIN lesson_quiz_questions qq ON qq.quiz_id=q.id
     LEFT JOIN quiz_attempt_answers aa ON aa.attempt_id=a.id AND aa.question_id=qq.id
-    WHERE q.instructor_id=$1 AND l.instructor_id=$1 AND a.status='SUBMITTED'
+    WHERE q.instructor_id=$1 AND l.instructor_id=$1 AND s.instructor_id=$1
+      AND l.section_id=s.id AND a.lesson_id=l.id AND a.status='SUBMITTED'
       AND (qq.manual_grading OR qq.question_type IN ('SHORT_ANSWER','PROBLEM_SOLVING')) AND aa.points_awarded IS NULL
     GROUP BY q.id,l.id,s.id ORDER BY s.section_name,q.title`,[instructorId]);
   return result.rows.map(row=>({quizId:row.quiz_id,title:row.title,lessonId:row.lesson_id,sectionId:row.section_id,sectionName:row.section_name,pending:row.pending,attempts:row.attempts}));
 }
 
-module.exports = { reviewAttempts, sectionReviews, reviewQueue, uploadSolution, listSolutions, recognize, analyze, grade, image };
+async function reviewSubmissionCount(instructorId) {
+  const { rows } = await pool.query(`SELECT COUNT(DISTINCT a.id)::int total_submissions
+    FROM quiz_attempts a JOIN lesson_quizzes q ON q.id=a.quiz_id
+    JOIN lesson_sessions l ON l.id=q.lesson_id JOIN sections s ON s.id=a.section_id
+    JOIN lesson_quiz_questions qq ON qq.quiz_id=q.id
+    WHERE q.instructor_id=$1 AND l.instructor_id=$1 AND s.instructor_id=$1
+      AND l.section_id=s.id AND a.lesson_id=l.id AND a.status IN ('SUBMITTED','GRADED')
+      AND (qq.manual_grading OR qq.question_type IN ('SHORT_ANSWER','PROBLEM_SOLVING'))`,[instructorId]);
+  return rows[0].total_submissions;
+}
+
+module.exports = { reviewAttempts, sectionReviews, reviewQueue, reviewSubmissionCount, uploadSolution, listSolutions, recognize, analyze, grade, image };

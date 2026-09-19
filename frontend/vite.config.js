@@ -22,7 +22,7 @@ export default defineConfig({
 
     allowedHosts: [
       'localhost',
-      'recreational-detail-trek-deluxe.trycloudflare.com',
+      'guy-furnished-factor-bernard.trycloudflare.com',
     ],
 
     proxy: {

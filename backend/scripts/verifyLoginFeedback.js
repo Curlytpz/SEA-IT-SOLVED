@@ -70,8 +70,17 @@ async function main() {
       password,
       expectedRole: 'INSTRUCTOR',
     });
-    assert.equal(pending.status, 200);
-    assert.equal(pending.body.data.user.status, 'PENDING');
+    assert.equal(pending.status, 403);
+    assert.equal(pending.body.code, 'INSTRUCTOR_PENDING');
+    assert.equal(pending.body.data?.token, undefined);
+
+    const pendingWrongPassword = await postLogin(base, {
+      email: accounts[1].email,
+      password: 'WrongPass123!',
+      expectedRole: 'INSTRUCTOR',
+    });
+    assert.equal(pendingWrongPassword.status, 401);
+    assert.deepEqual(pendingWrongPassword.body, expectedCredentialFailure);
 
     const suspended = await postLogin(base, {
       email: accounts[2].email,
@@ -88,13 +97,15 @@ async function main() {
       expectedRole: 'INSTRUCTOR',
     });
     assert.equal(rejected.status, 403);
-    assert.match(rejected.body.error, /rejected/i);
+    assert.equal(rejected.body.code, 'INSTRUCTOR_REJECTED');
+    assert.match(rejected.body.error, /not approved/i);
     assert.notEqual(rejected.body.error, expectedCredentialFailure.error);
 
     console.log('PASS wrong password returns the generic credential message');
     console.log('PASS unknown email returns the identical generic credential message');
     console.log('PASS valid credentials authenticate successfully');
-    console.log('PASS pending instructor retains the approval-state flow');
+    console.log('PASS pending instructor receives no session after correct credentials');
+    console.log('PASS wrong password does not reveal instructor approval status');
     console.log('PASS suspended and rejected instructors retain specific account-state messages');
   } finally {
     if (server) await new Promise(resolve => server.close(resolve));

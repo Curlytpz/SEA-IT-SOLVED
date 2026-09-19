@@ -26,9 +26,7 @@ router.post('/forgot-password', forgotPasswordLimiter, authCtrl.forgotPassword);
 router.post('/reset-password/validate', resetPasswordLimiter, authCtrl.validateResetToken);
 router.post('/reset-password', resetPasswordLimiter, authCtrl.resetPassword);
 
-// Protected — requires valid JWT.
-// authenticate allows PENDING instructors through here so the frontend
-// can read user.status and show the "awaiting approval" screen.
+// Protected — requires a valid JWT and current server-side account access.
 router.get('/me', authenticate, authCtrl.getMe);
 
 module.exports = router;

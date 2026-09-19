@@ -37,15 +37,16 @@ const StudentQuizHistory = lazy(() => import('./pages/student/StudentQuizHistory
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 function TokenValidator({ children }) {
-  const { refreshUser } = useAuth();
+  const { refreshUser, validatingSession } = useAuth();
   useEffect(() => { refreshUser(); }, [refreshUser]);
-  return children;
+  return validatingSession ? <RouteLoadingFallback /> : children;
 }
 
 function PublicRoute({ children }) {
   const { user } = useAuth();
   if (!user) return children;
   if (user.role === 'ADMIN') return <Navigate to="/admin" replace />;
+  if (user.role === 'INSTRUCTOR' && user.status !== 'ACTIVE') return children;
   if (user.role === 'INSTRUCTOR') return <Navigate to="/instructor" replace />;
   return <Navigate to="/student" replace />;
 }
@@ -77,7 +78,7 @@ function AppRoutes() {
         <Route path="/admin/users" element={<ProtectedRoute roles={['ADMIN']}><AllUsers /></ProtectedRoute>} />
         <Route path="/admin/system-evaluation" element={<ProtectedRoute roles={['ADMIN']}><SystemEvaluation /></ProtectedRoute>} />
 
-        <Route path="/instructor" element={<ProtectedRoute roles={['INSTRUCTOR']}><InstructorDashboard /></ProtectedRoute>} />
+        <Route path="/instructor" element={<ProtectedRoute roles={['INSTRUCTOR']} requireActive><InstructorDashboard /></ProtectedRoute>} />
         <Route path="/instructor/sections" element={<ProtectedRoute roles={['INSTRUCTOR']} requireActive><InstructorSections /></ProtectedRoute>} />
         <Route path="/instructor/sections/:id" element={<ProtectedRoute roles={['INSTRUCTOR']} requireActive><InstructorSectionDetail /></ProtectedRoute>} />
         <Route path="/instructor/lessons/:lessonId/active" element={<ProtectedRoute roles={['INSTRUCTOR']} requireActive><LessonActiveView /></ProtectedRoute>} />

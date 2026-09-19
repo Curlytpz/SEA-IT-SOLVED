@@ -5,6 +5,7 @@ import { Alert, Badge, Btn, Card, EmptyState, LoadingState, PageHeader, StatCard
 import { useAuth } from '../../context/AuthContext';
 import { BookOpen, Chart, Check, Play, Plus } from '../../components/icons';
 import { getStudentLearning, startQuizAttempt } from '../../services/phase6Api';
+import GeneratedContent from '../../components/reasoning/GeneratedContent';
 import { studentQuizTitle } from '../../utils/quizDisplay';
 import { dashboardGreeting } from '../../utils/dashboardGreeting';
 
@@ -85,7 +86,7 @@ export default function StudentDashboard() {
         <section className="mt-8">
           <div className="student-section-heading"><div><h2 className="text-lg font-bold text-foreground">Pending Quizzes</h2><p className="mt-1 text-sm text-muted-foreground">Assessments that still need your answer.</p></div></div>
           {pendingQuizzes.length ? <div className="student-pending-quiz-list">{pendingQuizzes.map(quiz => <Card key={quiz.id} className="student-pending-quiz-row">
-            <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><Badge status={quiz.studentStatus}/><span className="student-subject-label">{quiz.section.subjectCode}</span></div><h3>{studentQuizTitle(quiz.title, quiz.lessonTitle)}</h3><p>{quiz.section.name} <span aria-hidden="true">·</span> {quiz.lessonTitle} <span aria-hidden="true">·</span> {countLabel(quiz.questionCount, 'question')}</p></div>
+            <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><Badge status={quiz.studentStatus}/><span className="student-subject-label">{quiz.section.subjectCode}</span></div><h3><GeneratedContent markdown={studentQuizTitle(quiz.title, quiz.lessonTitle)} quizText audience="student" inline/></h3><p>{quiz.section.name} <span aria-hidden="true">·</span> <GeneratedContent markdown={quiz.lessonTitle} audience="student" inline/> <span aria-hidden="true">·</span> {countLabel(quiz.questionCount, 'question')}</p></div>
             <Btn loading={quizBusy === quiz.id} disabled={Boolean(quizBusy) && quizBusy !== quiz.id} onClick={() => openPendingQuiz(quiz)}><Play size={15}/>{quiz.studentStatus === 'IN_PROGRESS' ? 'Resume Quiz' : 'Answer Quiz'}</Btn>
           </Card>)}</div> : <Card className="student-dashboard-compact-empty"><span className="student-dashboard-compact-empty-icon" aria-hidden="true"><Check size={18}/></span><div><h3>You're all caught up!</h3><p>No quizzes are waiting for you right now.</p></div></Card>}
         </section>
@@ -97,7 +98,7 @@ export default function StudentDashboard() {
             const badgeStatus = lessonBadgeStatus(lesson);
             return <Card key={lesson.id} className="student-lesson-card">
               <div className="flex items-start justify-between gap-3"><span className="student-subject-label">{lesson.section.subjectCode}</span>{badgeStatus && <Badge status={badgeStatus}/>}</div>
-              <h3 className="mt-4 font-bold text-foreground">{lesson.title}</h3>
+              <h3 className="mt-4 font-bold text-foreground"><GeneratedContent markdown={lesson.title} audience="student" inline/></h3>
               <p className="mt-1 text-sm text-muted-foreground">{lesson.section.subjectName} <span aria-hidden="true">·</span> {lesson.section.name}</p>
               <p className="mt-2 text-xs text-muted-foreground">Instructor: {lesson.section.instructorName}</p>
               <div className="student-lesson-meta"><span>{lesson.hasMaterials ? 'Lesson material available' : 'Quiz only'}</span><span>{lessonQuizSummary(lesson)}</span></div>
@@ -108,7 +109,7 @@ export default function StudentDashboard() {
 
         <section className="mt-8">
           <div className="student-section-heading"><div><h2 className="text-lg font-bold text-foreground">Recent Results</h2><p className="mt-1 text-sm text-muted-foreground">Recent submissions and released quiz results.</p></div><Link to="/student/results" className="shrink-0 text-sm font-semibold text-primary hover:text-primary-hover">View history <span aria-hidden="true">→</span></Link></div>
-          {data.recentResults.length ? <div className="student-result-list">{data.recentResults.map(result => <Link key={result.id} to={`/student/attempts/${result.id}`}><Card className="student-result-row"><div className="student-result-main"><div className="flex flex-wrap items-center gap-2"><Badge status={result.status}/><h3 className="truncate font-semibold text-foreground">{studentQuizTitle(result.quizTitle,result.lessonTitle)}</h3></div><p className="mt-1 text-xs text-muted-foreground">{result.subjectCode} <span aria-hidden="true">·</span> Submitted {new Date(result.submittedAt).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'})}</p></div><div className="student-result-score">{result.status === 'SUBMITTED' ? <><strong className="text-warning">Awaiting Review</strong><span>Instructor grading pending</span></> : <><strong className="text-success">{result.score}/{result.maxScore}</strong><span>{result.percentage}% <span aria-hidden="true">·</span> <span className="student-result-action">View Results</span></span></>}</div></Card></Link>)}</div> : <EmptyState icon={<Chart/>} title="No results yet" body="Submit a quiz to see your performance indicators."/>}
+          {data.recentResults.length ? <div className="student-result-list">{data.recentResults.map(result => <Link key={result.id} to={`/student/attempts/${result.id}`}><Card className="student-result-row"><div className="student-result-main"><div className="flex flex-wrap items-center gap-2"><Badge status={result.status}/><h3 className="truncate font-semibold text-foreground"><GeneratedContent markdown={studentQuizTitle(result.quizTitle,result.lessonTitle)} quizText audience="student" inline/></h3></div><p className="mt-1 text-xs text-muted-foreground">{result.subjectCode} <span aria-hidden="true">·</span> Submitted {new Date(result.submittedAt).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'})}</p></div><div className="student-result-score">{result.status === 'SUBMITTED' ? <><strong className="text-warning">Awaiting Review</strong><span>Instructor grading pending</span></> : <><strong className="text-success">{result.score}/{result.maxScore}</strong><span>{result.percentage}% <span aria-hidden="true">·</span> <span className="student-result-action">View Results</span></span></>}</div></Card></Link>)}</div> : <EmptyState icon={<Chart/>} title="No results yet" body="Submit a quiz to see your performance indicators."/>}
         </section>
       </>}
     </div>

@@ -74,8 +74,7 @@ function ReviewWorkspace() {
 
 export default function InstructorWorkspace() {
   return (
-    <section id="instructors" className={`landing-section-light relative overflow-clip bg-background text-foreground ${landingStyles.section}`}>
-      <div aria-hidden="true" className="absolute -right-44 top-36 h-[420px] w-[420px] rounded-full" style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.08), transparent 68%)' }} />
+    <section id="instructors" className={`landing-section-dark relative overflow-clip bg-background text-foreground ${landingStyles.section}`}>
       <div className={landingStyles.container}>
         <div data-landing-reveal className="grid gap-8 lg:grid-cols-[0.72fr_1.28fr] lg:items-center">
           <div>

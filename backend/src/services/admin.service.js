@@ -29,7 +29,7 @@ async function getPendingInstructors() {
 
 async function approveInstructor(instructorId) {
   const { rows } = await pool.query(
-    `UPDATE users SET status = 'ACTIVE'
+    `UPDATE users SET status = 'ACTIVE', auth_version = auth_version + 1
      WHERE id = $1 AND role = 'INSTRUCTOR' AND status = 'PENDING'
      RETURNING *`,
     [instructorId]
@@ -40,7 +40,7 @@ async function approveInstructor(instructorId) {
 
 async function rejectInstructor(instructorId) {
   const { rows } = await pool.query(
-    `UPDATE users SET status = 'REJECTED'
+    `UPDATE users SET status = 'REJECTED', auth_version = auth_version + 1
      WHERE id = $1 AND role = 'INSTRUCTOR' AND status = 'PENDING'
      RETURNING *`,
     [instructorId]
@@ -119,7 +119,10 @@ async function setUserStatus(userId, newStatus, adminId) {
   }
 
   const { rows } = await pool.query(
-    'UPDATE users SET status = $1 WHERE id = $2 RETURNING *',
+    `UPDATE users
+     SET status = $1,
+         auth_version = auth_version + CASE WHEN role = 'INSTRUCTOR' THEN 1 ELSE 0 END
+     WHERE id = $2 RETURNING *`,
     [newStatus, userId]
   );
   return safeUser(rows[0]);

@@ -10,15 +10,15 @@ const asyncHandler = require('../utils/asyncHandler');
  * verifies it, and fetches a fresh copy of the user row from the DB
  * on every single request. This means:
  *
- *   - SUSPENDED accounts are blocked immediately (no stale JWT window)
- *   - REJECTED accounts are blocked immediately
+ *   - PENDING instructors, SUSPENDED accounts, and REJECTED accounts are
+ *     blocked immediately (no stale JWT window)
  *   - Role or status changes made by the admin are reflected on the very
  *     next request — no re-login required
  *
  * What this middleware does NOT do:
  *   - It does not enforce role requirements (use authorize / authorizeActive)
- *   - It does not require status=ACTIVE (a PENDING instructor may call /auth/me
- *     so the frontend can show the "awaiting approval" screen)
+ *   - It does not require status=ACTIVE for every role; instructor approval
+ *     is enforced here even for /auth/me and mixed-role endpoints
  */
 const authenticate = asyncHandler(async (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -48,16 +48,25 @@ const authenticate = asyncHandler(async (req, res, next) => {
 
   const user = rows[0];
 
-  if (Number(decoded.authVersion || 0) !== Number(user.auth_version || 0)) {
-    throw new AppError('Invalid or expired token.', 401);
-  }
-
   // Block hard-stopped accounts at the authentication layer
+  if (user.role === 'INSTRUCTOR' && user.status === 'PENDING') {
+    throw new AppError('Your instructor account is awaiting admin approval.', 403, { code: 'INSTRUCTOR_PENDING' });
+  }
   if (user.status === 'SUSPENDED') {
-    throw new AppError('Your account has been suspended. Contact the administrator.', 403);
+    throw new AppError('Your account has been suspended. Contact the administrator.', 403, {
+      code: user.role === 'INSTRUCTOR' ? 'INSTRUCTOR_SUSPENDED' : undefined,
+    });
   }
   if (user.status === 'REJECTED') {
-    throw new AppError('Your account has been rejected. Contact the administrator.', 403);
+    throw user.role === 'INSTRUCTOR'
+      ? new AppError('Your instructor account was not approved.', 403, { code: 'INSTRUCTOR_REJECTED' })
+      : new AppError('Your account has been rejected. Contact the administrator.', 403);
+  }
+  if (user.role === 'INSTRUCTOR' && user.status !== 'ACTIVE') {
+    throw new AppError('Your instructor account is not available. Please contact the administrator.', 403, { code: 'INSTRUCTOR_SUSPENDED' });
+  }
+  if (Number(decoded.authVersion || 0) !== Number(user.auth_version || 0)) {
+    throw new AppError('Invalid or expired token.', 401);
   }
 
   req.user = user;

@@ -184,7 +184,7 @@ function Block({ block, selectedMaterialId, changedMaterialId, editState, audien
     return <header className="generated-document-header">
       <p className="generated-document-brand">SEA-IT-SOLVED</p>
       <p className="generated-document-kind">Generated Lesson Materials</p>
-      <h2>{meta.lessonTitle || 'Generated Lesson Materials'}</h2>
+      <h2><GeneratedContent markdown={meta.lessonTitle || 'Generated Lesson Materials'} inline audience={audience}/></h2>
       <div className="generated-document-rule"/>
       <dl className="generated-document-metadata">
         {(meta.subjectCode || meta.subjectName || meta.sectionName) && <div><dt>Course</dt><dd>{[meta.subjectCode, meta.subjectName, meta.sectionName].filter(Boolean).join(' • ')}</dd></div>}
@@ -196,7 +196,7 @@ function Block({ block, selectedMaterialId, changedMaterialId, editState, audien
   if (block.kind === 'section') return <section
     className={`generated-document-section-start ${selectedMaterialId === block.materialId ? 'is-selected' : ''} ${changedMaterialId === block.materialId ? 'is-changed' : ''} ${isEditing ? 'is-ai-editing' : ''}`}
   >
-    <h3><span aria-hidden="true">{block.sectionNumber}. </span>{block.title}</h3>
+    <h3><span aria-hidden="true">{block.sectionNumber}. </span><GeneratedContent markdown={block.title} inline audience={audience}/></h3>
     {isEditing ? previewMarkdown
       ? <div className="generated-document-ai-preview"><span>AI editing…</span><DocumentMathContent markdown={previewMarkdown} audience={audience}/></div>
       : <DocumentEditSkeleton/>

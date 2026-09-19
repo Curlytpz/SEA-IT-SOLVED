@@ -22,7 +22,10 @@ export async function getSystemEvaluation(){const{data}=await api.get('/admin/sy
 
 
 export async function getInstructorQuizAttempts(quizId){const{data}=await api.get(`/instructor/quizzes/${quizId}/attempts`);return data.data;}
-export async function getInstructorReviewQueue(){const{data}=await api.get('/instructor/review-queue');return data.data;}
+export async function getInstructorReviewQueue(){
+  const {data}=await api.get('/instructor/review-queue');
+  return {rows:data.data,totalSubmissions:data.meta?.totalSubmissions ?? null};
+}
 
 
 export async function getInstructorSectionReviews(sectionId){const{data}=await api.get(`/instructor/sections/${sectionId}/reviews`);return data.data;}

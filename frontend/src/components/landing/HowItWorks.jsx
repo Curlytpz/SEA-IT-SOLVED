@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import landingWhiteboard from '../../assets/landing-whiteboard.jpg';
 import landingLectureWhiteboard from '../../assets/landing-whiteboard-new.png';
 import MathExpression from '../recognition/MathExpression';
@@ -198,15 +198,6 @@ function ContextualAiVisual() {
 }
 
 const VISUALS = [LectureVisual, CaptureVisual, ReviewVisual, ContextualAiVisual, GenerateVisual, LearnVisual];
-const STAGE_GLOWS = [
-  'radial-gradient(circle at 78% 42%, hsl(var(--primary) / 0.13), transparent 38%)',
-  'radial-gradient(circle at 72% 46%, hsl(var(--primary) / 0.12), transparent 40%)',
-  'radial-gradient(circle at 82% 52%, hsl(var(--primary) / 0.11), transparent 39%)',
-  'radial-gradient(circle at 76% 58%, hsl(var(--primary) / 0.10), transparent 42%)',
-  'radial-gradient(circle at 84% 48%, hsl(var(--primary) / 0.13), transparent 40%)',
-  'radial-gradient(circle at 74% 54%, hsl(var(--primary) / 0.12), transparent 41%)',
-];
-
 const WORKFLOW_NOTICES = [
   'Lecture active',
   'Camera connected',
@@ -245,6 +236,18 @@ export default function HowItWorks() {
   const sectionRef = useRef(null);
   const pinRef = useRef(null);
   const progressRef = useRef(null);
+  const timelineRef = useRef(null);
+  const [activeStage, setActiveStage] = useState(0);
+
+  const goToStage = index => {
+    const timeline = timelineRef.current;
+    const trigger = timeline?.scrollTrigger;
+    if (!trigger) return;
+
+    const stageTime = index === 0 ? 0.25 : index + 0.35;
+    const scrollPosition = trigger.start + (stageTime / timeline.duration()) * (trigger.end - trigger.start);
+    window.scrollTo({ top: scrollPosition, behavior: 'smooth' });
+  };
 
   useLandingGsap(sectionRef, ({ gsap, desktop, mobile, reduce }) => {
     const section = sectionRef.current;
@@ -253,11 +256,10 @@ export default function HowItWorks() {
     if (desktop) {
       const copies = gsap.utils.toArray('.landing-workflow-copy', section);
       const visuals = gsap.utils.toArray('.landing-workflow-visual', section);
-      const glows = gsap.utils.toArray('.landing-workflow-glow', section);
       const notices = gsap.utils.toArray('.landing-workflow-desktop .landing-workflow-notice', section);
 
-      gsap.set([...copies, ...visuals, ...glows, ...notices], { autoAlpha: 0 });
-      gsap.set([copies[0], visuals[0], glows[0]], { autoAlpha: 1, y: 0, scale: 1 });
+      gsap.set([...copies, ...visuals, ...notices], { autoAlpha: 0 });
+      gsap.set([copies[0], visuals[0]], { autoAlpha: 1, y: 0, scale: 1 });
       gsap.set(progressRef.current, { scaleX: 0 });
 
       const timeline = gsap.timeline({
@@ -272,6 +274,11 @@ export default function HowItWorks() {
           invalidateOnRefresh: true,
         },
       });
+      timelineRef.current = timeline;
+      timeline.eventCallback('onUpdate', () => {
+        const stage = Math.min(STAGES.length - 1, Math.floor(timeline.time() + 0.05));
+        setActiveStage(current => current === stage ? current : stage);
+      });
 
       timeline
         .to(progressRef.current, { scaleX: 1 / STAGES.length, duration: 0.7 }, 0)
@@ -282,13 +289,13 @@ export default function HowItWorks() {
         const stageIndex = index + 1;
         const position = stageIndex;
         timeline
-          .to([copies[stageIndex - 1], visuals[stageIndex - 1], glows[stageIndex - 1]], {
+          .to([copies[stageIndex - 1], visuals[stageIndex - 1]], {
             autoAlpha: 0,
             y: -18,
             scale: 0.985,
             duration: 0.22,
           }, position - 0.18)
-          .fromTo([copies[stageIndex], visuals[stageIndex], glows[stageIndex]], {
+          .fromTo([copies[stageIndex], visuals[stageIndex]], {
             autoAlpha: 0,
             y: 22,
             scale: 0.985,
@@ -304,6 +311,10 @@ export default function HowItWorks() {
       });
 
       timeline.to({}, { duration: 0.65 });
+
+      return () => {
+        timelineRef.current = null;
+      };
     }
 
     if (mobile) {
@@ -333,16 +344,10 @@ export default function HowItWorks() {
   }, []);
 
   return (
-    <section id="how-it-works" ref={sectionRef} className="relative landing-workflow landing-section-light overflow-clip bg-background text-foreground">
+    <section id="how-it-works" ref={sectionRef} className="relative landing-workflow landing-section-dark overflow-clip bg-background text-foreground">
       <StackedWorkflow />
 
       <div ref={pinRef} className="relative items-center hidden landing-workflow-desktop min-h-dvh overflow-clip lg:flex">
-        <div aria-hidden="true" className="absolute inset-0 pointer-events-none">
-          {STAGE_GLOWS.map((background) => (
-            <div key={background} style={{ background }} className="absolute inset-0 landing-workflow-glow" />
-          ))}
-        </div>
-
         <div className={`${landingStyles.container} relative grid grid-cols-[0.7fr_1.3fr] items-center gap-14 xl:gap-20`}>
           <div className="min-w-0">
             <p className={landingStyles.eyebrowDark}>How it works</p>
@@ -369,6 +374,25 @@ export default function HowItWorks() {
             ))}
           </GlowCardGrid>
         </div>
+        <nav aria-label="How it works steps" className="absolute inset-x-0 bottom-5">
+          <div className={`${landingStyles.container} flex items-center justify-between gap-4`}>
+            <span className="text-xs text-muted-foreground">Scroll to explore all six steps</span>
+            <div className="flex items-center gap-1.5">
+              {STAGES.map((stage, index) => (
+                <button
+                  key={stage.number}
+                  type="button"
+                  onClick={() => goToStage(index)}
+                  aria-label={`Show step ${stage.number}: ${stage.title}`}
+                  aria-current={activeStage === index ? 'step' : undefined}
+                  className={`grid h-8 w-8 place-items-center rounded-full border text-[11px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${activeStage === index ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background/60 text-muted-foreground hover:border-primary hover:text-foreground'}`}
+                >
+                  {stage.number}
+                </button>
+              ))}
+            </div>
+          </div>
+        </nav>
         <div className="absolute inset-x-0 bottom-0 h-px bg-border">
           <div ref={progressRef} className="h-px origin-left bg-primary" />
         </div>

@@ -6,7 +6,7 @@ import { landingStyles } from './landingStyles';
 
 export default function FinalCTA() {
   return (
-    <section className="landing-final-cta landing-section-dark landing-noise relative overflow-clip bg-background py-24 text-foreground sm:py-28 lg:py-36">
+    <section className="landing-final-cta landing-section-dark relative overflow-clip bg-background py-24 text-foreground sm:py-28 lg:py-36">
       <WaveBackground compact />
       <div data-landing-reveal className={`relative grid gap-12 lg:grid-cols-[1.35fr_0.65fr] lg:items-end ${landingStyles.container}`}>
         <div>

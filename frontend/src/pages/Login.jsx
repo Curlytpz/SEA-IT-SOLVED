@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { GraduationCap, Presentation, ShieldCheck } from 'lucide-react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { Alert, Btn, Input, FormField } from '../components/ui';
 import AuthLayout from '../components/public/AuthLayout';
 import { isStudentEmail, STUDENT_EMAIL_HINT } from '../utils/authEmail';
+import { INSTRUCTOR_ACCESS_NOTICE_KEY, INSTRUCTOR_ACCESS_NOTICES, isInstructorAccessCode } from '../utils/instructorAccess';
 
 const ROLE_OPTIONS = [
   { key: 'student', label: 'Student', description: 'Access lessons', icon: GraduationCap },
@@ -40,6 +41,18 @@ export default function Login() {
   const selectedCopy = selectedRole ? ROLE_COPY[selectedRole] : null;
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
+  const [approvalCode, setApprovalCode] = useState(() => {
+    const code = sessionStorage.getItem(INSTRUCTOR_ACCESS_NOTICE_KEY);
+    return isInstructorAccessCode(code) ? code : null;
+  });
+  useEffect(() => {
+    sessionStorage.removeItem(INSTRUCTOR_ACCESS_NOTICE_KEY);
+  }, []);
+  useEffect(() => {
+    if (isInstructorAccessCode(location.state?.instructorAccessCode)) {
+      setApprovalCode(location.state.instructorAccessCode);
+    }
+  }, [location.state?.instructorAccessCode]);
   const set = key => event => {
     setForm(current => ({ ...current, [key]: event.target.value }));
     if (error) setError('');
@@ -49,6 +62,7 @@ export default function Login() {
     event.preventDefault();
     if (!selectedRole) return;
     setError('');
+    setApprovalCode(null);
     if (selectedRole === 'student' && !isStudentEmail(form.email)) { setError(STUDENT_EMAIL_HINT); return; }
     try {
       const user = await login(form.email, form.password, selectedRole.toUpperCase());
@@ -56,7 +70,8 @@ export default function Login() {
       else if (user.role === 'INSTRUCTOR') navigate('/instructor', { replace: true });
       else navigate('/student', { replace: true });
     } catch (err) {
-      setError(err.message);
+      if (isInstructorAccessCode(err.code)) setApprovalCode(err.code);
+      else setError(err.message);
     }
   }
 
@@ -110,6 +125,11 @@ export default function Login() {
         >
           {selectedRole === 'student' && location.state?.studentRegistrationSuccess && (
             <Alert type="success">Account created successfully. Please sign in.</Alert>
+          )}
+          {selectedRole === 'instructor' && approvalCode && (
+            <Alert type={INSTRUCTOR_ACCESS_NOTICES[approvalCode].type} label="Instructor account" title={INSTRUCTOR_ACCESS_NOTICES[approvalCode].title}>
+              {INSTRUCTOR_ACCESS_NOTICES[approvalCode].message}
+            </Alert>
           )}
           <form onSubmit={handleSubmit} className="public-auth-form">
             <FormField label="Email address" hint={selectedRole === 'student' ? STUDENT_EMAIL_HINT : undefined}><Input type="email" required placeholder={selectedRole === 'student' ? 'you@student.hau.edu.ph' : 'you@hau.edu.ph'} value={form.email} onChange={set('email')} autoComplete="email"/></FormField>

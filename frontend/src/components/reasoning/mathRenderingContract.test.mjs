@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import katex from 'katex';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { createServer } from 'vite';
 import mathContentApi from '../../../../shared/mathContent.cjs';
 import { DISPLAY_MATH_CASES, INLINE_MATH_CASES, MALFORMED_MATH_CASE } from '../../fixtures/math-rendering-cases.js';
 import { rehypeMathRenderingContract, remarkMathRenderingContract, withSafeInlineMathStyle } from '../../utils/mathRenderingContract.js';
@@ -109,6 +112,7 @@ assert.doesNotMatch(css, /\.math-invalid-hidden/);
 
 const generatedContent = fs.readFileSync(new URL('./GeneratedContent.jsx', import.meta.url), 'utf8');
 assert.match(generatedContent, /export const SharedMathMarkdown/);
+assert.match(generatedContent, /math-content-inline/);
 assert.match(generatedContent, /rehypeMathRenderingContract/);
 assert.match(generatedContent, /querySelectorAll\('\.math-inline'\)/);
 assert.match(generatedContent, /ResizeObserver/);
@@ -123,7 +127,68 @@ for (const file of [
   assert.match(fs.readFileSync(new URL(file, import.meta.url), 'utf8'), /GeneratedContent/);
 }
 
+const tutorSource = fs.readFileSync(new URL('./QuizTutor.jsx', import.meta.url), 'utf8');
+assert.match(tutorSource, /markdown=\{step\}/, 'Tutor steps must use shared math rendering.');
+assert.doesNotMatch(tutorSource, /<span>\{step\}<\/span>/, 'Tutor steps must not render raw LaTeX.');
+
+const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
+try {
+  const { default: GeneratedContent } = await server.ssrLoadModule('/src/components/reasoning/GeneratedContent.jsx');
+  const render = (markdown, options = {}) => renderToStaticMarkup(createElement(GeneratedContent, { markdown, ...options }));
+  const visibleText = html => html
+    .replace(/<annotation\b[^>]*>[\s\S]*?<\/annotation>/g, '')
+    .replace(/<[^>]*>/g, '');
+  const renderedCases = [
+    String.raw`$f(c)$`,
+    String.raw`$\lim_{x \to c} f(x)$`,
+    String.raw`$\frac{\sin x}{x}$`,
+    String.raw`$x^2 + y^2 = z^2$`,
+    String.raw`$\int_0^1 x^2\,dx$`,
+    String.raw`$$\frac{-b \pm \sqrt{b^2-4ac}}{2a}$$`,
+    String.raw`The value of $f(c)$ differs from $\lim_{x \to c} f(x)$.`,
+    String.raw`Distinguish between the value of a function $f(c)$ and the limit $\lim_{x \to c} f(x)$.`,
+    String.raw`- Study $\frac{\sin x}{x}$ and **explain** the limit.`,
+    String.raw`1. Evaluate $\lim_{x \to c} f(x)$.`,
+    String.raw`**Important:** $f(c)$ and $\lim_{x \to c} f(x)$ need not agree.`,
+    String.raw`Both $f(c)$ and $\frac{\sin x}{x}$ appear here.`,
+    String.raw`\(f(c)\) and \[\frac{\sin x}{x}\]`,
+  ];
+  renderedCases.forEach((source, index) => {
+    const html = render(source, { audience: 'student' });
+    assert.match(html, /class="katex"/, `rendered-${index}: KaTeX output missing`);
+    assert.doesNotMatch(visibleText(html), /\$\$?|\\(?:lim|frac|int|sin)\b/, `rendered-${index}: raw math is visible`);
+  });
+  const inline = render(String.raw`Study $f(c)$`, { inline: true });
+  assert.match(inline, /class="katex"/);
+  assert.doesNotMatch(inline, /<p(?:\s|>)/, 'Compact math labels must not insert block paragraphs.');
+  const table = render(String.raw`| Quantity | Value |
+| --- | --- |
+| Limit | $\lim_{x \to c} f(x)$ |`);
+  assert.match(table, /class="math-table-scroll"/);
+  assert.match(table, /<table>/);
+  assert.match(table, /class="katex"/);
+  const wideDisplay = render(DISPLAY_MATH_CASES.find(([label]) => label === 'long-mobile-overflow')[1]);
+  assert.match(wideDisplay, /class="math-block math-scroll"/, 'Wide display math must scroll locally.');
+  assert.doesNotThrow(() => render(String.raw`Malformed $\frac{x}{$ stays readable.`));
+  const currency = render('The kit costs $5 and the book costs $10.');
+  assert.match(visibleText(currency), /\$5 and the book costs \$10/, 'Ordinary prices must stay ordinary text.');
+  const escapedCurrency = render(String.raw`The kit costs \$5 and the book costs \$10.`);
+  assert.match(visibleText(escapedCurrency), /\$5 and the book costs \$10/, 'Escaped prices must stay ordinary text.');
+  assert.match(render(String.raw`Study \$f(c)\$ next.`), /class="katex"/, 'Escaped AI math delimiters must render.');
+  assert.doesNotMatch(render('Use `$f(c)$` as a literal example.'), /class="katex"/, 'Inline code must not be converted into math.');
+  const literalDelimiter = render('Use `\\(x\\)` as literal notation.');
+  assert.match(literalDelimiter, /<code>\\\(x\\\)<\/code>/, 'Inline code delimiters must retain their source.');
+  const fencedMath = render('Literal:\n\n```tex\n\\(x\\)\n```\n\nDone.');
+  assert.doesNotMatch(fencedMath, /class="katex"/, 'Fenced code must not be converted into math.');
+  assert.match(fencedMath, /\\\(x\\\)/, 'Fenced code delimiters must retain their source.');
+  const linkedSource = render('See https://example.test/notes/x^2 and contact tutor@example.test.');
+  assert.match(linkedSource, /https:\/\/example\.test\/notes\/x\^2/, 'URLs must not be rewritten as math.');
+  assert.match(linkedSource, /tutor@example\.test/, 'Email addresses must remain intact.');
+} finally {
+  await server.close();
+}
+
 const packageJson = JSON.parse(fs.readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'));
 assert.equal(packageJson.dependencies.katex, '0.16.47');
 
-console.log(`SYSTEM MATH RENDERING CONTRACT: PASS (${INLINE_MATH_CASES.length + DISPLAY_MATH_CASES.length} valid fixtures + malformed fallback)`);
+console.log(`SYSTEM MATH RENDERING CONTRACT: PASS (${INLINE_MATH_CASES.length + DISPLAY_MATH_CASES.length} valid fixtures + rendered Markdown/KaTeX and malformed fallback)`);

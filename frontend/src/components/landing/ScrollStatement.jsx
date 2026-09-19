@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { landingStyles } from './landingStyles';
 
 const WORDS = [
@@ -10,10 +11,12 @@ const WORDS = [
 ];
 
 export default function ScrollStatement() {
+  const sectionRef = useRef(null);
+
   return (
-    <section className="landing-statement landing-section-dark" aria-labelledby="landing-scroll-statement">
+    <section ref={sectionRef} className="landing-statement landing-section-dark" aria-labelledby="landing-scroll-statement">
       <div className="landing-statement-sticky">
-        <div className={landingStyles.container}>
+        <div className={`${landingStyles.container} landing-statement-content`}>
           <p className={landingStyles.eyebrowLight}>From the classroom</p>
           <h2 id="landing-scroll-statement" className="landing-statement-copy" aria-label="Every lecture contains knowledge worth keeping.">
             {WORDS.map(([word, accent], index) => (

@@ -50,6 +50,8 @@ async function main() {
       ids.users.push(result.rows[0].id);
     }
     const [instructor, otherInstructor, student, outsider] = ids.users;
+    assert.equal(await solutions.reviewSubmissionCount(instructor),0);
+    assert.equal(await solutions.reviewSubmissionCount(otherInstructor),0);
     ids.subject = (await pool.query("INSERT INTO subjects(code,name) VALUES($1,'Quiz integration verification') RETURNING id", ['QP'+suffix])).rows[0].id;
     ids.section = (await pool.query("INSERT INTO sections(subject_id,instructor_id,section_name,join_code) VALUES($1,$2,'Verification',$3) RETURNING id", [ids.subject,instructor,suffix.toUpperCase()])).rows[0].id;
     ids.lesson = (await pool.query("INSERT INTO lesson_sessions(section_id,instructor_id,title) VALUES($1,$2,'Quiz integration verification') RETURNING id", [ids.section,instructor])).rows[0].id;
@@ -128,6 +130,7 @@ async function main() {
     await intelligence.publishQuiz(ids.quiz,instructor);
     const payload = await attempts.startAttempt(ids.quiz,student);
     ids.attempt = payload.attempt.id;
+    assert.equal(await solutions.reviewSubmissionCount(instructor),0,'An in-progress attempt is not a submission.');
     assert.equal(payload.questions[1].tip,'Start with the power rule.');
     assert.equal(payload.questions[1].formula,'');
     assert.equal(payload.questions[2].tip,'');
@@ -175,6 +178,8 @@ async function main() {
     assert.equal(review.attempts[0].responses.length,3);
     assert.equal(review.attempts[0].objectiveScore,2);
     assert.equal((await solutions.reviewQueue(instructor)).find(row=>row.quizId===ids.quiz).pending,2);
+    assert.equal(await solutions.reviewSubmissionCount(instructor),1);
+    assert.equal(await solutions.reviewSubmissionCount(otherInstructor),0,'Other instructors must not see this submission.');
     const sectionReview=await solutions.sectionReviews(ids.section,instructor);
     const sectionQuiz=sectionReview.quizzes.find(row=>row.quizId===ids.quiz);
     assert.equal(sectionReview.summary.pendingResponses,2);
@@ -183,12 +188,19 @@ async function main() {
     assert.equal(sectionQuiz.problemSolvingQuestions,2);
     await assert.rejects(()=>solutions.sectionReviews(ids.section,otherInstructor),status(404));
     const ownerToken=jwt.sign({id:instructor},env.JWT_SECRET,{expiresIn:'5m'});
+    const reviewQueueResponse=await fetch(base+'/instructor/review-queue',{headers:{Authorization:'Bearer '+ownerToken}});
+    assert.equal(reviewQueueResponse.status,200);
+    const reviewQueuePayload=await reviewQueueResponse.json();
+    assert.equal(reviewQueuePayload.meta.totalSubmissions,1);
+    assert.equal(reviewQueuePayload.data.find(row=>row.quizId===ids.quiz).pending,2);
     assert.equal((await fetch(base+'/instructor/quizzes/'+ids.quiz+'/attempts',{headers:{Authorization:'Bearer '+ownerToken}})).status,200);
     assert.equal((await fetch(base+'/instructor/quizzes/'+ids.quiz+'/attempts',{headers:{Authorization:'Bearer '+token}})).status,403);
     const sectionResponse=await fetch(base+'/instructor/sections/'+ids.section+'/reviews',{headers:{Authorization:'Bearer '+ownerToken}});
     assert.equal(sectionResponse.status,200);
     assert.equal((await sectionResponse.json()).data.summary.pendingResponses,2);
     const otherToken=jwt.sign({id:otherInstructor},env.JWT_SECRET,{expiresIn:'5m'});
+    const otherQueue=await fetch(base+'/instructor/review-queue',{headers:{Authorization:'Bearer '+otherToken}});
+    assert.equal((await otherQueue.json()).meta.totalSubmissions,0);
     assert.equal((await fetch(base+'/instructor/sections/'+ids.section+'/reviews',{headers:{Authorization:'Bearer '+otherToken}})).status,404);
     console.log('PASS instructor attempt list, queue count and HTTP role/ownership isolation');
     assert.equal(result.attempt.maxScore,17); assert.equal(result.attempt.score,null); assert.equal(result.attempt.percentage,null);
@@ -250,6 +262,11 @@ async function main() {
     assert.equal((await solutions.reviewAttempts(ids.quiz,instructor)).attempts[0].status,'GRADED');
     assert.equal((await solutions.reviewAttempts(ids.quiz,instructor)).attempts[0].pending,0);
     assert(!(await solutions.reviewQueue(instructor)).some(row=>row.quizId===ids.quiz));
+    assert.equal(await solutions.reviewSubmissionCount(instructor),1,'A reviewed submission still exists.');
+    const reviewedQueue=await fetch(base+'/instructor/review-queue',{headers:{Authorization:'Bearer '+ownerToken}});
+    const reviewedPayload=await reviewedQueue.json();
+    assert.equal(reviewedPayload.meta.totalSubmissions,1);
+    assert(!reviewedPayload.data.some(row=>row.quizId===ids.quiz));
     assert.equal((await solutions.sectionReviews(ids.section,instructor)).summary.pendingResponses,0);
     assert.equal((await solutions.sectionReviews(ids.section,instructor)).summary.gradedAttempts,1);
     assert.equal((await attempts.quizHistory(student))[0].score,13);
@@ -283,6 +300,7 @@ async function main() {
       assert.equal(finished.questions[0].isCorrect,true);assert.equal(finished.questions[1].isCorrect,false);
       assert.equal((await attempts.attemptPayload(started.attempt.id,student)).attempt.score,2);
       assert.equal((await attempts.quizAnalytics(mcqId,instructor)).overview.averagePercentage,50);
+      assert.equal(await solutions.reviewSubmissionCount(instructor),1,'Objective-only quizzes are not manual-review submissions.');
     } finally {
       if(mcqId){await pool.query('DELETE FROM quiz_attempts WHERE quiz_id=$1',[mcqId]);await pool.query('DELETE FROM lesson_quizzes WHERE id=$1',[mcqId]);}
     }
@@ -302,6 +320,7 @@ async function main() {
       assert.equal(question.solution,null);assert.equal(question.answer,'');assert.equal(question.pointsAwarded,null);
     }
     assert.equal((await solutions.reviewAttempts(ids.quiz,instructor)).attempts.find(a=>a.id===blank.attempt.id).pending,2);
+    assert.equal(await solutions.reviewSubmissionCount(instructor),2);
     console.log('PASS explicit Submit Anyway: unanswered objective zero, missing solutions retained as unanswered, manual review still required');
 
     let isolationSection,isolationLesson;

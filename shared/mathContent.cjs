@@ -14,10 +14,28 @@ const BARE_MATH_COMMAND = new RegExp(`\\\\(?:${COMMAND_SOURCE})(?![A-Za-z])`);
 const DOUBLE_ESCAPED_MATH_COMMAND = new RegExp(`\\\\{2,}(?=(?:${COMMAND_SOURCE})(?![A-Za-z]))`, 'g');
 const DOUBLE_ESCAPED_MATH_DELIMITER = /\\{2,}(?=\$)/g;
 const BARE_SCRIPT_EXPRESSION = /\b([A-Za-z](?:\([^\n)]*\))?(?:(?:\^(?:\{[^}\n]+\}|[-+]?\d+|[A-Za-z]|[+-])|_(?:\{[^}\n]+\}|\d+|[ijkn])))+)(?![A-Za-z0-9_])/g;
-const PROTECTED_INLINE = /(`[^`\n]*`|\$[^$\n]+\$)/g;
+const PROTECTED_INLINE = /(`[^`\n]*`|(?<!\\)\$[^$\n]+(?<!\\)\$)/g;
 const INLINE_MATH = /(^|[^$])\$([^$\n]+)\$(?!\$)/g;
 const TALL_MATH = /\\(?:d?frac|tfrac|int|sum|prod|lim|sqrt|begin|left|right)(?![A-Za-z])/;
 const MATH_WORDS = new Set(['dx', 'dy', 'dt', 'du', 'dv', 'dw', 'sin', 'cos', 'tan', 'sec', 'csc', 'cot', 'log', 'ln', 'mod']);
+
+function protectLiteralSegments(value) {
+  const originals = [];
+  const protect = match => {
+    const token = `\uE000${originals.length}\uE001`;
+    originals.push(match);
+    return token;
+  };
+  const content = String(value || '')
+    .replace(/```[\s\S]*?```|~~~[\s\S]*?~~~/g, protect)
+    .replace(/`[^`\n]*`/g, protect)
+    .replace(/https?:\/\/[^\s<>]+/gi, protect)
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, protect);
+  return {
+    content,
+    restore: output => output.replace(/\uE000(\d+)\uE001/g, (_, index) => originals[Number(index)] || ''),
+  };
+}
 
 function repairEscapedMathDollars(value) {
   let output = '';
@@ -36,6 +54,15 @@ function repairEscapedMathDollars(value) {
     }
     if (character === '\\' && value[index + 1] === '$') {
       if (inlineMath) {
+        output += '$';
+        inlineMath = false;
+        index += 1;
+        continue;
+      }
+      // A price is not an escaped AI math delimiter, even if another price
+      // later in the sentence provides a second dollar sign.
+      if (/^\d[\d,.]*/.test(value.slice(index + 2))) {
+        output += '\\$';
         index += 1;
         continue;
       }
@@ -54,15 +81,6 @@ function repairEscapedMathDollars(value) {
 
 function repairStructuralEscapes(value) {
   return String(value || '').replace(/\\(?=\d)/g, '').replace(/\\([_^])(?=[{A-Za-z0-9+-])/g, '$1').trim();
-}
-
-function repairOcrCurrency(value) {
-  return String(value || '')
-    .replace(/\\\$\s*\.(\d+)/g, '0.$1')
-    .replace(/\\\$\s*(\d+(?:\.\d+)?)/g, '$1')
-    .replace(/\$\s*\.(\d+)/g, (match, digits, offset, source) => (
-      /^\s*\$/.test(source.slice(offset + match.length)) ? match : `0.${digits}`
-    ));
 }
 
 function normalizeOcrNotation(value) {
@@ -271,7 +289,14 @@ function normalizeInlineLine(line, state) {
   for (const match of safeLine.matchAll(PROTECTED_INLINE)) {
     output += normalizePlainText(safeLine.slice(cursor, match.index), state);
     if (match[0].startsWith('`')) output += match[0];
-    else output += recordMathFragment(match[0].slice(1, -1), state);
+    else {
+      const expression = match[0].slice(1, -1);
+      const currencyLikeProse = /^\s*\d[\d,.]*\s+[A-Za-z]{2,}/.test(expression)
+        && !/[\\=+*/^_{}]/.test(expression);
+      output += currencyLikeProse
+        ? `\\$${expression}\\$`
+        : recordMathFragment(expression, state);
+    }
     cursor = match.index + match[0].length;
   }
   output += normalizePlainText(safeLine.slice(cursor), state);
@@ -284,9 +309,10 @@ function normalizeInlineLine(line, state) {
  * returned needsReview metadata and is never injected into rendered Markdown.
  */
 function normalizeLessonMathContent(value) {
-  const prepared = normalizeOcrNotation(repairOcrCurrency(removeMathReviewDiagnostics(String(value || ''))
+  const protectedSource = protectLiteralSegments(value);
+  const prepared = normalizeOcrNotation(removeMathReviewDiagnostics(protectedSource.content)
     .replace(DOUBLE_ESCAPED_MATH_COMMAND, '\\')
-    .replace(DOUBLE_ESCAPED_MATH_DELIMITER, '')));
+    .replace(DOUBLE_ESCAPED_MATH_DELIMITER, ''));
   const source = repairEscapedMathDollars(prepared)
     .replace(/\\\[([\s\S]*?)\\\]/g, (_, expression) => `\n$$\n${expression.trim()}\n$$\n`)
     .replace(/\\\(([\s\S]*?)\\\)/g, (_, expression) => `$${expression.trim()}$`);
@@ -327,7 +353,7 @@ function normalizeLessonMathContent(value) {
   }
 
   return {
-    content: output.join('\n').replace(/\n{3,}/g, '\n\n'),
+    content: protectedSource.restore(output.join('\n').replace(/\n{3,}/g, '\n\n')),
     needsReview: state.needsReview,
   };
 }

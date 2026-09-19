@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import { Alert, LoadingState, EmptyState, PageHeader, StatCard, Badge, Btn } from '../../components/ui';
+import { LoadingState, EmptyState, PageHeader, StatCard, Badge, Btn } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import { BookOpen, Plus, Users } from '../../components/icons';
@@ -18,12 +18,6 @@ export default function InstructorDashboard() {
   useEffect(() => {
     api.get('/sections/instructor/sections').then(r=>setSections(r.data.data.sections)).catch(()=>{}).finally(()=>setLoading(false));
   }, []);
-
-  if (user.status === 'PENDING') return (
-    <DashboardLayout>
-      <Alert type="pending" label="Account status" title="Awaiting approval" className="mt-6 max-w-lg">Your instructor account is pending administrator approval. You will gain access to your dashboard once an admin reviews your registration.</Alert>
-    </DashboardLayout>
-  );
 
   const enrolled = sections.reduce((s,sec)=>s+(sec.enrolledCount||0),0);
   const pending  = sections.reduce((s,sec)=>s+(sec.pendingCount||0),0);

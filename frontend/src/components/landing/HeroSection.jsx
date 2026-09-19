@@ -93,7 +93,7 @@ export default function HeroSection() {
   }, []);
 
   return (
-    <section id="top" ref={sectionRef} className="relative landing-hero landing-noise landing-section-dark isolate bg-sidebar text-foreground">
+    <section id="top" ref={sectionRef} className="relative landing-hero landing-section-dark isolate bg-sidebar text-foreground">
       <WaveBackground interactive />
 
       <div className={`${landingStyles.container} relative grid min-h-[calc(100svh-72px)] items-center gap-14 py-16 sm:py-20 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-12 lg:py-24 xl:grid-cols-[minmax(0,0.94fr)_minmax(0,1.06fr)] xl:gap-16`}>

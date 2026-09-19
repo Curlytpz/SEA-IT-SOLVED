@@ -1,14 +1,15 @@
 import { memo, useLayoutEffect, useMemo, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeKatex from 'rehype-katex';
+import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import { containsQuizSourceReference, normalizeAssistantContent, normalizeGeneratedContent, normalizeQuizDisplayContent, normalizeStudentLessonContent } from '../../utils/generatedContent';
 import { normalizeLessonMathContent } from '../../utils/mathContent';
 import { rehypeMathRenderingContract, remarkMathRenderingContract } from '../../utils/mathRenderingContract';
 
-const REMARK_PLUGINS = [remarkMath, remarkMathRenderingContract];
+const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkMathRenderingContract];
 
-function SharedMathMarkdownComponent({ markdown = '', quizText = false, audience = 'internal', assistantText = false, reviewIndicator = false, mathFallback = false, className = '' }) {
+function SharedMathMarkdownComponent({ markdown = '', quizText = false, audience = 'internal', assistantText = false, reviewIndicator = false, mathFallback = false, inline = false, className = '' }) {
   const rootRef = useRef(null);
   const normalized = useMemo(() => {
     if (audience === 'student') return normalizeStudentLessonContent(markdown);
@@ -60,9 +61,10 @@ function SharedMathMarkdownComponent({ markdown = '', quizText = false, audience
     };
   }, [mathResult.content]);
 
-  return <div
+  const Container = inline ? 'span' : 'div';
+  return <Container
     ref={rootRef}
-    className={`math-content generated-doc-markdown ${mathResult.needsReview.length ? 'has-math-review' : ''} ${className}`.trim()}
+    className={`math-content generated-doc-markdown ${inline ? 'math-content-inline' : ''} ${mathResult.needsReview.length ? 'has-math-review' : ''} ${className}`.trim()}
     data-needs-review={mathResult.needsReview.length || undefined}
   >
     {showReviewIndicator && <div className="math-review-needed" role="note">
@@ -74,16 +76,18 @@ function SharedMathMarkdownComponent({ markdown = '', quizText = false, audience
       rehypePlugins={rehypePlugins}
       skipHtml
       components={{
+        ...(inline ? { p: ({ node, ...props }) => <span {...props}/> } : {}),
         h1: props => <h2 {...props}/>,
         h2: props => <h3 {...props}/>,
         h3: props => <h4 {...props}/>,
         h4: props => <h5 {...props}/>,
+        table: ({ node, ...props }) => <div className="math-table-scroll" role="region" tabIndex={0} aria-label="Scrollable content table"><table {...props}/></div>,
         a: ({ children, ...props }) => <a {...props} target="_blank" rel="noreferrer">{children}</a>,
       }}
     >
       {mathResult.content}
     </ReactMarkdown>
-  </div>;
+  </Container>;
 }
 
 export const SharedMathMarkdown = memo(SharedMathMarkdownComponent);

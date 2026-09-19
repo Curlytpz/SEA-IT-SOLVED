@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Alert, Card, LoadingState, StatCard } from '../ui';
 import { getSectionAnalytics } from '../../services/phase6Api';
+import GeneratedContent from '../reasoning/GeneratedContent';
 
 const percent = value => value == null ? '—' : `${Math.round(value * 10) / 10}%`;
 const performanceColor = value => value == null ? 'bg-muted-foreground' : value < 50 ? 'bg-warning' : value < 75 ? 'bg-info' : 'bg-success';
@@ -55,7 +56,7 @@ export default function SectionAnalytics({ sectionId }) {
     <Card className="analytics-panel">
       <div className="analytics-heading-row"><div><h3>Quiz Performance</h3><p>Published assessments, ordered by availability.</p></div></div>
       {data.quizzes.length ? <div className="analytics-quiz-list">{data.quizzes.map(quiz => <article key={quiz.id}>
-        <div><strong>{quiz.title}</strong><span>{quiz.submissions ?? 0} submissions · {percent(quiz.averagePercentage)} average</span></div>
+        <div><strong><GeneratedContent markdown={quiz.title} quizText inline/></strong><span>{quiz.submissions ?? 0} submissions · {percent(quiz.averagePercentage)} average</span></div>
         <span className={`analytics-status is-${String(quiz.status || '').toLowerCase()}`}>{String(quiz.status || '').replaceAll('_', ' ').toLowerCase()}</span>
         <Link to={`/instructor/quizzes/${quiz.id}/analytics`} state={{ returnTo: `/instructor/sections/${sectionId}?tab=analytics` }}>View analytics</Link>
       </article>)}</div> : <p className="analytics-empty">No published quizzes yet.</p>}
@@ -69,7 +70,7 @@ export default function SectionAnalytics({ sectionId }) {
           {visibleNeedsAttention.length ? <section className="analytics-topic-group" aria-labelledby="needs-attention-title">
             <h4 id="needs-attention-title">Needs Attention</h4>
             <ol className="analytics-topic-list">{visibleNeedsAttention.map(item => <li key={item.topic}>
-              <div><span>{item.topic}</span><strong>{percent(item.percentage)}</strong></div>
+              <div><span><GeneratedContent markdown={item.topic} quizText inline/></span><strong>{percent(item.percentage)}</strong></div>
               <Bar value={item.percentage}/>
               <small>{item.correct} correct of {item.scored} scored responses</small>
             </li>)}</ol>
@@ -77,7 +78,7 @@ export default function SectionAnalytics({ sectionId }) {
           {visibleDoingWell.length ? <section className="analytics-topic-group" aria-labelledby="doing-well-title">
             <h4 id="doing-well-title">Doing Well</h4>
             <ol className="analytics-topic-list">{visibleDoingWell.map(item => <li key={item.topic}>
-              <div><span>{item.topic}</span><strong>{percent(item.percentage)}</strong></div>
+              <div><span><GeneratedContent markdown={item.topic} quizText inline/></span><strong>{percent(item.percentage)}</strong></div>
               <Bar value={item.percentage}/>
               <small>{item.correct} correct of {item.scored} scored responses</small>
             </li>)}</ol>
@@ -92,7 +93,7 @@ export default function SectionAnalytics({ sectionId }) {
         {students.length ? <div className="analytics-student-list">{students.map(student => <article key={student.studentId}>
           <div className="analytics-student-summary"><div><strong>{student.name}</strong><span>{student.studentNumber || 'No student number'}</span></div><strong>{percent(student.averagePercentage)}</strong></div>
           <dl><Metric label="Quizzes completed" value={student.recentScores.length}/><Metric label="Questions missed" value={student.questionsMissed}/></dl>
-          <details><summary>View performance</summary><ul>{student.recentScores.map(score => <li key={score.attemptId}><span>{score.quizTitle}</span><strong>{percent(score.percentage)}</strong></li>)}</ul></details>
+          <details><summary>View performance</summary><ul>{student.recentScores.map(score => <li key={score.attemptId}><span><GeneratedContent markdown={score.quizTitle} quizText inline/></span><strong>{percent(score.percentage)}</strong></li>)}</ul></details>
         </article>)}</div> : <p className="analytics-empty">No submitted attempts yet.</p>}
       </Card>
     </div>
@@ -101,7 +102,7 @@ export default function SectionAnalytics({ sectionId }) {
     {data.comparableSectionCount > 1 ? <Card className="analytics-panel analytics-comparison-panel">
       <details>
         <summary><span><strong>Section Comparison</strong><small>Compare performance across {data.comparableSectionCount} sections</small></span><span>View comparison</span></summary>
-        {data.sectionComparison.length ? <div className="responsive-table analytics-compact-table"><table><thead><tr><th>Concept</th><th>Section</th><th>Lessons assessed</th><th>Latest performance</th></tr></thead><tbody>{data.sectionComparison.map((item, index) => <tr key={`${item.topic}-${item.sectionId}-${index}`}><td>{item.topic}</td><td>{item.sectionName}</td><td>{item.lessonsWithAssessments}</td><td>{percent(item.latestPerformance)}</td></tr>)}</tbody></table></div> : <p className="analytics-empty">Insufficient comparable assessment data.</p>}
+        {data.sectionComparison.length ? <div className="responsive-table analytics-compact-table"><table><thead><tr><th>Concept</th><th>Section</th><th>Lessons assessed</th><th>Latest performance</th></tr></thead><tbody>{data.sectionComparison.map((item, index) => <tr key={`${item.topic}-${item.sectionId}-${index}`}><td><GeneratedContent markdown={item.topic} quizText inline/></td><td>{item.sectionName}</td><td>{item.lessonsWithAssessments}</td><td>{percent(item.latestPerformance)}</td></tr>)}</tbody></table></div> : <p className="analytics-empty">Insufficient comparable assessment data.</p>}
       </details>
     </Card> : null}
   </div>;

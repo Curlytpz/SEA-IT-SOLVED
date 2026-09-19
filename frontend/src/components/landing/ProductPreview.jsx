@@ -108,7 +108,6 @@ export default function ProductPreview() {
   return (
     <section id="product" className={`landing-section-dark ${landingStyles.section} relative overflow-clip bg-background text-foreground`}>
       <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
-        <div className="absolute -right-[18%] top-[8%] h-[620px] w-[620px] rounded-full bg-primary/12 blur-[120px]" />
         <div className="absolute bottom-0 left-[18%] h-px w-[64%] bg-gradient-to-r from-transparent via-primary/35 to-transparent" />
       </div>
 

@@ -22,7 +22,7 @@ export default defineConfig({
 
     allowedHosts: [
       'localhost',
-      'guy-furnished-factor-bernard.trycloudflare.com',
+      'lane-revealed-warriors-allocated.trycloudflare.com',
     ],
 
     proxy: {

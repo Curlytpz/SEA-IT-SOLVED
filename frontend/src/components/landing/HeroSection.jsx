@@ -1,11 +1,9 @@
-import { useRef } from 'react';
 import { ArrowRight, Check } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import landingWhiteboard from '../../assets/landing-whiteboard.jpg';
 import GlowCard from './GlowCard';
 import MagneticButton from './MagneticButton';
 import WaveBackground from './WaveBackground';
-import { useLandingGsap } from './animation/useLandingAnimations';
 import { landingStyles } from './landingStyles';
 
 const STATUS_ITEMS = [
@@ -29,10 +27,10 @@ function ProductWindow() {
         </span>
       </header>
 
-      <div className="grid min-h-[300px] bg-background sm:min-h-[440px] lg:grid-cols-[minmax(0,1fr)_210px]">
+      <div className="landing-hero-workspace-main grid min-h-[300px] bg-background sm:min-h-[440px] lg:grid-cols-[minmax(0,1fr)_210px]">
         <div className="relative grid min-w-0 overflow-hidden place-items-center bg-background">
           <div aria-hidden="true" className="absolute inset-0" style={{ background: 'radial-gradient(circle at 60% 30%, hsl(var(--primary) / 0.09), transparent 56%)' }} />
-          <img src={landingWhiteboard} alt="Classroom whiteboard filled with handwritten calculus examples" width="720" height="360" fetchPriority="high" decoding="async" className="relative z-10 h-full max-h-[440px] w-full object-contain" />
+          <img src={landingWhiteboard} alt="Classroom whiteboard filled with handwritten calculus examples" width="720" height="360" fetchPriority="high" decoding="async" className="landing-hero-workspace-capture relative z-10 h-full max-h-[440px] w-full object-contain" />
           <span className="absolute left-3 top-3 z-20 rounded-full border border-white/10 bg-background/90 px-3 py-1.5 text-[10px] font-semibold text-foreground shadow-lg sm:left-4 sm:top-4">Corrected whiteboard view</span>
           <span className="absolute bottom-3 right-3 z-20 hidden items-center gap-1.5 rounded-full border border-primary/25 bg-sidebar/90 px-3 py-1.5 text-[10px] font-semibold text-primary sm:inline-flex">
             <Check size={11} aria-hidden="true" /> Calibration applied
@@ -62,47 +60,18 @@ function ProductWindow() {
   );
 }
 
-export default function HeroSection() {
-  const sectionRef = useRef(null);
-  const copyRef = useRef(null);
-  const visualRef = useRef(null);
-
-  useLandingGsap(sectionRef, ({ gsap, desktop, reduce }) => {
-    const revealItems = gsap.utils.toArray('[data-hero-reveal]');
-    if (reduce) {
-      gsap.set([...revealItems, visualRef.current], { clearProps: 'all', autoAlpha: 1 });
-      return undefined;
-    }
-
-    gsap.timeline({ defaults: { ease: 'power3.out' } })
-      .fromTo(revealItems, { autoAlpha: 0, y: 24, filter: 'blur(9px)' }, { autoAlpha: 1, y: 0, filter: 'blur(0px)', duration: .82, stagger: .085 })
-      .fromTo(visualRef.current, { autoAlpha: 0, y: 34, scale: .97, filter: 'blur(8px)' }, { autoAlpha: 1, y: 0, scale: 1, filter: 'blur(0px)', duration: .95 }, .14);
-
-    gsap.timeline({
-      scrollTrigger: {
-        trigger: sectionRef.current,
-        start: 'top top',
-        end: 'bottom top',
-        scrub: desktop ? .85 : .55,
-      },
-    })
-      .to(copyRef.current, { y: desktop ? -28 : -12, ease: 'none' }, 0)
-      .to(visualRef.current, { y: desktop ? -52 : -22, scale: desktop ? .985 : .995, ease: 'none' }, 0);
-
-    return undefined;
-  }, []);
-
+export default function HeroSection({ introComplete = false }) {
   return (
-    <section id="top" ref={sectionRef} className="relative landing-hero landing-section-dark isolate bg-sidebar text-foreground">
+    <section id="top" data-hero-ready={introComplete ? 'true' : 'false'} className="relative landing-hero landing-section-dark isolate bg-sidebar text-foreground">
       <WaveBackground interactive />
 
-      <div className={`${landingStyles.container} relative grid min-h-[calc(100svh-72px)] items-center gap-14 py-16 sm:py-20 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-12 lg:py-24 xl:grid-cols-[minmax(0,0.94fr)_minmax(0,1.06fr)] xl:gap-16`}>
-        <div ref={copyRef} className="relative z-20 min-w-0 max-w-[680px] lg:pb-12">
+      <div className={`${landingStyles.container} landing-hero-grid relative grid min-h-[calc(100svh-72px)] items-center gap-14 py-16 sm:py-20 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-12 lg:py-24 xl:grid-cols-[minmax(0,0.94fr)_minmax(0,1.06fr)] xl:gap-16`}>
+        <div className="relative z-20 min-w-0 max-w-[680px] lg:max-w-[560px] lg:pb-12">
           <p data-hero-reveal className="mb-7 flex items-center gap-3 text-xs font-semibold tracking-[0.08em] text-primary sm:text-sm">
             <span className="w-8 h-px bg-primary" aria-hidden="true" />SEA-IT-SOLVED · AI-ASSISTED WORKSPACE
           </p>
 
-          <h1 className="max-w-full text-[clamp(3rem,10vw,4rem)] font-semibold leading-[0.86] tracking-[-0.07em] text-balance sm:text-[clamp(4rem,8vw,7rem)] lg:text-[clamp(4rem,5.2vw,6rem)] xl:text-[clamp(4.75rem,5vw,6.25rem)]">
+          <h1 className="max-w-full text-[clamp(3rem,10vw,4rem)] font-semibold leading-[0.86] tracking-[-0.07em] text-balance sm:text-[clamp(4rem,8vw,7rem)] lg:text-[clamp(3.8rem,5vw,5.7rem)]">
               <span data-hero-reveal className="block">Classroom</span>
   <span data-hero-reveal className="block">intelligence,</span>
 
@@ -131,7 +100,7 @@ export default function HeroSection() {
           </p>
         </div>
 
-        <div ref={visualRef} className="relative z-10 w-full min-w-0">
+        <div className="landing-hero-product relative z-10 w-full min-w-0">
           <div className="relative [perspective:1400px]">
             <div aria-hidden="true" className="absolute -inset-5 rounded-[36px] blur-xl" style={{ background: 'radial-gradient(circle at 50% 50%, hsl(var(--primary) / 0.13), transparent 70%)' }} />
             <ProductWindow />

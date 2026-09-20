@@ -15,6 +15,7 @@ export default function ScrollStatement() {
 
   return (
     <section ref={sectionRef} className="landing-statement landing-section-dark" aria-labelledby="landing-scroll-statement">
+      <div className="landing-story-handoff" aria-hidden="true" />
       <div className="landing-statement-sticky">
         <div className={`${landingStyles.container} landing-statement-content`}>
           <p className={landingStyles.eyebrowLight}>From the classroom</p>

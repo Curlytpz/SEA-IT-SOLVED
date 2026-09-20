@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
 import { PageTransition } from './components/PageTransition';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -38,8 +38,12 @@ const NotFound = lazy(() => import('./pages/NotFound'));
 
 function TokenValidator({ children }) {
   const { refreshUser, validatingSession } = useAuth();
+  const { pathname } = useLocation();
   useEffect(() => { refreshUser(); }, [refreshUser]);
-  return validatingSession ? <RouteLoadingFallback /> : children;
+  useEffect(() => {
+    if (pathname !== '/') document.documentElement.classList.remove('landing-boot', 'landing-boot-complete');
+  }, [pathname]);
+  return validatingSession ? <RouteLoadingFallback landing={pathname === '/'} /> : children;
 }
 
 function PublicRoute({ children }) {
@@ -51,7 +55,8 @@ function PublicRoute({ children }) {
   return <Navigate to="/student" replace />;
 }
 
-function RouteLoadingFallback() {
+function RouteLoadingFallback({ landing = false }) {
+  if (landing) return <main className="min-h-screen bg-[#0a1612]" aria-busy="true" aria-label="Loading SEA-IT-SOLVED" />;
   return <main className="min-h-screen bg-background px-6 py-12 text-foreground" aria-busy="true" aria-label="Loading page">
     <div className="mx-auto grid w-full max-w-4xl gap-4 rounded-2xl border border-border bg-card p-6 shadow-sm">
       <div className="h-3 w-24 animate-pulse rounded-full bg-muted motion-reduce:animate-none" aria-hidden="true" />
@@ -66,7 +71,7 @@ function AppRoutes() {
   return <TokenValidator>
     <Suspense fallback={<RouteLoadingFallback />}>
       <Routes>
-        <Route path="/" element={<PublicRoute><PageTransition><Landing /></PageTransition></PublicRoute>} />
+        <Route path="/" element={<PublicRoute><Landing /></PublicRoute>} />
         <Route path="/login" element={<PublicRoute><PageTransition><Login /></PageTransition></PublicRoute>} />
         <Route path="/register/student" element={<PublicRoute><PageTransition><RegisterStudent /></PageTransition></PublicRoute>} />
         <Route path="/register/instructor" element={<PublicRoute><PageTransition><RegisterInstructor /></PageTransition></PublicRoute>} />

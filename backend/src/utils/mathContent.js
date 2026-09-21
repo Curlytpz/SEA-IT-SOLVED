@@ -1,6 +1,10 @@
 const katex = require('katex');
-const { createLessonMathNormalizer } = require('../../../shared/mathContent.cjs');
+const {
+  createLessonMathNormalizer,
+  normalizeRecognitionNumericArtifacts,
+  normalizeRecognitionLatex,
+} = require('../../../shared/mathContent.cjs');
 
 const normalizeLessonMathContent = createLessonMathNormalizer(katex);
 
-module.exports = { normalizeLessonMathContent };
+module.exports = { normalizeLessonMathContent, normalizeRecognitionNumericArtifacts, normalizeRecognitionLatex };

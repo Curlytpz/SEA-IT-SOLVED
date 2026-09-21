@@ -48,7 +48,30 @@ function retainedProviderOutput(value) {
   return { omitted: true, reason: 'Structured provider output exceeded the retention limit.' };
 }
 
-function wait(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+let pendingWait = null;
+let poolClosed = false;
+
+function wait(ms) {
+  if (stopping) return Promise.resolve();
+  return new Promise(resolve => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (pendingWait === finish) pendingWait = null;
+      resolve();
+    };
+    const timer = setTimeout(finish, ms);
+    pendingWait = finish;
+  });
+}
+
+async function closePool() {
+  if (poolClosed) return;
+  poolClosed = true;
+  await pool.end();
+}
 
 async function processAttempt(attempt) {
   let temporaryDirectory = '';
@@ -107,18 +130,23 @@ async function run() {
   }
 }
 
-async function shutdown(signal) {
+function requestShutdown(signal) {
   if (stopping) return;
   stopping = true;
   console.log(`[Transcription] ${signal} received; stopping after the current operation.`);
-  await pool.end();
+  pendingWait?.();
 }
 
-process.on('SIGINT', () => shutdown('SIGINT'));
-process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => requestShutdown('SIGINT'));
+process.once('SIGTERM', () => requestShutdown('SIGTERM'));
 
-run().then(() => shutdown('complete')).catch(async error => {
-  console.error(`[Transcription] Worker stopped: ${error.message}`);
-  await pool.end().catch(() => {});
-  process.exitCode = 1;
-});
+run()
+  .then(async () => {
+    await closePool();
+    console.log('[Transcription] Worker stopped cleanly.');
+  })
+  .catch(async error => {
+    console.error(`[Transcription] Worker stopped: ${error.message}`);
+    await closePool().catch(() => {});
+    process.exitCode = 1;
+  });

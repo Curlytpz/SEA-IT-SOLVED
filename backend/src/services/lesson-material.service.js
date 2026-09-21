@@ -4,7 +4,7 @@ const AppError = require('../utils/AppError');
 const { lessonMaterialStorage } = require('../storage');
 const { validateMaterialFile } = require('../utils/lessonMaterialFile');
 const {
-  GEMINI_MODEL,
+  GEMINI_RECOGNITION_MODEL,
   RECOGNITION_PROVIDER,
   RECOGNITION_MAX_ATTEMPTS,
   GEMINI_SHARED_RATE_LIMIT_BACKOFF_MS,
@@ -110,7 +110,7 @@ async function upload(lessonId, instructorId, file) {
       `INSERT INTO lesson_material_attempts
         (material_id,attempt_number,request_kind,status,provider,provider_version,next_attempt_at)
        VALUES($1,1,'INITIAL','PENDING',$2,$3,NOW())`,
-      [id, RECOGNITION_PROVIDER, GEMINI_MODEL]
+      [id, RECOGNITION_PROVIDER, GEMINI_RECOGNITION_MODEL]
     );
     if (nativePages) {
       await client.query(
@@ -203,7 +203,7 @@ async function reprocess(materialId, instructorId) {
     );
     await client.query(
       `INSERT INTO lesson_material_attempts(material_id,attempt_number,request_kind,status,provider,provider_version,next_attempt_at)
-       VALUES($1,$2,'REPROCESS','PENDING',$3,$4,NOW())`, [materialId, attempt, RECOGNITION_PROVIDER, GEMINI_MODEL]
+       VALUES($1,$2,'REPROCESS','PENDING',$3,$4,NOW())`, [materialId, attempt, RECOGNITION_PROVIDER, GEMINI_RECOGNITION_MODEL]
     );
     await client.query('COMMIT');
     return { material: safe(rows[0]), queued: true };
@@ -298,11 +298,11 @@ async function failAttempt(attempt, mapped) {
     );
     if (mapped.retryable && count < RECOGNITION_MAX_ATTEMPTS) {
       const next = attempt.attempt_number + 1;
-      const delay = mapped.code === 'PROVIDER_RATE_LIMITED' ? Math.ceil(GEMINI_SHARED_RATE_LIMIT_BACKOFF_MS / 1000) : count === 1 ? 10 : 30;
+      const delay = ['RATE_LIMITED', 'PROVIDER_RATE_LIMITED'].includes(mapped.code) ? Math.ceil(GEMINI_SHARED_RATE_LIMIT_BACKOFF_MS / 1000) : count === 1 ? 10 : 30;
       await client.query(
         `INSERT INTO lesson_material_attempts(material_id,attempt_number,request_kind,status,provider,provider_version,next_attempt_at)
          VALUES($1,$2,'AUTO_RETRY','PENDING',$3,$4,NOW()+($5::int*INTERVAL '1 second'))`,
-        [attempt.material_id, next, RECOGNITION_PROVIDER, GEMINI_MODEL, delay]
+        [attempt.material_id, next, RECOGNITION_PROVIDER, GEMINI_RECOGNITION_MODEL, delay]
       );
       await client.query(
         `UPDATE lesson_materials SET status='UPLOADED',attempt_count=$2,last_failure_code=$3,last_failure_message=$4,updated_at=NOW() WHERE id=$1`,

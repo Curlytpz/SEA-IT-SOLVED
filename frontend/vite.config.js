@@ -22,7 +22,7 @@ export default defineConfig({
 
     allowedHosts: [
       'localhost',
-      'lane-revealed-warriors-allocated.trycloudflare.com',
+      'tampa-couple-caribbean-interference.trycloudflare.com',
     ],
 
     proxy: {

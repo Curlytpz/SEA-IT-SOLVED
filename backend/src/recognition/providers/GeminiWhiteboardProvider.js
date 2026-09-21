@@ -28,7 +28,7 @@ class GeminiWhiteboardProvider extends WhiteboardExtractionProvider {
   }
 
   async getClient() {
-    if (!this.apiKey) throw new RecognitionProviderError('PROVIDER_AUTH_FAILED', 'Gemini API key is not configured.', false);
+    if (!this.apiKey) throw new RecognitionProviderError('AUTHENTICATION_ERROR', 'Gemini API key is not configured.', false);
     if (!this.client) {
       const { GoogleGenAI } = await import('@google/genai');
       this.client = new GoogleGenAI({ apiKey: this.apiKey });

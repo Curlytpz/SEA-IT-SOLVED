@@ -1,5 +1,6 @@
 const GeminiWhiteboardProvider = require('./GeminiWhiteboardProvider');
 const { RecognitionProviderError, mapProviderError } = require('../ProviderErrorMapper');
+const { normalizeRecognitionNumericArtifacts, normalizeRecognitionLatex } = require('../../utils/mathContent');
 
 const PDF_SYSTEM = `You extract lesson source material page by page.
 Transcribe only content present in the PDF. Preserve mathematical notation in LaTeX when practical.
@@ -27,6 +28,15 @@ const pdfSchema = {
 
 function wait(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
+function normalizeMaterialPage(page) {
+  return {
+    ...page,
+    text: normalizeRecognitionNumericArtifacts(page?.text || ''),
+    mathExpressions: (Array.isArray(page?.mathExpressions) ? page.mathExpressions : [])
+      .map(value => normalizeRecognitionLatex(value)),
+  };
+}
+
 class GeminiLessonMaterialProvider {
   constructor(options) {
     this.options = options;
@@ -35,7 +45,7 @@ class GeminiLessonMaterialProvider {
   }
 
   async getClient() {
-    if (!this.options.apiKey) throw new RecognitionProviderError('PROVIDER_AUTH_FAILED', 'Gemini API key is not configured.', false);
+    if (!this.options.apiKey) throw new RecognitionProviderError('AUTHENTICATION_ERROR', 'Gemini API key is not configured.', false);
     if (!this.client) {
       const { GoogleGenAI } = await import('@google/genai');
       this.client = new GoogleGenAI({ apiKey: this.options.apiKey });
@@ -57,10 +67,13 @@ class GeminiLessonMaterialProvider {
   async extractPdf(buffer, nativePages) {
     const visualPages = nativePages.filter(page => !page.reliable).map(page => page.pageNumber);
     if (!visualPages.length) {
+      const pages = nativePages.map(page => normalizeMaterialPage({
+        ...page, mathExpressions: [], uncertain: false, extraction: 'NATIVE_TEXT',
+      }));
       return {
-        plainText: nativePages.map(page => page.text).join('\n\n'),
+        plainText: pages.map(page => page.text).join('\n\n'),
         mathExpressions: [],
-        pages: nativePages.map(page => ({ ...page, mathExpressions: [], uncertain: false, extraction: 'NATIVE_TEXT' })),
+        pages,
         raw: { strategy: 'NATIVE_TEXT', visualPages: [] },
         providerVersion: 'native-pdf-text',
       };
@@ -81,7 +94,7 @@ class GeminiLessonMaterialProvider {
         await wait(this.options.filePollIntervalMs || 2000);
         remote = await client.files.get({ name: remote.name });
       }
-      if (!remote.uri) throw new RecognitionProviderError('UNSUPPORTED_INPUT', 'The PDF could not be prepared.', false);
+      if (!remote.uri) throw new RecognitionProviderError('INVALID_INPUT', 'The PDF could not be prepared.', false);
       const response = await client.models.generateContent({
         model: this.options.model,
         contents: [{
@@ -103,9 +116,9 @@ class GeminiLessonMaterialProvider {
       const byPage = new Map((parsed.pages || []).map(page => [Number(page.pageNumber), page]));
       const pages = nativePages.map(native => {
         const visual = byPage.get(native.pageNumber) || {};
-        return native.reliable
+        return normalizeMaterialPage(native.reliable
           ? { pageNumber: native.pageNumber, text: native.text, mathExpressions: visual.mathExpressions || [], uncertain: false, extraction: 'NATIVE_TEXT' }
-          : { pageNumber: native.pageNumber, text: visual.text || native.text || '', mathExpressions: visual.mathExpressions || [], uncertain: Boolean(visual.uncertain), extraction: 'GEMINI_VISUAL' };
+          : { pageNumber: native.pageNumber, text: visual.text || native.text || '', mathExpressions: visual.mathExpressions || [], uncertain: Boolean(visual.uncertain), extraction: 'GEMINI_VISUAL' });
       });
       return {
         plainText: pages.map(page => page.text).filter(Boolean).join('\n\n'),

@@ -30,6 +30,31 @@ function renderNormalized(markdown, label) {
 INLINE_MATH_CASES.forEach((markdown, index) => renderNormalized(markdown, `inline-${index + 1}`));
 DISPLAY_MATH_CASES.forEach(([label, markdown]) => renderNormalized(markdown, label));
 
+const RECOGNITION_MATH_CASES = [
+  '\\lim\\_{x\\to 1^-} P(x)=0.49',
+  '\\lim\\_{x\\to 1^+} P(x)=0.86',
+  '\\frac{1}{x}',
+  '\\sqrt{x}',
+  '\\sum\\_{n=1}^{\\infty} x\\_n',
+  '\\int\\_0^1 f(x)\\\\,dx',
+];
+RECOGNITION_MATH_CASES.forEach((markdown, index) => renderNormalized(markdown, 'recognition-' + (index + 1)));
+
+const malformedRecognition = '\\lim\\_{x\\to 1^-} P(x)=$.49';
+const repairedRecognition = normalizeMath(malformedRecognition);
+assert.equal(repairedRecognition.needsReview.length, 0, 'Recoverable OCR decimal artifacts must not fall back to raw LaTeX.');
+assert.match(repairedRecognition.content, /P\(x\)=0\.49/);
+assert.doesNotMatch(repairedRecognition.content, /\\$\\.49|\u00A2/);
+assert.equal(
+  mathContentApi.normalizeRecognitionNumericArtifacts('\\lim\\_{x\\to 1^+} P(x)=\u00A2.86'),
+  '\\lim\\_{x\\to 1^+} P(x)=0.86',
+);
+assert.equal(
+  mathContentApi.normalizeRecognitionNumericArtifacts('The kit costs $5.49.'),
+  'The kit costs $5.49.',
+  'Ordinary currency must not be changed.',
+);
+
 const nestedFraction = katex.renderToString(
   String.raw`\frac{\frac{x+1}{x-1}}{\frac{x-2}{x+2}}`,
   { displayMode: true, throwOnError: true, strict: 'ignore' },
@@ -158,6 +183,9 @@ try {
     assert.match(html, /class="katex"/, `rendered-${index}: KaTeX output missing`);
     assert.doesNotMatch(visibleText(html), /\$\$?|\\(?:lim|frac|int|sin)\b/, `rendered-${index}: raw math is visible`);
   });
+  const malformedRecognitionHtml = render('$$\\n' + malformedRecognition + '\\n$$');
+  assert.match(malformedRecognitionHtml, /class="katex"/, 'Malformed recognition must recover into KaTeX output.');
+  assert.doesNotMatch(visibleText(malformedRecognitionHtml), /\\$\\.49|\u00A2|\\\\(?:lim|to)\\b/, 'Raw malformed recognition must not be visible.');
   const inline = render(String.raw`Study $f(c)$`, { inline: true });
   assert.match(inline, /class="katex"/);
   assert.doesNotMatch(inline, /<p(?:\s|>)/, 'Compact math labels must not insert block paragraphs.');

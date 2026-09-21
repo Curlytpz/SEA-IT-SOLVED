@@ -26,6 +26,13 @@ export default function useRecognitionPolling(lessonId) {
     }
   }, [lessonId]);
 
+  const updateCaptureRecognition = useCallback((captureId, recognition) => {
+    setData(current => current ? {
+      ...current,
+      items: current.items.map(item => item.capture.id === captureId ? { ...item, recognition } : item),
+    } : current);
+  }, []);
+
   useEffect(() => {
     activeRef.current = true;
     refresh();
@@ -39,5 +46,5 @@ export default function useRecognitionPolling(lessonId) {
     return () => window.clearInterval(timer);
   }, [hasRunningJobs, refresh]);
 
-  return { data, loading, error, refresh, hasRunningJobs };
+  return { data, loading, error, refresh, hasRunningJobs, updateCaptureRecognition };
 }

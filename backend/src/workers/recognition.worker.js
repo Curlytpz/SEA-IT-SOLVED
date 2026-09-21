@@ -11,12 +11,13 @@ const providerGate = require('../services/providerRequestGate');
 const GeminiWhiteboardProvider = require('../recognition/providers/GeminiWhiteboardProvider');
 const GeminiLessonCompilationProvider = require('../recognition/providers/GeminiLessonCompilationProvider');
 const GeminiLessonMaterialProvider = require('../recognition/providers/GeminiLessonMaterialProvider');
-const { RecognitionProviderError, mapProviderError } = require('../recognition/ProviderErrorMapper');
+const { RecognitionProviderError, mapProviderError, providerHttpStatus } = require('../recognition/ProviderErrorMapper');
 const { reconcileRecognitionBlocks, plainTextFromBlocks } = require('../recognition/RecognitionReconciler');
 const {
   GEMINI_API_KEY,
-  GEMINI_MODEL,
+  GEMINI_RECOGNITION_MODEL,
   GEMINI_MEDIA_RESOLUTION,
+  RECOGNITION_PROVIDER,
   RECOGNITION_POLL_INTERVAL_MS,
   RECOGNITION_PROVIDER_TIMEOUT_MS,
   RECOGNITION_MIN_REQUEST_INTERVAL_MS,
@@ -32,16 +33,16 @@ const {
 const workerId = RECOGNITION_WORKER_ID || `${os.hostname()}-${process.pid}`;
 const provider = new GeminiWhiteboardProvider({
   apiKey: GEMINI_API_KEY,
-  model: GEMINI_MODEL,
+  model: GEMINI_RECOGNITION_MODEL,
   mediaResolution: GEMINI_MEDIA_RESOLUTION,
   timeoutMs: RECOGNITION_PROVIDER_TIMEOUT_MS,
 });
 const lessonProvider = new GeminiLessonCompilationProvider({
-  apiKey: GEMINI_API_KEY, model: GEMINI_MODEL, mediaResolution: GEMINI_MEDIA_RESOLUTION,
+  apiKey: GEMINI_API_KEY, model: GEMINI_RECOGNITION_MODEL, mediaResolution: GEMINI_MEDIA_RESOLUTION,
   timeoutMs: RECOGNITION_PROVIDER_TIMEOUT_MS,
 });
 const materialProvider = new GeminiLessonMaterialProvider({
-  apiKey: GEMINI_API_KEY, model: GEMINI_MODEL, mediaResolution: GEMINI_MEDIA_RESOLUTION,
+  apiKey: GEMINI_API_KEY, model: GEMINI_RECOGNITION_MODEL, mediaResolution: GEMINI_MEDIA_RESOLUTION,
   timeoutMs: RECOGNITION_PROVIDER_TIMEOUT_MS,
 });
 let stopping = false;
@@ -51,21 +52,21 @@ function mimeFromKey(key) {
   if (extension === 'png') return 'image/png';
   if (extension === 'webp') return 'image/webp';
   if (extension === 'jpg' || extension === 'jpeg') return 'image/jpeg';
-  const error = new RecognitionProviderError('UNSUPPORTED_INPUT', 'The capture image format is unsupported.', false);
+  const error = new RecognitionProviderError('INVALID_INPUT', 'The capture image format is unsupported.', false);
   throw error;
 }
 
 async function readProtectedImage(key) {
   const opened = await captureStorage.open(key);
   const maxBytes = RECOGNITION_MAX_IMAGE_MB * 1024 * 1024;
-  if (opened.size > maxBytes) throw new RecognitionProviderError('UNSUPPORTED_INPUT', 'The capture image is too large.', false);
+  if (opened.size > maxBytes) throw new RecognitionProviderError('INVALID_INPUT', 'The capture image is too large.', false);
   const chunks = [];
   let total = 0;
   for await (const chunk of opened.stream) {
     total += chunk.length;
     if (total > maxBytes) {
       opened.stream.destroy();
-      throw new RecognitionProviderError('UNSUPPORTED_INPUT', 'The capture image is too large.', false);
+      throw new RecognitionProviderError('INVALID_INPUT', 'The capture image is too large.', false);
     }
     chunks.push(chunk);
   }
@@ -76,6 +77,75 @@ function retainedProviderOutput(value) {
   const serialized = JSON.stringify(value);
   if (Buffer.byteLength(serialized, 'utf8') <= RECOGNITION_RAW_OUTPUT_MAX_BYTES) return value;
   return { omitted: true, reason: 'Structured provider output exceeded the retention limit.' };
+}
+
+function safeLogText(value) {
+  return String(value || '')
+    .replace(/AIza[A-Za-z0-9_-]{20,}/g, '[REDACTED_API_KEY]')
+    .replace(/([?&](?:key|api_key)=)[^&\s]+/gi, '$1[REDACTED]')
+    .replace(/(authorization\s*[:=]\s*bearer\s+)[^\s,}]+/gi, '$1[REDACTED]');
+}
+
+function safeCause(cause) {
+  if (!cause) return null;
+  if (typeof cause === 'string') return safeLogText(cause);
+  return {
+    name: cause.name || null,
+    code: cause.code || null,
+    status: providerHttpStatus(cause) || null,
+    message: safeLogText(cause.message || cause),
+  };
+}
+
+function attemptContext(kind, attempt, source) {
+  return {
+    kind,
+    attemptId: attempt?.id || null,
+    attemptNumber: attempt?.attempt_number || null,
+    captureId: source?.capture_id || null,
+    lessonId: source?.lesson_id || null,
+    materialId: source?.material_id || null,
+    provider: RECOGNITION_PROVIDER,
+    model: GEMINI_RECOGNITION_MODEL,
+  };
+}
+
+function logRequestStarted(kind, attempt, source) {
+  console.info('[Recognition] Request started', {
+    ...attemptContext(kind, attempt, source),
+    requestStatus: 'STARTED',
+  });
+}
+
+function logRequestSucceeded(kind, attempt, source, startedAt) {
+  console.info('[Recognition] Request finished', {
+    ...attemptContext(kind, attempt, source),
+    requestStatus: 'SUCCEEDED',
+    httpStatus: 200,
+    durationMs: Date.now() - startedAt,
+  });
+}
+
+function logRawProviderFailure(kind, attempt, source, error, mapped, startedAt, requestStarted) {
+  const raw = error?.cause || error;
+  console.error('[Recognition] Raw provider failure', {
+    ...attemptContext(kind, attempt, source),
+    requestStarted,
+    requestStatus: 'FAILED',
+    httpStatus: providerHttpStatus(error) || null,
+    name: raw?.name || error?.name || null,
+    code: raw?.code || error?.code || null,
+    message: safeLogText(raw?.message || error?.message),
+    status: providerHttpStatus(raw) || null,
+    cause: safeCause(raw?.cause),
+    mappedCode: mapped.code,
+    retryable: mapped.retryable,
+    durationMs: Date.now() - startedAt,
+  });
+}
+
+function isRateLimited(error) {
+  return ['RATE_LIMITED', 'PROVIDER_RATE_LIMITED'].includes(error?.code);
 }
 
 function planeBounds(plane) {
@@ -148,34 +218,43 @@ ${page.plainText}`).join('\n\n').trim();
 }
 
 async function processAttempt(attempt) {
+  const startedAt = Date.now();
+  let source;
+  let requestStarted = false;
   try {
-    const source = await recognitionService.getAttemptSource(attempt.id);
+    source = await recognitionService.getAttemptSource(attempt.id);
     const storageKey = source.corrected_storage_key;
     if (!storageKey) throw new RecognitionProviderError('IMAGE_NOT_FOUND', 'A polygon-masked corrected capture is required for recognition.', false);
     const imageBuffer = await readProtectedImage(storageKey);
     const sha256 = crypto.createHash('sha256').update(imageBuffer).digest('hex');
     const gateDelay = await providerGate.reserveRequest(GEMINI_SHARED_MIN_REQUEST_INTERVAL_MS);
     if (gateDelay > 0) await wait(gateDelay);
+    requestStarted = true;
+    logRequestStarted('CAPTURE', attempt, source);
     const result = await provider.extract({ imageBuffer, mimeType: mimeFromKey(storageKey) });
     result.sanitizedOutput = retainedProviderOutput(result.sanitizedOutput);
     const sourceVariant = 'CORRECTED';
     const sourceWidth = source.corrected_width;
     const sourceHeight = source.corrected_height;
     await recognitionService.completeAttempt(attempt, result, { ...source, sourceVariant, sourceWidth, sourceHeight, sha256 });
+    logRequestSucceeded('CAPTURE', attempt, source, startedAt);
     console.log(`[Recognition] Completed capture ${source.capture_id}, attempt ${attempt.attempt_number}.`);
     return { rateLimited: false };
   } catch (error) {
     const mapped = error?.code === 'OWNERSHIP_MISMATCH'
       ? new RecognitionProviderError('OWNERSHIP_MISMATCH', 'Capture ownership validation failed.', false, error)
       : mapProviderError(error);
-    if (mapped.code === 'PROVIDER_RATE_LIMITED') await providerGate.extendCooldown(GEMINI_SHARED_RATE_LIMIT_BACKOFF_MS).catch(() => {});
+    logRawProviderFailure('CAPTURE', attempt, source, error, mapped, startedAt, requestStarted);
+    if (isRateLimited(mapped)) await providerGate.extendCooldown(GEMINI_SHARED_RATE_LIMIT_BACKOFF_MS).catch(() => {});
     console.error(`[Recognition] Attempt ${attempt.id} failed (${mapped.code}): ${mapped.message}`);
     await recognitionService.failAttempt(attempt, mapped);
-    return { rateLimited: mapped.code === 'PROVIDER_RATE_LIMITED' };
+    return { rateLimited: isRateLimited(mapped) };
   }
 }
 async function processLessonAttempt(attempt) {
+  const startedAt = Date.now();
   let source;
+  let requestStarted = false;
   try {
     source = await lessonRecognitionService.getAttemptSource(attempt.id);
     const images = [], pageSources = [], captureHashes = [];
@@ -195,17 +274,21 @@ async function processLessonAttempt(attempt) {
     }
     const gateDelay = await providerGate.reserveRequest(GEMINI_SHARED_MIN_REQUEST_INTERVAL_MS);
     if (gateDelay > 0) await wait(gateDelay);
+    requestStarted = true;
+    logRequestStarted('LESSON', attempt, source);
     const result = await lessonProvider.compile({ images, captures: pageSources });
     result.normalized = mergeLessonPlanePages(result.normalized, pageSources, source.captures);
     result.sanitizedOutput = retainedProviderOutput(result.sanitizedOutput);
     const captureSetSha256 = crypto.createHash('sha256').update(captureHashes.join('|')).digest('hex');
     await lessonRecognitionService.completeAttempt(attempt, result, { ...source, captureSetSha256 });
+    logRequestSucceeded('LESSON', attempt, source, startedAt);
     console.log(`[Recognition] Compiled lesson ${source.lesson_id}, attempt ${attempt.attempt_number}.`);
   } catch (error) {
     const mapped = error?.code === 'OWNERSHIP_MISMATCH'
       ? new RecognitionProviderError('OWNERSHIP_MISMATCH', 'Lesson ownership validation failed.', false, error)
       : mapProviderError(error);
-    if (mapped.code === 'PROVIDER_RATE_LIMITED') await providerGate.extendCooldown(GEMINI_SHARED_RATE_LIMIT_BACKOFF_MS).catch(() => {});
+    logRawProviderFailure('LESSON', attempt, source, error, mapped, startedAt, requestStarted);
+    if (isRateLimited(mapped)) await providerGate.extendCooldown(GEMINI_SHARED_RATE_LIMIT_BACKOFF_MS).catch(() => {});
     console.error(`[Recognition] Lesson attempt ${attempt.id} failed (${mapped.code}): ${mapped.message}`);
     await lessonRecognitionService.failAttempt(attempt, mapped);
   } finally {
@@ -213,22 +296,28 @@ async function processLessonAttempt(attempt) {
   }
 }
 async function processMaterialAttempt(attempt) {
+  const startedAt = Date.now();
   let source;
+  let requestStarted = false;
   try {
     source = await lessonMaterialService.getAttemptSource(attempt.id);
     const buffer = await lessonMaterialService.readBuffer(source);
     const gateDelay = await providerGate.reserveRequest(GEMINI_SHARED_MIN_REQUEST_INTERVAL_MS);
     if (gateDelay > 0) await wait(gateDelay);
+    requestStarted = true;
+    logRequestStarted('MATERIAL', attempt, source);
     const result = source.material_type === 'PDF'
       ? await materialProvider.extractPdf(buffer, source.raw_extraction?.nativePages || [])
       : await materialProvider.extractImage(buffer, source.mime_type);
     await lessonMaterialService.completeAttempt(attempt, result);
+    logRequestSucceeded('MATERIAL', attempt, source, startedAt);
     console.log(`[Recognition] Processed lesson material ${source.material_id}, attempt ${attempt.attempt_number}.`);
   } catch (error) {
     const mapped = error?.code === 'OWNERSHIP_MISMATCH'
       ? new RecognitionProviderError('OWNERSHIP_MISMATCH', 'Material ownership validation failed.', false, error)
       : mapProviderError(error);
-    if (mapped.code === 'PROVIDER_RATE_LIMITED') await providerGate.extendCooldown(GEMINI_SHARED_RATE_LIMIT_BACKOFF_MS).catch(() => {});
+    logRawProviderFailure('MATERIAL', attempt, source, error, mapped, startedAt, requestStarted);
+    if (isRateLimited(mapped)) await providerGate.extendCooldown(GEMINI_SHARED_RATE_LIMIT_BACKOFF_MS).catch(() => {});
     console.error(`[Recognition] Material attempt ${attempt.id} failed (${mapped.code}): ${mapped.message}`);
     await lessonMaterialService.failAttempt(attempt, mapped);
   } finally {
@@ -236,11 +325,34 @@ async function processMaterialAttempt(attempt) {
   }
 }
 
-function wait(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+let pendingWait = null;
+let poolClosed = false;
+
+function wait(ms) {
+  if (stopping) return Promise.resolve();
+  return new Promise(resolve => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (pendingWait === finish) pendingWait = null;
+      resolve();
+    };
+    const timer = setTimeout(finish, ms);
+    pendingWait = finish;
+  });
+}
+
+async function closePool() {
+  if (poolClosed) return;
+  poolClosed = true;
+  await pool.end();
+}
 
 async function run() {
   if (!GEMINI_API_KEY) throw new Error('Missing required environment variable: GEMINI_API_KEY.');
-  console.log(`[Recognition] Worker ${workerId} started with ${GEMINI_MODEL} (${GEMINI_MEDIA_RESOLUTION}).`);
+  console.log(`[Recognition] Worker ${workerId} started with ${RECOGNITION_PROVIDER}/${GEMINI_RECOGNITION_MODEL} (${GEMINI_MEDIA_RESOLUTION}).`);
   await Promise.all([
     recognitionService.recoverStaleAttempts(RECOGNITION_JOB_TIMEOUT_MS),
     lessonRecognitionService.recoverStaleAttempts(RECOGNITION_JOB_TIMEOUT_MS),
@@ -270,20 +382,25 @@ async function run() {
   }
 }
 
-async function shutdown(signal) {
+function requestShutdown(signal) {
   if (stopping) return;
   stopping = true;
   console.log(`[Recognition] ${signal} received; stopping after the current operation.`);
-  await pool.end();
+  pendingWait?.();
 }
 
-process.on('SIGINT', () => shutdown('SIGINT'));
-process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => requestShutdown('SIGINT'));
+process.once('SIGTERM', () => requestShutdown('SIGTERM'));
 
-run().then(() => shutdown('complete')).catch(async error => {
-  console.error(`[Recognition] Worker stopped: ${error.message}`);
-  await pool.end().catch(() => {});
-  process.exitCode = 1;
-});
+run()
+  .then(async () => {
+    await closePool();
+    console.log('[Recognition] Worker stopped cleanly.');
+  })
+  .catch(async error => {
+    console.error(`[Recognition] Worker stopped: ${error.message}`);
+    await closePool().catch(() => {});
+    process.exitCode = 1;
+  });
 
 

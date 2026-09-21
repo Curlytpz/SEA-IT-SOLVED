@@ -1,6 +1,6 @@
 const pool = require('../db/pool');
 const AppError = require('../utils/AppError');
-const { RECOGNITION_PROVIDER, GEMINI_MODEL, RECOGNITION_MAX_ATTEMPTS, RECOGNITION_RATE_LIMIT_BACKOFF_MS } = require('../config/env');
+const { RECOGNITION_PROVIDER, GEMINI_RECOGNITION_MODEL, RECOGNITION_MAX_ATTEMPTS, RECOGNITION_RATE_LIMIT_BACKOFF_MS } = require('../config/env');
 
 function safeRecognition(row) {
   if (!row?.recognition_id && !row?.id) return null;
@@ -97,14 +97,14 @@ async function queueCapture(captureId, instructorId, { reprocess = false } = {})
           (capture_id, lesson_id, section_id, instructor_id, status, provider, provider_version, attempt_count, requested_at, updated_at)
          VALUES ($1,$2,$3,$4,'PENDING',$5,$6,1,NOW(),NOW())
          RETURNING *`,
-        [capture.id, capture.lesson_id, capture.section_id, instructorId, RECOGNITION_PROVIDER, GEMINI_MODEL]
+        [capture.id, capture.lesson_id, capture.section_id, instructorId, RECOGNITION_PROVIDER, GEMINI_RECOGNITION_MODEL]
       );
       recognition = inserted.rows[0];
       await client.query(
         `INSERT INTO capture_recognition_attempts
           (recognition_id, attempt_number, request_kind, status, provider, provider_version, next_attempt_at)
          VALUES ($1,1,'INITIAL','PENDING',$2,$3,NOW())`,
-        [recognition.id, RECOGNITION_PROVIDER, GEMINI_MODEL]
+        [recognition.id, RECOGNITION_PROVIDER, GEMINI_RECOGNITION_MODEL]
       );
     } else {
       const nextAttempt = recognition.attempt_count + 1;
@@ -120,7 +120,7 @@ async function queueCapture(captureId, instructorId, { reprocess = false } = {})
         `INSERT INTO capture_recognition_attempts
           (recognition_id, attempt_number, request_kind, status, provider, provider_version, next_attempt_at)
          VALUES ($1,$2,'REPROCESS','PENDING',$3,$4,NOW())`,
-        [recognition.id, nextAttempt, RECOGNITION_PROVIDER, GEMINI_MODEL]
+        [recognition.id, nextAttempt, RECOGNITION_PROVIDER, GEMINI_RECOGNITION_MODEL]
       );
     }
     await client.query('COMMIT');
@@ -360,14 +360,14 @@ async function failAttempt(attempt, mappedError) {
     );
     if (mappedError.retryable && requestAttemptCount < RECOGNITION_MAX_ATTEMPTS) {
       const nextAttempt = attempt.attempt_number + 1;
-      const delaySeconds = mappedError.code === 'PROVIDER_RATE_LIMITED'
+      const delaySeconds = ['RATE_LIMITED', 'PROVIDER_RATE_LIMITED'].includes(mappedError.code)
         ? Math.ceil(RECOGNITION_RATE_LIMIT_BACKOFF_MS / 1000)
         : requestAttemptCount === 1 ? 5 : 30;
       await client.query(
         `INSERT INTO capture_recognition_attempts
           (recognition_id, attempt_number, request_kind, status, provider, provider_version, next_attempt_at)
          VALUES ($1,$2,'AUTO_RETRY','PENDING',$3,$4,NOW() + ($5::int * INTERVAL '1 second'))`,
-        [attempt.recognition_id, nextAttempt, RECOGNITION_PROVIDER, GEMINI_MODEL, delaySeconds]
+        [attempt.recognition_id, nextAttempt, RECOGNITION_PROVIDER, GEMINI_RECOGNITION_MODEL, delaySeconds]
       );
       await client.query(
         `UPDATE capture_recognitions

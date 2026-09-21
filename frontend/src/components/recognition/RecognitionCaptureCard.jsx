@@ -9,7 +9,10 @@ import GeneratedContent from '../reasoning/GeneratedContent';
 function friendlyFailure(recognition) {
   if (recognition?.failureCode === 'NO_RECOGNIZABLE_CONTENT') return 'No recognizable whiteboard content was found.';
   if (recognition?.failureCode === 'IMAGE_NOT_FOUND') return 'The saved whiteboard image is unavailable.';
-  if (recognition?.failureCode === 'UNSUPPORTED_INPUT') return 'This image could not be processed.';
+  if (['INVALID_INPUT', 'UNSUPPORTED_INPUT'].includes(recognition?.failureCode)) return 'This image could not be processed.';
+  if (recognition?.failureCode === 'MODEL_NOT_FOUND') return 'The configured recognition model is unavailable. Check the worker configuration and retry.';
+  if (recognition?.failureCode === 'AUTHENTICATION_ERROR') return 'Recognition credentials are invalid. Ask an administrator to check the worker configuration.';
+  if (recognition?.failureCode === 'PERMISSION_ERROR') return 'The recognition service does not have permission to use the configured model.';
   if (recognition?.failureCode === 'PROVIDER_BLOCKED') return 'The recognition provider could not process this image.';
   if (recognition?.failureCode === 'PROVIDER_REQUEST_INVALID') return 'The recognition service could not accept this request. Check the worker configuration and retry.';
   return recognition?.failureMessage || 'Recognition failed. You can try again.';

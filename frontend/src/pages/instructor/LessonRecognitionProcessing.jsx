@@ -13,25 +13,28 @@ import TranscriptPanel from '../../components/transcription/TranscriptPanel';
 import useRecognitionPolling from '../../hooks/useRecognitionPolling';
 import useTranscriptionPolling from '../../hooks/useTranscriptionPolling';
 import useLessonWorkflowPolling from '../../hooks/useLessonWorkflowPolling';
-import { processLessonCaptures } from '../../services/recognitionApi';
+import { processLessonCaptures, reprocessCapture } from '../../services/recognitionApi';
+import { captureRecognitionStatus, isRecognitionRunning } from '../../components/recognition/recognitionStatus';
 import { sectionBackLabel, sectionOriginFromState, sectionOriginState, sectionReturnPath } from '../../utils/instructorLessonNavigation';
 
 export default function LessonRecognitionProcessing() {
   const { lessonId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const { data, loading, error, refresh, hasRunningJobs } = useRecognitionPolling(lessonId);
+  const { data, loading, error, refresh, updateCaptureRecognition } = useRecognitionPolling(lessonId);
   const transcript = useTranscriptionPolling(lessonId);
   const workflow = useLessonWorkflowPolling(lessonId);
   const [selectedId, setSelectedId] = useState('');
   const [busy, setBusy] = useState(false);
+  const [retryingCaptureIds, setRetryingCaptureIds] = useState({});
+  const [retryErrors, setRetryErrors] = useState({});
   const [viewerOpen, setViewerOpen] = useState(false);
   const [message, setMessage] = useState({ text: '', type: 'success' });
 
   const items = data?.items || [];
   const lessonRecognition = data?.lessonRecognition || null;
   const workflowLesson = workflow.lesson;
-  const running = hasRunningJobs || transcript.running || workflow.readiness.processing;
+  const completeLessonRunning = isRecognitionRunning(lessonRecognition?.status);
   const approved = workflowLesson?.workflow?.context?.status === 'APPROVED';
   const draftReady = workflowLesson?.workflow?.context?.status === 'DRAFT';
   const reviewBlocked = workflow.loading || !workflowLesson
@@ -60,7 +63,7 @@ export default function LessonRecognitionProcessing() {
 
   const selectedIndex = useMemo(() => Math.max(0, items.findIndex(item => item.capture.id === selectedId)), [items, selectedId]);
   const selectedItem = items[selectedIndex] || null;
-  const viewerStatus = lessonRecognition?.status || selectedItem?.recognition?.status || 'NOT_STARTED';
+  const viewerStatus = captureRecognitionStatus(selectedItem, lessonRecognition);
   const sectionOrigin = sectionOriginFromState(location.state) || sectionReturnPath(data?.lesson?.sectionId, 'lessons');
   const navigationState = sectionOriginState(location.state, sectionOrigin);
   const backTarget = sectionOrigin || '/instructor/sections';
@@ -76,16 +79,43 @@ export default function LessonRecognitionProcessing() {
   }), [items]);
 
   async function compileLesson() {
-    if (busy || running || !items.length) return;
+    if (busy || completeLessonRunning || !items.length) return;
     setBusy(true);
     try {
       const result = await processLessonCaptures(lessonId);
       const queuedAny = result.queued?.whiteboard || result.queued?.transcription || result.queued?.materials > 0;
       setMessage({ text: queuedAny ? 'All missing lesson sources were queued for processing.' : 'Lesson sources are processed. Open the review workspace when ready.', type: 'success' });
-      await Promise.all([refresh({ quiet: true }), workflow.refresh({ quiet: true })]);
+      await Promise.all([
+        refresh({ quiet: true }),
+        transcript.refresh({ quiet: true }),
+        workflow.refresh({ quiet: true }),
+      ]);
     } catch (requestError) {
       setMessage({ text: requestError.response?.data?.error || 'Unable to queue complete lesson processing.', type: 'error' });
     } finally { setBusy(false); }
+  }
+
+  async function retrySelectedCapture() {
+    const captureId = selectedItem?.capture.id;
+    const pageNumber = selectedIndex + 1;
+    if (!captureId || retryingCaptureIds[captureId]) return;
+    setRetryErrors(current => ({ ...current, [captureId]: '' }));
+    setRetryingCaptureIds(current => ({ ...current, [captureId]: true }));
+    try {
+      const result = await reprocessCapture(captureId);
+      if (result?.recognition) updateCaptureRecognition(captureId, result.recognition);
+      setMessage({ text: `Page ${pageNumber} recognition was queued again.`, type: 'success' });
+      await Promise.all([refresh({ quiet: true }), workflow.refresh({ quiet: true })]);
+    } catch (requestError) {
+      const retryError = requestError.response?.data?.error || 'Unable to retry recognition for this page. Please try again.';
+      setRetryErrors(current => ({ ...current, [captureId]: retryError }));
+    } finally {
+      setRetryingCaptureIds(current => {
+        const next = { ...current };
+        delete next[captureId];
+        return next;
+      });
+    }
   }
 
   function selectCompiledPage(pageNumber) {
@@ -103,7 +133,7 @@ export default function LessonRecognitionProcessing() {
     <button type="button" onClick={() => navigate(backTarget,{replace:true})} className="mb-4 inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-muted-foreground transition hover:-translate-y-0.5 hover:bg-primary-subtle hover:text-primary-subtle-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"><ArrowLeft size={17}/> {sectionOrigin ? sectionBackLabel(sectionOrigin) : 'Back to My Teaching'}</button>
     <PageHeader title="Lesson Processing Workspace" subtitle={data?.lesson ? `${data.lesson.title}${data.lesson.topic ? ` — ${data.lesson.topic}` : ''}` : 'Compile whiteboard pages with the protected lesson transcript.'}>
       <Btn variant="secondary" className="w-full sm:w-auto" disabled={reviewBlocked} onClick={() => navigate(`/instructor/lessons/${lessonId}/review${approved?'?view=workspace':''}`,{state:{...navigationState,from:processingPath}})}>{reviewLabel}</Btn>
-      <Btn variant="primary" className="w-full sm:w-auto" loading={busy} disabled={busy || running} onClick={compileLesson}><Scan size={16}/> {lessonRecognition ? 'Reprocess Complete Lesson' : 'Process Complete Lesson'}</Btn>
+      <Btn variant="primary" className="w-full sm:w-auto" loading={busy} disabled={busy || completeLessonRunning} onClick={compileLesson}><Scan size={16}/> {lessonRecognition ? 'Reprocess Complete Lesson' : 'Process Complete Lesson'}</Btn>
     </PageHeader>
     {message.text && <Alert type={message.type} onClose={() => setMessage({ text: '' })}>{message.text}</Alert>}
     {error && <Alert type="error">{error}</Alert>}
@@ -117,7 +147,7 @@ export default function LessonRecognitionProcessing() {
       <main className="min-w-0">
         {!items.length ? <EmptyState icon={<BookOpen size={23}/>} title="No whiteboard captures" body="This lesson does not have saved whiteboard pages to process."/> : <>
           <CaptureAlbum items={items} selectedId={selectedId} onSelect={setSelectedId} lessonRecognition={lessonRecognition}/>
-          <SelectedCapturePreview item={selectedItem} pageNumber={selectedIndex + 1} lessonRecognition={lessonRecognition} onOpen={() => setViewerOpen(true)}/>
+          <SelectedCapturePreview item={selectedItem} pageNumber={selectedIndex + 1} lessonRecognition={lessonRecognition} onOpen={() => setViewerOpen(true)} onRetry={retrySelectedCapture} retrying={Boolean(retryingCaptureIds[selectedItem?.capture.id])} retryError={retryErrors[selectedItem?.capture.id] || ''}/>
           <CompiledLessonRecognition recognition={lessonRecognition} selectedPage={selectedIndex + 1} onSelectPage={selectCompiledPage}/>
         </>}
         <AdditionalLessonMaterials lessonId={lessonId} onMessage={setMessage} onStatusChange={handleMaterialStatusChange}/>

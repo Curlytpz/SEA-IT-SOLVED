@@ -21,7 +21,7 @@ class GeminiLessonCompilationProvider {
     this.filePollIntervalMs=filePollIntervalMs; this.fileReadyTimeoutMs=fileReadyTimeoutMs; this.client=null;
   }
   async getClient() {
-    if (!this.apiKey) throw new RecognitionProviderError('PROVIDER_AUTH_FAILED','Gemini API key is not configured.',false);
+    if (!this.apiKey) throw new RecognitionProviderError('AUTHENTICATION_ERROR','Gemini API key is not configured.',false);
     if (!this.client) { const { GoogleGenAI } = await import('@google/genai'); this.client=new GoogleGenAI({apiKey:this.apiKey}); }
     return this.client;
   }
@@ -31,7 +31,7 @@ class GeminiLessonCompilationProvider {
       if (Date.now()>=deadline) throw new RecognitionProviderError('PROVIDER_TIMEOUT','The lesson images took too long to prepare.',true);
       await wait(this.filePollIntervalMs); file=await client.files.get({name:uploaded.name});
     }
-    if (String(file.state||'').toUpperCase()==='FAILED'||!file.uri) throw new RecognitionProviderError('UNSUPPORTED_INPUT','A lesson image could not be prepared.',false);
+    if (String(file.state||'').toUpperCase()==='FAILED'||!file.uri) throw new RecognitionProviderError('INVALID_INPUT','A lesson image could not be prepared.',false);
     return file;
   }
   async compile({ images, captures }) {

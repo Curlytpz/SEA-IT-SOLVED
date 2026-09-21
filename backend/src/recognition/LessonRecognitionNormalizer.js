@@ -1,10 +1,16 @@
 const { lessonCompilationSchema } = require('./lessonGeminiSchema');
 const { reconcileRecognitionBlocks, plainTextFromBlocks } = require('./RecognitionReconciler');
+const { normalizeRecognitionNumericArtifacts, normalizeRecognitionLatex } = require('../utils/mathContent');
 
 function clean(value, maxLength) {
   if (value === null || value === undefined) return null;
   return String(value).normalize('NFC').replace(/\r\n?/g, '\n')
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').trim().slice(0, maxLength);
+}
+
+function normalizedRecognitionText(value, maxLength, { mathContext = false } = {}) {
+  const cleaned = clean(value, maxLength);
+  return cleaned === null ? null : normalizeRecognitionNumericArtifacts(cleaned, { mathContext });
 }
 
 function normalizeLessonCompilation(input, captures) {
@@ -22,8 +28,10 @@ function normalizeLessonCompilation(input, captures) {
     }
     const providerBlocks = page.blocks.sort((a,b) => a.order-b.order).map(block => ({
       type:block.type, order:block.order,
-      text:block.type==='text' ? clean(block.text,10000) : null,
-      latex:block.type==='math' ? clean(block.latex,10000)?.replace(/^\$+|\$+$/g,'').trim() : null,
+      text:block.type==='text' ? normalizedRecognitionText(block.text,10000) : null,
+      latex:block.type==='math'
+        ? normalizeRecognitionLatex(clean(block.latex,10000)?.replace(/^\$+|\$+$/g,'').trim())
+        : null,
       confidence:null, uncertain:block.uncertain,
       uncertaintyReason:block.uncertain ? clean(block.uncertaintyReason,1000) : null,
       bounds:block.bounds,
@@ -32,7 +40,7 @@ function normalizeLessonCompilation(input, captures) {
     const blocks = reconciled.blocks;
     return {
       pageNumber:index+1, captureId:captures[index].id, capturedAt:captures[index].captured_at,
-      plainText:plainTextFromBlocks(blocks) || (blocks.length ? '' : clean(page.plainText,50000)||''), blocks,
+      plainText:plainTextFromBlocks(blocks) || (blocks.length ? '' : normalizedRecognitionText(page.plainText,50000)||''), blocks,
       warnings:[
         ...page.warnings.map(value=>clean(value,1000)).filter(Boolean),
         ...(reconciled.suppressedCount ? [`${reconciled.suppressedCount} overlapping recognition block${reconciled.suppressedCount === 1 ? '' : 's'} omitted from the compiled result.`] : []),

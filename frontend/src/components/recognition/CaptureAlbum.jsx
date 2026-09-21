@@ -1,10 +1,6 @@
 import ProtectedCaptureImage from '../hardware/ProtectedCaptureImage';
 import RecognitionStatusBadge from './RecognitionStatusBadge';
-
-function pageStatus(item, lessonRecognition) {
-  if (lessonRecognition?.status) return lessonRecognition.status;
-  return item.recognition?.status || 'NOT_STARTED';
-}
+import { captureRecognitionStatus } from './recognitionStatus';
 
 export default function CaptureAlbum({ items, selectedId, onSelect, lessonRecognition }) {
   return <section aria-labelledby="capture-album-title">
@@ -17,7 +13,7 @@ export default function CaptureAlbum({ items, selectedId, onSelect, lessonRecogn
         const selected=item.capture.id===selectedId;
         return <button key={item.capture.id} type="button" onClick={()=>onSelect(item.capture.id)} aria-pressed={selected} className={`group min-w-0 snap-start overflow-hidden rounded-2xl border text-left transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected?'border-primary bg-primary-subtle shadow-glow':'border-border bg-card/55 hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-md'}`}>
           <div className="aspect-video overflow-hidden bg-slate-950"><ProtectedCaptureImage url={item.capture.correctedUrl||item.capture.originalUrl} alt={`Page ${index+1} whiteboard thumbnail`} className="h-full w-full object-contain transition-transform duration-200 group-hover:scale-[1.02]"/></div>
-          <div className="p-2.5"><div className="flex items-center justify-between gap-2"><span className="text-xs font-bold text-slate-800 dark:text-white">Page {index+1}</span><RecognitionStatusBadge status={pageStatus(item,lessonRecognition)}/></div><p className="mt-1 truncate text-[10px] text-slate-400">{new Date(item.capture.capturedAt).toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit'})}</p></div>
+          <div className="p-2.5"><div className="flex items-center justify-between gap-2"><span className="text-xs font-bold text-slate-800 dark:text-white">Page {index+1}</span><RecognitionStatusBadge status={captureRecognitionStatus(item,lessonRecognition)}/></div><p className="mt-1 truncate text-[10px] text-slate-400">{new Date(item.capture.capturedAt).toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit'})}</p></div>
         </button>;
       })}
     </div>

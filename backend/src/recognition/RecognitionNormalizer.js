@@ -1,5 +1,6 @@
 const { extractionSchema } = require('./geminiSchema');
 const { reconcileRecognitionBlocks, plainTextFromBlocks } = require('./RecognitionReconciler');
+const { normalizeRecognitionNumericArtifacts, normalizeRecognitionLatex } = require('../utils/mathContent');
 
 function cleanText(value, maxLength) {
   if (value === null || value === undefined) return null;
@@ -11,14 +12,21 @@ function cleanText(value, maxLength) {
     .slice(0, maxLength);
 }
 
+function normalizedRecognitionText(value, maxLength, { mathContext = false } = {}) {
+  const cleaned = cleanText(value, maxLength);
+  return cleaned === null ? null : normalizeRecognitionNumericArtifacts(cleaned, { mathContext });
+}
+
 function normalizeExtraction(input) {
   const parsed = extractionSchema.parse(input);
   const providerBlocks = parsed.blocks
     .map((block, index) => ({
       type: block.type,
       order: block.order,
-      text: block.type === 'text' ? cleanText(block.text, 10000) : null,
-      latex: block.type === 'math' ? cleanText(block.latex, 10000)?.replace(/^\$+|\$+$/g, '').trim() : null,
+      text: block.type === 'text' ? normalizedRecognitionText(block.text, 10000) : null,
+      latex: block.type === 'math'
+        ? normalizeRecognitionLatex(cleanText(block.latex, 10000)?.replace(/^\$+|\$+$/g, '').trim())
+        : null,
       confidence: null,
       uncertain: block.uncertain,
       uncertaintyReason: block.uncertain ? cleanText(block.uncertaintyReason, 1000) : null,
@@ -30,7 +38,7 @@ function normalizeExtraction(input) {
   const reconciled = reconcileRecognitionBlocks(providerBlocks);
   const blocks = reconciled.blocks;
 
-  const plainText = plainTextFromBlocks(blocks) || (blocks.length ? '' : cleanText(parsed.plainText, 50000) || '');
+  const plainText = plainTextFromBlocks(blocks) || (blocks.length ? '' : normalizedRecognitionText(parsed.plainText, 50000) || '');
   if (!plainText && blocks.length === 0) {
     const error = new Error('No recognizable whiteboard content was found.');
     error.code = 'NO_RECOGNIZABLE_CONTENT';

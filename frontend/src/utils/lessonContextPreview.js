@@ -1,4 +1,4 @@
-import { normalizeLessonMathContent } from './mathContent.js';
+import { normalizeLessonMathContent, normalizeRecognitionLatex } from './mathContent.js';
 
 const JUNK_LINE = /^(?:[.,;:!?_~`'"*#|\\/\-–—]+|(?:raw\s+)?(?:OCR|HMER)(?:\s+(?:output|result|text|label))?|recognized content)$/i;
 const DISPLAY_COMMAND = /\\(?:d?frac|tfrac|int|sum|prod|lim|sqrt|begin)(?![A-Za-z])/;
@@ -57,6 +57,7 @@ export function normalizeLessonContextMathValues(mathValues) {
   const seen = new Set();
   return (Array.isArray(mathValues) ? mathValues : [])
     .map(unwrapOuterMathDelimiters)
+    .map(value => normalizeRecognitionLatex(value))
     .filter(value => {
       if (obviousJunk(value)) return false;
       const key = mathKey(value);

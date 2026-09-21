@@ -47,7 +47,10 @@ module.exports = {
   LESSON_MATERIAL_PDF_MAX_PAGES: boundedInteger(process.env.LESSON_MATERIAL_PDF_MAX_PAGES, 50, 1, 200),
   RECOGNITION_PROVIDER: 'GEMINI',
   GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
-  GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-3.6-flash',
+  GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+  // Recognition is isolated from general reasoning models so an experimental
+  // or obsolete default cannot silently break the capture worker.
+  GEMINI_RECOGNITION_MODEL: process.env.GEMINI_RECOGNITION_MODEL || process.env.GEMINI_CHAT_MODEL || 'gemini-2.5-flash',
   GEMINI_MEDIA_RESOLUTION: mediaResolutionMap[configuredMediaResolution] || mediaResolutionMap.HIGH,
   RECOGNITION_MAX_ATTEMPTS: boundedInteger(process.env.RECOGNITION_MAX_ATTEMPTS, 3, 1, 5),
   RECOGNITION_POLL_INTERVAL_MS: boundedInteger(process.env.RECOGNITION_POLL_INTERVAL_MS, 1000, 250, 30000),
@@ -59,7 +62,10 @@ module.exports = {
   RECOGNITION_MAX_IMAGE_MB: boundedInteger(process.env.RECOGNITION_MAX_IMAGE_MB, 8, 1, 32),
   RECOGNITION_WORKER_ID: process.env.RECOGNITION_WORKER_ID || '',
   TRANSCRIPTION_PROVIDER: 'GEMINI',
-  GEMINI_TRANSCRIPTION_MODEL: process.env.GEMINI_TRANSCRIPTION_MODEL || process.env.GEMINI_MODEL || 'gemini-3.6-flash',
+  GEMINI_TRANSCRIPTION_MODEL: process.env.GEMINI_TRANSCRIPTION_MODEL
+    || process.env.GEMINI_RECOGNITION_MODEL
+    || process.env.GEMINI_CHAT_MODEL
+    || 'gemini-2.5-flash',
   TRANSCRIPTION_MAX_ATTEMPTS: boundedInteger(process.env.TRANSCRIPTION_MAX_ATTEMPTS, 3, 1, 5),
   TRANSCRIPTION_POLL_INTERVAL_MS: boundedInteger(process.env.TRANSCRIPTION_POLL_INTERVAL_MS, 1000, 250, 30000),
   TRANSCRIPTION_PROVIDER_TIMEOUT_MS: boundedInteger(process.env.TRANSCRIPTION_PROVIDER_TIMEOUT_MS, 600000, 30000, 1800000),
@@ -73,7 +79,10 @@ module.exports = {
   GEMINI_FILE_READY_TIMEOUT_MS: boundedInteger(process.env.GEMINI_FILE_READY_TIMEOUT_MS, 120000, 10000, 600000),
   GEMINI_SHARED_MIN_REQUEST_INTERVAL_MS: boundedInteger(process.env.GEMINI_SHARED_MIN_REQUEST_INTERVAL_MS, 15000, 0, 300000),
   GEMINI_SHARED_RATE_LIMIT_BACKOFF_MS: boundedInteger(process.env.GEMINI_SHARED_RATE_LIMIT_BACKOFF_MS, 60000, 5000, 900000),
-  GEMINI_REASONING_MODEL: process.env.GEMINI_REASONING_MODEL || process.env.GEMINI_MODEL || 'gemini-3.6-flash',
+  GEMINI_REASONING_MODEL: process.env.GEMINI_REASONING_MODEL
+    || process.env.GEMINI_CHAT_MODEL
+    || process.env.GEMINI_MODEL
+    || 'gemini-2.5-flash',
   // Keep latency-sensitive lesson chat independently configurable. The general
   // reasoning model may be a preview/high-demand model that is unsuitable for
   // interactive requests.

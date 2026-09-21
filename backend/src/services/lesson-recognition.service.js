@@ -1,6 +1,6 @@
 const pool = require('../db/pool');
 const AppError = require('../utils/AppError');
-const { RECOGNITION_PROVIDER, GEMINI_MODEL, RECOGNITION_MAX_ATTEMPTS, GEMINI_SHARED_RATE_LIMIT_BACKOFF_MS } = require('../config/env');
+const { RECOGNITION_PROVIDER, GEMINI_RECOGNITION_MODEL, RECOGNITION_MAX_ATTEMPTS, GEMINI_SHARED_RATE_LIMIT_BACKOFF_MS } = require('../config/env');
 
 function safe(row) {
   if (!row) return null;
@@ -37,11 +37,11 @@ async function queueLesson(lessonId,instructorId) {
       const inserted=await client.query(`INSERT INTO lesson_recognitions
         (lesson_id,section_id,instructor_id,status,capture_count,provider,provider_version,attempt_count,requested_at,updated_at)
         VALUES($1,$2,$3,'PENDING',$4,$5,$6,1,NOW(),NOW()) RETURNING *`,
-        [lesson.id,lesson.section_id,instructorId,captures.rows.length,RECOGNITION_PROVIDER,GEMINI_MODEL]);
+        [lesson.id,lesson.section_id,instructorId,captures.rows.length,RECOGNITION_PROVIDER,GEMINI_RECOGNITION_MODEL]);
       recognition=inserted.rows[0];
       await client.query(`INSERT INTO lesson_recognition_attempts
         (lesson_recognition_id,attempt_number,request_kind,status,provider,provider_version,next_attempt_at)
-        VALUES($1,1,'INITIAL','PENDING',$2,$3,NOW())`,[recognition.id,RECOGNITION_PROVIDER,GEMINI_MODEL]);
+        VALUES($1,1,'INITIAL','PENDING',$2,$3,NOW())`,[recognition.id,RECOGNITION_PROVIDER,GEMINI_RECOGNITION_MODEL]);
     } else {
       const attempt=recognition.attempt_count+1;
       const updated=await client.query(`UPDATE lesson_recognitions SET status='PENDING',capture_count=$2,
@@ -50,7 +50,7 @@ async function queueLesson(lessonId,instructorId) {
       recognition=updated.rows[0];
       await client.query(`INSERT INTO lesson_recognition_attempts
         (lesson_recognition_id,attempt_number,request_kind,status,provider,provider_version,next_attempt_at)
-        VALUES($1,$2,'REPROCESS','PENDING',$3,$4,NOW())`,[recognition.id,attempt,RECOGNITION_PROVIDER,GEMINI_MODEL]);
+        VALUES($1,$2,'REPROCESS','PENDING',$3,$4,NOW())`,[recognition.id,attempt,RECOGNITION_PROVIDER,GEMINI_RECOGNITION_MODEL]);
     }
     await client.query('COMMIT'); return {recognition:safe(recognition),queued:true};
   } catch(error) { await client.query('ROLLBACK'); throw error; }
@@ -135,9 +135,9 @@ async function failAttempt(attempt,mapped) {
       AND created_at>=(SELECT MAX(created_at) FROM lesson_recognition_attempts WHERE lesson_recognition_id=$1 AND request_kind IN('INITIAL','REPROCESS'))`,[attempt.lesson_recognition_id]);
     const count=chain.rows[0].count;
     await client.query(`UPDATE lesson_recognition_attempts SET status='FAILED',failure_code=$2,failure_message=$3,completed_at=NOW() WHERE id=$1`,[attempt.id,mapped.code,mapped.message]);
-    if(mapped.retryable&&count<RECOGNITION_MAX_ATTEMPTS){const next=attempt.attempt_number+1;const delay=mapped.code==='PROVIDER_RATE_LIMITED'?Math.ceil(GEMINI_SHARED_RATE_LIMIT_BACKOFF_MS/1000):count===1?10:30;
+    if(mapped.retryable&&count<RECOGNITION_MAX_ATTEMPTS){const next=attempt.attempt_number+1;const delay=['RATE_LIMITED','PROVIDER_RATE_LIMITED'].includes(mapped.code)?Math.ceil(GEMINI_SHARED_RATE_LIMIT_BACKOFF_MS/1000):count===1?10:30;
       await client.query(`INSERT INTO lesson_recognition_attempts(lesson_recognition_id,attempt_number,request_kind,status,provider,provider_version,next_attempt_at)
-        VALUES($1,$2,'AUTO_RETRY','PENDING',$3,$4,NOW()+($5::int*INTERVAL '1 second'))`,[attempt.lesson_recognition_id,next,RECOGNITION_PROVIDER,GEMINI_MODEL,delay]);
+        VALUES($1,$2,'AUTO_RETRY','PENDING',$3,$4,NOW()+($5::int*INTERVAL '1 second'))`,[attempt.lesson_recognition_id,next,RECOGNITION_PROVIDER,GEMINI_RECOGNITION_MODEL,delay]);
       await client.query(`UPDATE lesson_recognitions SET status='PENDING',attempt_count=$2,last_failure_code=$3,last_failure_message=$4,updated_at=NOW() WHERE id=$1`,[attempt.lesson_recognition_id,next,mapped.code,mapped.message]);
     }else await client.query(`UPDATE lesson_recognitions SET status='FAILED',last_failure_code=$2,last_failure_message=$3,updated_at=NOW() WHERE id=$1`,[attempt.lesson_recognition_id,mapped.code,mapped.message]);
     await client.query('COMMIT');

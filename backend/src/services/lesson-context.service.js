@@ -1,6 +1,7 @@
 const pool = require('../db/pool');
 const AppError = require('../utils/AppError');
 const { compileTranscriptSegments } = require('../../../shared/transcriptContent.cjs');
+const { normalizeRecognitionNumericArtifacts, normalizeRecognitionLatex } = require('../utils/mathContent');
 
 function normalizeForDedup(text, math) {
   return `${text || ''} ${(math || []).map(item => typeof item === 'string' ? item : item.latex || '').join(' ')}`
@@ -8,7 +9,7 @@ function normalizeForDedup(text, math) {
 }
 
 function humanText(value) {
-  if (typeof value === 'string' || typeof value === 'number') return String(value);
+  if (typeof value === 'string' || typeof value === 'number') return normalizeRecognitionNumericArtifacts(String(value));
   if (Array.isArray(value)) return value.map(humanText).filter(Boolean).join('\n');
   if (!value || typeof value !== 'object') return '';
   for (const key of ['text', 'plainText', 'content', 'value', 'label']) {
@@ -31,10 +32,12 @@ function classifyContentType(text, math) {
 function normalizeMath(value) {
   const items = Array.isArray(value) ? value : value == null ? [] : [value];
   return [...new Set(items.flatMap(item => {
-    if (typeof item === 'string' || typeof item === 'number') return [String(item).trim()];
+    if (typeof item === 'string' || typeof item === 'number') {
+      return [normalizeRecognitionLatex(String(item).trim())];
+    }
     if (Array.isArray(item)) return normalizeMath(item);
     if (!item || typeof item !== 'object') return [];
-    if (typeof item.latex === 'string') return [item.latex.trim()];
+    if (typeof item.latex === 'string') return [normalizeRecognitionLatex(item.latex.trim())];
     if (item.type === 'math') return normalizeMath(item.value || item.content || item.text);
     return normalizeMath(item.math || item.mathExpressions || item.blocks);
   }).filter(Boolean))];

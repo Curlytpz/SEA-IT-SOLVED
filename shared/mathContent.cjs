@@ -1,3 +1,32 @@
+const RECOGNITION_MATH_SIGNAL = /\\(?:frac|dfrac|tfrac|int|sum|prod|sqrt|lim|sin|cos|tan|log|ln|to|infty)(?![A-Za-z])|(?:^|[^\p{L}])(?:[A-Za-z](?:\([^\n)]*\))?)\s*(?:=|\u2248|\u2264|\u2265|<|>)/u;
+const RELATION_SOURCE = '(?:=|\\u2248|\\u2243|\\u2264|\\u2265|<|>|\\\\(?:approx|sim|le|leq|ge|geq|ne|neq))';
+const STRAY_CURRENCY_DECIMAL = new RegExp('(' + RELATION_SOURCE + '\\s*)\\\\?[$\\u00A2]\\s*\\.(\\d+)', 'g');
+const BARE_RELATIONAL_DECIMAL = new RegExp('(' + RELATION_SOURCE + '\\s*)\\.(\\d+)', 'g');
+
+/**
+ * Repairs only high-confidence OCR/HMER decimal artifacts in mathematical
+ * context. Ordinary currency such as "$5.49" remains unchanged.
+ */
+function normalizeRecognitionNumericArtifacts(value, { mathContext = false } = {}) {
+  const source = String(value == null ? '' : value);
+  if (!source || (!mathContext && !RECOGNITION_MATH_SIGNAL.test(source))) return source;
+  let output = source
+    .replace(STRAY_CURRENCY_DECIMAL, (_match, relation, decimals) => relation + '0.' + decimals)
+    .replace(BARE_RELATIONAL_DECIMAL, (_match, relation, decimals) => relation + '0.' + decimals);
+  if (mathContext) {
+    output = output.replace(/^(\s*)\\?[$\u00A2]\s*\.(\d+)/, (_match, spacing, decimals) => spacing + '0.' + decimals);
+  }
+  return output;
+}
+
+function normalizeRecognitionLatex(value) {
+  return normalizeRecognitionNumericArtifacts(value, { mathContext: true })
+    .replace(/\\(?=\d)/g, '')
+    .replace(/\\([_^])(?=[{A-Za-z0-9+-])/g, '$1')
+    .replace(/\\{2,}(?=[,;!])/g, '\\')
+    .trim();
+}
+
 function createLessonMathNormalizer(katex) {
 const MATH_COMMAND_NAMES = [
   'frac', 'dfrac', 'tfrac', 'int', 'sum', 'prod', 'sqrt', 'lim',
@@ -13,6 +42,7 @@ const COMMAND_SOURCE = MATH_COMMAND_NAMES.join('|');
 const BARE_MATH_COMMAND = new RegExp(`\\\\(?:${COMMAND_SOURCE})(?![A-Za-z])`);
 const DOUBLE_ESCAPED_MATH_COMMAND = new RegExp(`\\\\{2,}(?=(?:${COMMAND_SOURCE})(?![A-Za-z]))`, 'g');
 const DOUBLE_ESCAPED_MATH_DELIMITER = /\\{2,}(?=\$)/g;
+const DOUBLE_ESCAPED_MATH_SPACING = /\\{2,}(?=[,;!])/g;
 const BARE_SCRIPT_EXPRESSION = /\b([A-Za-z](?:\([^\n)]*\))?(?:(?:\^(?:\{[^}\n]+\}|[-+]?\d+|[A-Za-z]|[+-])|_(?:\{[^}\n]+\}|\d+|[ijkn])))+)(?![A-Za-z0-9_])/g;
 const PROTECTED_INLINE = /(`[^`\n]*`|(?<!\\)\$[^$\n]+(?<!\\)\$)/g;
 const INLINE_MATH = /(^|[^$])\$([^$\n]+)\$(?!\$)/g;
@@ -80,7 +110,7 @@ function repairEscapedMathDollars(value) {
 }
 
 function repairStructuralEscapes(value) {
-  return String(value || '').replace(/\\(?=\d)/g, '').replace(/\\([_^])(?=[{A-Za-z0-9+-])/g, '$1').trim();
+  return normalizeRecognitionLatex(value);
 }
 
 function normalizeOcrNotation(value) {
@@ -134,7 +164,7 @@ function readableMathFallback(value, delimiters) {
 }
 
 function recordMathFragment(rawValue, state, delimiters = '$') {
-  const latex = repairStructuralEscapes(rawValue);
+  const latex = repairStructuralEscapes(normalizeRecognitionNumericArtifacts(rawValue, { mathContext: true }));
   if (!latex) return '';
   if (!validateLatex(latex)) {
     state.needsReview.push({ original: String(rawValue || ''), reason: 'KATEX_PARSE_ERROR' });
@@ -144,7 +174,7 @@ function recordMathFragment(rawValue, state, delimiters = '$') {
 }
 
 function recordDisplayFragment(rawValue, state) {
-  const source = repairStructuralEscapes(rawValue);
+  const source = repairStructuralEscapes(normalizeRecognitionNumericArtifacts(rawValue, { mathContext: true }));
   const lines = source.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
   if (lines.length > 1 && !/\\begin\b|\\\\/.test(source) && lines.every(validateLatex)) {
     return lines.map(line => recordMathFragment(line, state, '$$')).filter(Boolean).join('\n\n');
@@ -282,7 +312,7 @@ function looksLikeStandaloneFormula(value) {
 }
 
 function normalizeInlineLine(line, state) {
-  const safeLine = removeUnmatchedDelimiters(line);
+  const safeLine = removeUnmatchedDelimiters(normalizeRecognitionNumericArtifacts(line));
   if (looksLikeStandaloneFormula(safeLine)) return promoteDisplayMath(recordMathFragment(safeLine, state));
   let cursor = 0;
   let output = '';
@@ -312,6 +342,7 @@ function normalizeLessonMathContent(value) {
   const protectedSource = protectLiteralSegments(value);
   const prepared = normalizeOcrNotation(removeMathReviewDiagnostics(protectedSource.content)
     .replace(DOUBLE_ESCAPED_MATH_COMMAND, '\\')
+    .replace(DOUBLE_ESCAPED_MATH_SPACING, '\\')
     .replace(DOUBLE_ESCAPED_MATH_DELIMITER, ''));
   const source = repairEscapedMathDollars(prepared)
     .replace(/\\\[([\s\S]*?)\\\]/g, (_, expression) => `\n$$\n${expression.trim()}\n$$\n`)
@@ -361,6 +392,6 @@ function normalizeLessonMathContent(value) {
 return normalizeLessonMathContent;
 }
 
-const mathContentApi = { createLessonMathNormalizer };
+const mathContentApi = { createLessonMathNormalizer, normalizeRecognitionNumericArtifacts, normalizeRecognitionLatex };
 if (typeof module !== 'undefined' && module.exports) module.exports = mathContentApi;
 if (typeof globalThis !== 'undefined') globalThis[Symbol.for('sea-it-solved.mathContent')] = mathContentApi;

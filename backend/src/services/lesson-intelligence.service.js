@@ -11,13 +11,13 @@ const { buildLessonDocument } = require('./lesson-document.service');
 const { randomizeMultipleChoiceQuestions } = require('../utils/quizOptions');
 const {
   GEMINI_API_KEY, GEMINI_REASONING_MODEL, GEMINI_QUIZ_MODEL, GEMINI_QUIZ_TIMEOUT_MS,
-  RECOGNITION_PROVIDER_TIMEOUT_MS,
+  GEMINI_INTERACTIVE_TIMEOUT_MS,
 } = require('../config/env');
 
 const provider = new GeminiReasoningProvider({
   apiKey: GEMINI_API_KEY,
   model: GEMINI_REASONING_MODEL,
-  timeoutMs: RECOGNITION_PROVIDER_TIMEOUT_MS,
+  timeoutMs: GEMINI_INTERACTIVE_TIMEOUT_MS,
 });
 const quizProvider = new GeminiReasoningProvider({
   apiKey: GEMINI_API_KEY,
@@ -292,7 +292,12 @@ async function generateMaterials(lessonId, instructorId) {
   const { context, payload } = await approvedPayload(lessonId, instructorId);
   const result = await geminiInteractive.run(
     () => provider.generateMaterials(payload),
-    'AI is temporarily unavailable.'
+    {
+      unavailable: 'Lesson notes could not be generated. Please try again.',
+      invalidOutput: 'The generated lesson notes could not be validated. Please try again.',
+      rateLimited: 'Lesson generation is temporarily rate-limited. Please try again shortly.',
+    },
+    { label: 'LessonAI', model: GEMINI_REASONING_MODEL }
   );
   const byType = new Map();
   for (const item of result.materials || []) {

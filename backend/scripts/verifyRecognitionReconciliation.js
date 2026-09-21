@@ -90,6 +90,34 @@ function main() {
   assert.equal(countMath(lesson.pages[0].blocks, 'du=(2x+2)dx'), 2);
   assert.equal(lesson.pages[0].plainText.includes('Example B: a separate substitution'), true);
 
+  const malformedRecognition = {
+    plainText: '',
+    blocks: [
+      math('\\lim\\_{x\\to 1^-} P(x)=$.49', 1, bounds(0.04, 0.10)),
+      math('\\lim\\_{x\\to 1^+} P(x)=\u00A2.86', 2, bounds(0.04, 0.20)),
+    ].map(providerBlock),
+    warnings: [],
+  };
+  const malformedSnapshot = structuredClone(malformedRecognition);
+  const repairedImage = normalizeExtraction(malformedRecognition);
+  assert.deepEqual(malformedRecognition, malformedSnapshot, 'OCR artifact repair must preserve raw provider output for audit.');
+  assert.equal(repairedImage.mathExpressions[0].latex, '\\lim_{x\\to 1^-} P(x)=0.49');
+  assert.equal(repairedImage.mathExpressions[1].latex, '\\lim_{x\\to 1^+} P(x)=0.86');
+
+  const bareTextRecognition = normalizeExtraction({
+    plainText: '\\lim\\_{x\\to 1^-} P(x)=$.49',
+    blocks: [],
+    warnings: [],
+  });
+  assert.equal(bareTextRecognition.plainText, '\\lim\\_{x\\to 1^-} P(x)=0.49');
+
+  const repairedLesson = normalizeLessonCompilation({
+    pages: [{ pageNumber: 1, plainText: '', blocks: malformedSnapshot.blocks, warnings: [] }],
+    warnings: [],
+  }, [{ id: 'capture-math-fixture', captured_at: '2026-01-01T00:00:00.000Z' }]);
+  assert.equal(repairedLesson.pages[0].blocks[0].latex, '\\lim_{x\\to 1^-} P(x)=0.49');
+  assert.equal(repairedLesson.pages[0].blocks[1].latex, '\\lim_{x\\to 1^+} P(x)=0.86');
+
   console.log('PASS exact overlapping OCR/HMER blocks are suppressed');
   console.log('PASS conservative math formatting equivalence is reconciled');
   console.log('PASS spatially distinct repeated equations remain');
@@ -97,6 +125,7 @@ function main() {
   console.log('PASS overlapping tile candidates in one capture are reconciled');
   console.log('PASS normalized camera/upload output is cleaned without mutating raw provider output');
   console.log('PASS lesson compilation emits cleaned blocks for context review and AI');
+  console.log('PASS malformed OCR currency decimals are repaired without mutating raw provider output');
 }
 
 try {

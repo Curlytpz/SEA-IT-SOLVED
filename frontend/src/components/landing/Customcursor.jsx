@@ -41,7 +41,7 @@ export default function CustomCursor() {
       <motion.div
         animate={{ scale: hovering ? 2.6 : 1 }}
         transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-        className="w-3 h-3 bg-white rounded-full"
+        className="w-3 h-3 bg-card rounded-full"
       />
       <motion.div
         animate={{ scale: hovering ? 1.4 : 0, opacity: hovering ? 1 : 0 }}

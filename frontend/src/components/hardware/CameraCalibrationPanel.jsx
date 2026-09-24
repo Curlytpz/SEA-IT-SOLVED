@@ -274,7 +274,7 @@ export default function CameraCalibrationPanel() {
         {camera.error && <Alert type="error">{camera.error}</Alert>}
         <div className="min-w-0">
           <CameraPreview {...camera} mode={mode} videoRef={videoRef} canvasRef={canvasRef}>
-            {camera.status === 'READY' && <CalibrationOverlay planes={planes} selectedId={selectedPlaneId} onPlaneChange={updatePlane} onDragEnd={invalidatePreview}/>} 
+            {camera.status === 'READY' && <CalibrationOverlay planes={planes} selectedId={selectedPlaneId} onPlaneChange={updatePlane} onDragEnd={invalidatePreview}/>}
           </CameraPreview>
           <div className="flex flex-wrap gap-2 mt-3">
             {camera.status !== 'READY'
@@ -285,14 +285,14 @@ export default function CameraCalibrationPanel() {
             <Btn variant="secondary" loading={detecting} disabled={camera.status !== 'READY' || detecting} onClick={autoDetect}>Auto Detect Board</Btn>
           </div>
         </div>
-        <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">Add points along the boundary, then drag them to refine the single region. The four canonical anchors remain separate. Coordinates remain normalized across responsive sizes. Arrow keys move precisely; hold Shift for larger steps.</p>
-        
+        <p className="mt-3 text-xs text-muted-foreground dark:text-muted-foreground">Add points along the boundary, then drag them to refine the single region. The four canonical anchors remain separate. Coordinates remain normalized across responsive sizes. Arrow keys move precisely; hold Shift for larger steps.</p>
+
         <div className="flex flex-wrap gap-2 mt-4"><Btn disabled={camera.status !== 'READY' || !calibrationValid} loading={saving} onClick={save}>Save Calibration</Btn>{savedCalibration && <Btn variant="ghost" disabled={saving} onClick={cancel}>Cancel</Btn>}<Btn variant="secondary" disabled={camera.status !== 'READY' || !savedCalibration || isDirty} loading={processing} onClick={testCapture}>Preview Corrected Board</Btn></div>
       </>}
       {!editing && <div className="pointer-events-none fixed -left-[10000px] top-0 h-[360px] w-[640px] overflow-hidden opacity-0" aria-hidden="true"><CameraPreview {...camera} mode={mode} videoRef={videoRef} canvasRef={canvasRef}/></div>}
     </Card>
     {originalPreview && <div className="space-y-4" key={`preview-${previewVersion}`}>
-      {originalPreview && <Card className="overflow-hidden"><div className="px-4 py-3 text-sm font-semibold border-b border-slate-200 dark:border-white/10">Original Capture</div><img src={originalPreview} alt="Original calibration test" className="max-h-[32rem] w-full bg-slate-950 object-contain"/></Card>}
+      {originalPreview && <Card className="overflow-hidden"><div className="px-4 py-3 text-sm font-semibold border-b border-border dark:border-border">Original Capture</div><img src={originalPreview} alt="Original calibration test" className="max-h-[32rem] w-full bg-slate-950 object-contain"/></Card>}
     </div>}
     <CalibrationImageLightbox inspection={visibleInspection} onClose={() => setInspection(null)}/>
   </div>;

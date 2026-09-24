@@ -498,9 +498,14 @@ async function ownedQuiz(quizId, instructorId, client = pool) {
   if (!rows.length) throw new AppError('Quiz not found or access denied.', 404);
   return rows[0];
 }
-async function ownedEditableQuiz(quizId, instructorId, client = pool) {
+async function ownedEditableQuiz(quizId, instructorId, client = pool, { allowPublished = false } = {}) {
   const quiz = await ownedQuiz(quizId, instructorId, client);
-  if (!['DRAFT', 'DISABLED'].includes(quiz.status)) throw new AppError('Only a draft or disabled quiz can be edited.', 409);
+  const editableStatuses = allowPublished ? ['DRAFT', 'DISABLED', 'PUBLISHED'] : ['DRAFT', 'DISABLED'];
+  if (!editableStatuses.includes(quiz.status)) {
+    throw new AppError(allowPublished
+      ? 'Only a draft, published, or disabled quiz can be edited.'
+      : 'Only a draft or disabled quiz can be edited.', 409);
+  }
   return quiz;
 }
 async function ownedDraftQuiz(quizId, instructorId, client = pool) {
@@ -519,14 +524,14 @@ async function updateQuiz(quizId, instructorId, body) {
 }
 
 async function updateQuestion(quizId, questionId, instructorId, body) {
-  await ownedEditableQuiz(quizId, instructorId);
+  await ownedEditableQuiz(quizId, instructorId, pool, { allowPublished: true });
   const { rows } = await pool.query('SELECT id FROM lesson_quiz_questions WHERE quiz_id=$1 ORDER BY question_order', [quizId]);
   const index = rows.findIndex(row => row.id === questionId);
   if (index < 0) throw new AppError('Quiz question not found.', 404);
   const result = await applyQuizEdit(quizId, instructorId, {
     operation: 'update_question', targetQuestionNumbers: [index + 1],
     expectedQuestionIds: rows.map(row => row.id), expectedTargetQuestionIds: [questionId], questions: [body],
-  });
+  }, { allowPublished: true });
   return result.questions.find(question => question.id === questionId);
 }
 
@@ -585,7 +590,7 @@ function sameIdSet(left, right) {
   return left.length === right.length && [...left].sort().every((id, index) => id === [...right].sort()[index]);
 }
 
-async function applyQuizEdit(quizId, instructorId, edit = {}) {
+async function applyQuizEdit(quizId, instructorId, edit = {}, options = {}) {
   const operation = String(edit.operation || '');
   if (!QUIZ_PATCH_OPERATIONS.has(operation)) throw new AppError('The requested quiz edit operation is invalid.', 422);
   const targetNumbers = [...new Set((edit.targetQuestionNumbers || []).map(Number))];
@@ -594,7 +599,7 @@ async function applyQuizEdit(quizId, instructorId, edit = {}) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const quiz = await ownedEditableQuiz(quizId, instructorId, client);
+    const quiz = await ownedEditableQuiz(quizId, instructorId, client, options);
     const existingResult = await client.query(
       'SELECT * FROM lesson_quiz_questions WHERE quiz_id=$1 ORDER BY question_order FOR UPDATE',
       [quizId]
@@ -749,7 +754,7 @@ async function applyQuizEdit(quizId, instructorId, edit = {}) {
 }
 
 async function deleteQuestion(quizId, questionId, instructorId) {
-  await ownedEditableQuiz(quizId, instructorId);
+  await ownedEditableQuiz(quizId, instructorId, pool, { allowPublished: true });
   const result = await pool.query(
     `DELETE FROM lesson_quiz_questions WHERE id=$1 AND quiz_id=$2
      AND EXISTS(SELECT 1 FROM lesson_quizzes WHERE id=$2 AND instructor_id=$3)`, [questionId, quizId, instructorId]
@@ -770,15 +775,16 @@ async function closeQuiz(quizId, instructorId) {
 async function setQuizStatus(quizId, instructorId, nextStatus) {
   if (!['PUBLISHED', 'DISABLED'].includes(nextStatus)) throw new AppError('Quiz status must be PUBLISHED or DISABLED.', 400);
   const expectedStatus = nextStatus === 'DISABLED' ? 'PUBLISHED' : 'DISABLED';
+  const shouldClose = nextStatus === 'DISABLED';
   const { rows } = await pool.query(
     `UPDATE lesson_quizzes
-     SET status=$3,
-         closed_at=CASE WHEN $3='DISABLED' THEN NOW() ELSE NULL END,
+     SET status=$3::varchar,
+         closed_at=CASE WHEN $4::boolean THEN NOW() ELSE NULL END,
          published_at=COALESCE(published_at,NOW()),
          updated_at=NOW()
-     WHERE id=$1 AND instructor_id=$2 AND status=$4
+     WHERE id=$1 AND instructor_id=$2 AND status=$5::varchar
      RETURNING *`,
-    [quizId, instructorId, nextStatus, expectedStatus]
+    [quizId, instructorId, nextStatus, shouldClose, expectedStatus]
   );
   if (!rows.length) {
     const owned = await pool.query('SELECT status FROM lesson_quizzes WHERE id=$1 AND instructor_id=$2', [quizId, instructorId]);

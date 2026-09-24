@@ -30,19 +30,19 @@ export default function QuizSolutionUpload({ attemptId, question, submitted, onU
   }
   return <div className="mt-6 min-w-0 space-y-5">
     {question.instructions && <GeneratedContent markdown={question.instructions} audience="student"/>}
-    {(question.tip || question.formula) && <section aria-label="Stored assistance"><p className="mb-2 text-sm font-medium text-slate-500">Need a little help?</p><div className="grid gap-3 sm:grid-cols-2">
+    {(question.tip || question.formula) && <section aria-label="Stored assistance"><p className="mb-2 text-sm font-medium text-muted-foreground">Need a little help?</p><div className="grid gap-3 sm:grid-cols-2">
       {[[question.tip,'View Tip',Lightbulb],[question.formula,'View Formula',Sigma]].filter(([text]) => text).map(([text,label,Icon]) => <StoredHelp key={label} text={text} label={label} Icon={Icon}/>)}
     </div></section>}
     <section className="min-w-0 rounded-xl border border-border bg-surface-subtle p-4 sm:p-5">
-      <h3 className="font-semibold">Your handwritten solution</h3><p className="mt-1 text-sm leading-6 text-slate-500">Take a photo or upload an image of your handwritten work.</p>
+      <h3 className="font-semibold">Your handwritten solution</h3><p className="mt-1 text-sm leading-6 text-muted-foreground">Take a photo or upload an image of your handwritten work.</p>
       {error && <Alert>{error}</Alert>}
-      {question.solution && <div className="mt-4"><ProtectedCaptureImage url={question.solution.imageUrl} alt="Your saved handwritten solution" className="max-h-72 w-full rounded-lg object-contain"/><p className="mt-2 flex items-center gap-2 text-sm font-medium text-emerald-700"><Check size={16}/>Solution saved</p></div>}
+      {question.solution && <div className="mt-4"><ProtectedCaptureImage url={question.solution.imageUrl} alt="Your saved handwritten solution" className="max-h-72 w-full rounded-lg object-contain"/><p className="mt-2 flex items-center gap-2 text-sm font-medium text-success-subtle-foreground"><Check size={16}/>Solution saved</p></div>}
       {!submitted && <>
         <input ref={input} hidden type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={event => { choose(event.target.files?.[0]); event.target.value = ''; }}/>
         <div className="mt-4 flex flex-wrap gap-3"><Btn variant="secondary" disabled={busy} onClick={() => setCamera(true)}><Camera size={17}/>Open Camera</Btn><Btn variant="secondary" disabled={busy} onClick={() => input.current?.click()}><Upload size={17}/>{file || question.solution ? 'Replace Image' : 'Choose Image'}</Btn></div>
-        {preview && <div className="mt-4"><img src={preview} alt="Selected solution, not yet saved" className="max-h-72 w-full rounded-lg object-contain"/><p className="mt-2 text-xs text-amber-700">Unsaved image — choose Save Solution to keep this work.</p><Btn variant="ghost" disabled={busy} onClick={() => onFile(null)}>Remove selected image</Btn></div>}
+        {preview && <div className="mt-4"><img src={preview} alt="Selected solution, not yet saved" className="max-h-72 w-full rounded-lg object-contain"/><p className="mt-2 text-xs text-warning-subtle-foreground dark:text-warning-subtle-foreground">Unsaved image — choose Save Solution to keep this work.</p><Btn variant="ghost" disabled={busy} onClick={() => onFile(null)}>Remove selected image</Btn></div>}
         <Btn className="mt-4" disabled={!file || busy} loading={busy} onClick={upload}>Save Solution</Btn>
-        <p className="mt-3 text-xs leading-5 text-slate-500">JPEG / PNG / WebP · up to 8 MB. Saving does not submit or grade your quiz.</p>
+        <p className="mt-3 text-xs leading-5 text-muted-foreground">JPEG / PNG / WebP · up to 8 MB. Saving does not submit or grade your quiz.</p>
       </>}
     </section>
     {camera && <SolutionCamera onClose={() => setCamera(false)} onUse={choose}/>}

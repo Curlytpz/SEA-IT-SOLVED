@@ -41,6 +41,13 @@ function questionCount(message) {
   const text = String(message || '').trim();
   const standalone = text.match(new RegExp(`^${COUNT_TOKEN}$`, 'i'));
   if (standalone) return countValue(standalone[0]);
+  const typedQuantities = [...text.matchAll(new RegExp(
+    `\\b(${COUNT_TOKEN})\\b[\\s-]+(?:multiple[-\\s]+choice|mcqs?|problem[-\\s]+solving|solution[-\\s]+required|true\\s*(?:/|or|-)\\s*false)\\b`,
+    'gi',
+  ))];
+  if (typedQuantities.length > 1) {
+    return typedQuantities.reduce((total, match) => total + countValue(match[1]), 0);
+  }
   const target = '(?:(?:easy|medium|hard)\\s+)?(?:(?:quiz\\s+)?(?:items?|questions?)|(?:multiple[-\\s]+choice|problem[-\\s]+solving)(?:\\s+(?:items?|questions?|problems?))?|problems?|quiz)';
   const match = text.match(new RegExp(`\\b(${COUNT_TOKEN})\\b(?=[\\s-]*${target}\\b)`, 'i'));
   return match ? countValue(match[1]) : undefined;

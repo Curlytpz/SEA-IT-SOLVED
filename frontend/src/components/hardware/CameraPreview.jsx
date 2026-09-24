@@ -13,7 +13,7 @@ export default function CameraPreview({ mode, stream, status, service, videoRef,
   }, [mode, status, service, canvasRef]);
 
   return (
-    <div className="calibration-surface relative aspect-video w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-950 shadow-inner dark:border-white/10">
+    <div className="isolate relative aspect-video w-full overflow-hidden rounded-xl border border-border bg-slate-950 shadow-inner dark:border-border">
       {mode === 'BROWSER'
         ? <video ref={videoRef} muted playsInline className="pointer-events-none h-full w-full object-contain" />
         : <canvas ref={canvasRef} className="pointer-events-none h-full w-full object-contain" />}

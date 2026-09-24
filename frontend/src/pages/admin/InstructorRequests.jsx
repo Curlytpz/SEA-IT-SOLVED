@@ -39,7 +39,7 @@ export default function InstructorRequests() {
             emptyIcon={<Clock size={23}/>} emptyTitle="No pending requests"
             columns={[
               { key: 'name', label: 'Name', render: r => <strong>{r.firstName} {r.lastName}</strong> },
-              { key: 'email', label: 'Email', render: r => <span className="text-slate-500">{r.email}</span> },
+              { key: 'email', label: 'Email', render: r => <span className="text-muted-foreground">{r.email}</span> },
               { key: 'date', label: 'Registered', render: r => new Date(r.createdAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) },
               { key: 'actions', label: 'Actions', render: r => (
                 <div className="flex gap-2">

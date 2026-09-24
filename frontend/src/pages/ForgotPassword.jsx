@@ -3,9 +3,10 @@ import { CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useSearchParams } from 'react-router-dom';
 import AuthLayout from '../components/public/AuthLayout';
-import { Alert, Btn, FormField, Input } from '../components/ui';
+import { Alert, BackButton, Btn, FormField, Input } from '../components/ui';
 import { requestPasswordReset } from '../services/passwordResetApi';
 import { isStudentEmail, STUDENT_EMAIL_HINT } from '../utils/authEmail';
+import { authFormClassName, authSignInClassName, authSuccessClassName } from '../components/public/authStyles';
 
 const GENERIC_SUCCESS = 'If an account exists for that email, password reset instructions have been sent.';
 
@@ -43,17 +44,17 @@ export default function ForgotPassword() {
     backTo={`/login?role=${role}`}
     backLabel="Back to sign in"
   >
-    {success ? <div className="auth-success-state mt-7" role="status">
+    {success ? <div className={`${authSuccessClassName} mt-7`} role="status">
       <CheckCircle2 size={30}/>
       <p>{GENERIC_SUCCESS}</p>
       <Link to="/login"><Btn className="w-full">Back to sign in</Btn></Link>
     </div> : <>
       {error && <Alert type="error" onClose={() => setError('')}>{error}</Alert>}
-      <form onSubmit={submit} className="public-auth-form">
+      <form onSubmit={submit} className={authFormClassName}>
         <FormField label={role === 'student' ? 'HAU Student Email' : 'Faculty Email'} hint={role === 'student' ? STUDENT_EMAIL_HINT : undefined}><Input type="email" required placeholder={role === 'student' ? 'you@student.hau.edu.ph' : 'you@hau.edu.ph'} value={email} onChange={event => setEmail(event.target.value)} autoComplete="email"/></FormField>
         <Btn type="submit" variant="primary" loading={loading} disabled={loading} className="mt-1 w-full">{loading ? 'Sending...' : 'Send reset link'}</Btn>
       </form>
-      <p className="auth-signin-copy"><Link to={`/login?role=${role}`}>← Back to sign in</Link></p>
+      <div className={authSignInClassName}><BackButton to={`/login?role=${role}`} className="mx-auto mb-0">Back to sign in</BackButton></div>
     </>}
   </AuthLayout>;
 }

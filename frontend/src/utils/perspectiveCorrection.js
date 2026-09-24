@@ -1,19 +1,40 @@
 import { advancedCells, calibrationPlanes, outerCornersFromAdvanced } from './calibrationPlanes';
 
 let openCvPromise;
+const OPEN_CV_RECOVERY_KEY = 'sea-it-solved:opencv-dependency-reload';
+
+function isStaleDevelopmentDependency(error) {
+  const message = String(error?.message || error || '');
+  return import.meta.env.DEV && (
+    /Failed to fetch dynamically imported module/i.test(message)
+    || /Outdated Optimize Dep/i.test(message)
+    || /node_modules\/\.vite\/deps/i.test(message)
+  );
+}
+
+function recoverStaleDevelopmentDependency(error) {
+  if (!isStaleDevelopmentDependency(error) || typeof window === 'undefined') return false;
+  if (window.sessionStorage.getItem(OPEN_CV_RECOVERY_KEY) === '1') return false;
+
+  window.sessionStorage.setItem(OPEN_CV_RECOVERY_KEY, '1');
+  window.location.reload();
+  return true;
+}
 
 export async function loadOpenCv() {
   if (!openCvPromise) {
-    openCvPromise = import('@techstark/opencv-js')
+    openCvPromise = import('./openCvRuntime.js')
       .then(async module => {
-        let cv = module.default || module;
-        if (typeof cv?.then === 'function') cv = await cv;
-        if (cv?.Mat) return cv;
-        await new Promise(resolve => { cv.onRuntimeInitialized = resolve; });
+        const cv = await module.resolveOpenCvRuntime();
+        window.sessionStorage.removeItem(OPEN_CV_RECOVERY_KEY);
         return cv;
       })
       .catch(error => {
         openCvPromise = undefined;
+        if (recoverStaleDevelopmentDependency(error)) return new Promise(() => {});
+        if (isStaleDevelopmentDependency(error)) {
+          throw new Error('The whiteboard image processor could not refresh. Restart the frontend development server, then reload this page.');
+        }
         throw error;
       });
   }

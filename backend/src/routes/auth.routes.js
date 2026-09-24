@@ -1,27 +1,32 @@
 const router       = require('express').Router();
 const authCtrl     = require('../controllers/auth.controller');
 const authenticate = require('../middleware/authenticate');
-const rateLimit = require('express-rate-limit');
+const { createRateLimiter } = require('../middleware/rateLimit');
+const { AUTH_RATE_LIMIT_MAX } = require('../config/env');
 
-const forgotPasswordLimiter = rateLimit({
+const authAttemptLimiter = createRateLimiter({
+  name: 'authentication-attempts',
+  windowMs: 15 * 60 * 1000,
+  max: AUTH_RATE_LIMIT_MAX,
+  message: 'Too many authentication attempts. Try again later.',
+});
+const forgotPasswordLimiter = createRateLimiter({
+  name: 'forgot-password',
   windowMs: 15 * 60 * 1000,
   max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, error: 'Too many password reset requests. Try again later.' },
+  message: 'Too many password reset requests. Try again later.',
 });
-const resetPasswordLimiter = rateLimit({
+const resetPasswordLimiter = createRateLimiter({
+  name: 'reset-password',
   windowMs: 15 * 60 * 1000,
   max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, error: 'Too many password reset attempts. Try again later.' },
+  message: 'Too many password reset attempts. Try again later.',
 });
 
 // Public routes — no authentication required
-router.post('/register/student',    authCtrl.registerStudent);
-router.post('/register/instructor', authCtrl.registerInstructor);
-router.post('/login',               authCtrl.login);
+router.post('/register/student',    authAttemptLimiter, authCtrl.registerStudent);
+router.post('/register/instructor', authAttemptLimiter, authCtrl.registerInstructor);
+router.post('/login',               authAttemptLimiter, authCtrl.login);
 router.post('/forgot-password', forgotPasswordLimiter, authCtrl.forgotPassword);
 router.post('/reset-password/validate', resetPasswordLimiter, authCtrl.validateResetToken);
 router.post('/reset-password', resetPasswordLimiter, authCtrl.resetPassword);

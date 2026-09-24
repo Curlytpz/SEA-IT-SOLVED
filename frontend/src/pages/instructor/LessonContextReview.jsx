@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Ban, ChevronDown, CircleCheck, CircleMinus, FileText, Image as ImageIcon, LoaderCircle, Maximize2, Mic, MoreVertical, Trash2, TriangleAlert } from 'lucide-react';
+import { Ban, ChevronDown, CircleCheck, CircleMinus, FileText, Image as ImageIcon, LoaderCircle, Maximize2, Mic, Trash2, TriangleAlert } from 'lucide-react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import { Alert, Badge, Btn, Card, ConfirmModal, EmptyState, LoadingState, PageHeader, Textarea } from '../../components/ui';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../components/ui/dropdown-menu';
-import { ArrowLeft, BookOpen, Check, Pencil } from '../../components/icons';
+import { Alert, BackButton, Badge, Btn, Card, ConfirmModal, EmptyState, LoadingState, PageHeader, Textarea } from '../../components/ui';
+import { BookOpen, Check, Pencil } from '../../components/icons';
 import ProtectedCaptureImage from '../../components/hardware/ProtectedCaptureImage';
 import ProtectedAudioPlayer from '../../components/hardware/ProtectedAudioPlayer';
 import ImageLightbox from '../../components/recognition/ImageLightbox';
@@ -26,6 +25,7 @@ import { normalizeLessonMathContent } from '../../utils/mathContent';
 import { buildTranscriptReviewSources, formatTranscriptTime, patchTranscriptReviewSource } from '../../utils/transcriptReview';
 import { createLessonContextDraftGate, isExpectedSourcesProcessingError, lessonContextReadiness } from '../../utils/lessonContextReadiness';
 import { sectionBackLabel, sectionOriginFromState, sectionOriginState, sectionReturnPath } from '../../utils/instructorLessonNavigation';
+import { getQuizEditingState } from '../../utils/quizEditingState';
 
 const PUBLISH_STATE = Object.freeze({ IDLE: 'idle', PUBLISHING: 'publishing', SUCCESS: 'success', ERROR: 'error' });
 
@@ -35,6 +35,21 @@ function sourceLabel(chunk) {
   if (chunk.type === 'SPEECH') return 'Lesson Transcript';
   if (chunk.type === 'PDF') return `${source.filename} • Page ${source.pdfPageNumber}`;
   return source.filename || 'Uploaded image';
+}
+
+function hasUnreadablePdfGlyphs(chunk) {
+  if (chunk?.type !== 'PDF') return false;
+  const characters = Array.from(String(chunk.text || chunk.rawText || '')).filter(character => !/\s/u.test(character));
+  if (!characters.length) return true;
+  const suspicious = characters.filter(character => {
+    const codePoint = character.codePointAt(0);
+    return codePoint === 0xfffd
+      || (codePoint >= 0xe000 && codePoint <= 0xf8ff)
+      || (codePoint >= 0xf0000 && codePoint <= 0xffffd)
+      || (codePoint >= 0x100000 && codePoint <= 0x10fffd)
+      || codePoint < 0x20;
+  }).length;
+  return suspicious / characters.length > 0.15;
 }
 
 function sourceTypeLabel(type) {
@@ -174,21 +189,13 @@ export default function LessonContextReview() {
   const backTarget = inspectedFromWorkspace ? workspacePath : cameFromProcessing ? processingPath : sectionOrigin || processingPath;
   const backLabel = inspectedFromWorkspace ? 'Back to Lesson Workspace' : cameFromProcessing ? 'Back to Processing' : sectionOrigin ? sectionBackLabel(sectionOrigin) : 'Back to Processing';
   function navigateBack() {
-    // Return through the exact known parent entry only when this inspection
-    // was pushed from it. Direct URLs/state-less refreshes use the explicit path.
-    if (inspectedFromWorkspace && location.state?.inspectionHistoryIndex === window.history.state?.idx - 1) {
-      navigate(-1);
-      return;
-    }
     navigate(backTarget, {
       replace: true,
       state: inspectedFromWorkspace || backTarget === processingPath ? preservedOriginState() : undefined,
     });
   }
   function continueToWorkspace() {
-    if (inspectedFromWorkspace && location.state?.inspectionHistoryIndex === window.history.state?.idx - 1) {
-      navigate(-1);
-    } else navigate(workspacePath, { replace: true, state: preservedOriginState() });
+    navigate(workspacePath, { replace: true, state: preservedOriginState() });
   }
   const staleMaterials = intelligence.materials.some(item => item.outdated || (item.contextVersionId && item.contextVersionId !== context?.id));
   async function regenerateMaterials() {
@@ -385,6 +392,21 @@ export default function LessonContextReview() {
     }
     finally { setBusy(''); }
   }, [lessonId]);
+  const savePublishedQuizChanges = useCallback(async (quizId, changedQuestions, removedQuestionIds) => {
+    setBusy(`quiz-save-${quizId}`);
+    try {
+      for (const question of changedQuestions) await updateQuizQuestion(quizId, question.id, question);
+      for (const questionId of removedQuestionIds) await deleteQuizQuestion(quizId, questionId);
+      setIntelligence(await getLessonIntelligence(lessonId));
+      setQuizToast({ text: 'Changes saved', description: 'The published quiz is locked again with your latest changes.' });
+      return true;
+    } catch (error) {
+      setQuizToast({ type: 'error', text: error.response?.data?.error || 'Unable to save the published quiz changes.' });
+      return false;
+    } finally {
+      setBusy('');
+    }
+  }, [lessonId, setQuizToast]);
   const removeQuestion = useCallback(async (quizId, question) => {
     setBusy(question.id);
     try { await deleteQuizQuestion(quizId, question.id); setIntelligence(await getLessonIntelligence(lessonId)); }
@@ -452,13 +474,13 @@ export default function LessonContextReview() {
   }
 
   if (loading || (workflow.loading && !lesson)) return <DashboardLayout>
-    <button type="button" onClick={navigateBack} className="mb-4 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-slate-600 dark:text-slate-300"><ArrowLeft size={17}/> {backLabel}</button>
+    <BackButton onClick={navigateBack}>{backLabel}</BackButton>
     <PageHeader title={wantsWorkspace ? 'Lesson Workspace' : 'Lesson Context Review'} subtitle={lesson?.title || 'Preparing your lesson sources and approved context.'}/>
     <section aria-busy="true" aria-label="Loading lesson content" className="space-y-5">
-      <p role="status" className="text-sm text-slate-500">Loading lesson content…</p>
+      <p role="status" className="text-sm text-muted-foreground">Loading lesson content…</p>
       <div aria-hidden="true" className="space-y-5 motion-safe:animate-pulse">
-        <Card className="p-5"><div className="h-5 w-48 rounded bg-slate-200 dark:bg-slate-700"/><div className="mt-4 h-4 w-2/3 rounded bg-slate-100 dark:bg-slate-800"/></Card>
-        <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">{[0,1].map(key=><Card key={key} className="min-h-80 space-y-5 p-5">{[0,1,2,3].map(line=><div key={line} className="h-5 rounded bg-slate-100 dark:bg-slate-800"/>)}</Card>)}</div>
+        <Card className="p-5"><div className="h-5 w-48 rounded bg-slate-200 dark:bg-skeleton-highlight"/><div className="mt-4 h-4 w-2/3 rounded bg-surface-elevated dark:bg-surface-elevated"/></Card>
+        <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">{[0,1].map(key=><Card key={key} className="min-h-80 space-y-5 p-5">{[0,1,2,3].map(line=><div key={line} className="h-5 rounded bg-surface-elevated dark:bg-surface-elevated"/>)}</Card>)}</div>
       </div>
     </section>
   </DashboardLayout>;
@@ -470,7 +492,7 @@ export default function LessonContextReview() {
         ? `Processing finished, but ${failed} needs attention. Return to Processing to retry it, or continue once another usable source is ready.`
         : 'No processed lesson sources are available yet. Return to Processing to start recognition or transcription.');
     return <DashboardLayout>
-      <button type="button" onClick={navigateBack} className="mb-4 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-slate-600 dark:text-slate-300"><ArrowLeft size={17}/> {backLabel}</button>
+      <BackButton onClick={navigateBack}>{backLabel}</BackButton>
       <PageHeader title="Lesson Context Review" subtitle={lesson?.title || 'Preparing the combined lesson context.'}/>
       {workflow.readiness.processing ? <EmptyState
         icon={<LoaderCircle className="motion-safe:animate-spin"/>}
@@ -490,7 +512,7 @@ export default function LessonContextReview() {
   }
 
   return <DashboardLayout>
-    <button type="button" onClick={navigateBack} className="mb-4 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-slate-600 dark:text-slate-300"><ArrowLeft size={17}/> {backLabel}</button>
+    <BackButton onClick={navigateBack}>{backLabel}</BackButton>
     {context.status === 'DRAFT' && <PageHeader title="Lesson Context Review" subtitle={`Version ${context.versionNumber} • Review every source before approval.`}>
       <Badge status={context.status}/>
       <Btn variant="secondary" loading={busy === 'save'} onClick={save}>Save Draft</Btn>
@@ -498,13 +520,13 @@ export default function LessonContextReview() {
     </PageHeader>}
     {context.status === 'APPROVED' && !workspaceMode && <>
       <Card className="mb-6 max-w-3xl p-5 sm:p-6">
-        <div className="mb-5 flex items-start gap-3"><CircleCheck size={24} className="shrink-0 text-emerald-600" aria-hidden="true"/><div><h1 className="text-xl font-bold text-slate-900 dark:text-white">Approved Lesson Context</h1><p className="mt-1 text-sm text-slate-500"><GeneratedContent markdown={lesson?.title} inline/> · Approved sources remain frozen until a new version is reviewed.</p></div></div>
+        <div className="mb-5 flex items-start gap-3"><CircleCheck size={24} className="shrink-0 text-success-subtle-foreground" aria-hidden="true"/><div><h1 className="text-xl font-bold text-foreground dark:text-foreground">Approved Lesson Context</h1><p className="mt-1 text-sm text-muted-foreground"><GeneratedContent markdown={lesson?.title} inline/> · Approved sources remain frozen until a new version is reviewed.</p></div></div>
         <dl className="grid gap-4 sm:grid-cols-3">
-          <div><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">Approved version</dt><dd className="mt-1 text-lg font-bold text-slate-900 dark:text-white">{context.versionNumber}</dd></div>
-          <div><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">Included sources</dt><dd className="mt-1 text-lg font-bold text-slate-900 dark:text-white">{includedCount}</dd></div>
-          <div><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">Excluded sources</dt><dd className="mt-1 text-lg font-bold text-slate-900 dark:text-white">{excludedCount}</dd></div>
+          <div><dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Approved version</dt><dd className="mt-1 text-lg font-bold text-foreground dark:text-foreground">{context.versionNumber}</dd></div>
+          <div><dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Included sources</dt><dd className="mt-1 text-lg font-bold text-foreground dark:text-foreground">{includedCount}</dd></div>
+          <div><dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Excluded sources</dt><dd className="mt-1 text-lg font-bold text-foreground dark:text-foreground">{excludedCount}</dd></div>
         </dl>
-        <p className="mt-4 text-sm text-slate-600 dark:text-slate-300">{sourceStatus}</p>
+        <p className="mt-4 text-sm text-muted-foreground dark:text-muted-foreground">{sourceStatus}</p>
         <div className="mt-5 flex flex-wrap gap-2">
           <Btn onClick={continueToWorkspace}>Continue to Lesson Workspace</Btn>
           <Btn variant="secondary" aria-expanded={showApprovedSources} onClick={() => setShowApprovedSources(value => !value)}>{showApprovedSources ? 'Hide Approved Sources' : 'View Approved Sources'}</Btn>
@@ -525,7 +547,7 @@ export default function LessonContextReview() {
       </header>
       <div className="context-review-workspace">
         <div className="context-source-list" role="list" aria-label="Lesson context sources">
-          {reviewSources.map(chunk => <SourceCard key={chunk.id} chunk={chunk} materials={materials} selected={selected?.id === chunk.id} draft={context.status === 'DRAFT'} editing={editingChunkId === chunk.id} onSelect={() => setSelectedId(chunk.id)} onToggleEdit={open => setEditingChunkId(open ? chunk.id : '')} onPatch={patch => patchReviewSource(chunk, patch)} onOpenImage={() => setImageViewerId(chunk.id)} onOpenPdf={setPdf}/>) }
+          {reviewSources.map(chunk => <SourceCard key={chunk.id} chunk={chunk} materials={materials} selected={selected?.id === chunk.id} draft={context.status === 'DRAFT'} editing={editingChunkId === chunk.id} onSelect={() => setSelectedId(chunk.id)} onToggleEdit={open => setEditingChunkId(open ? chunk.id : '')} onPatch={patch => patchReviewSource(chunk, patch)} onOpenImage={() => setImageViewerId(chunk.id)} onOpenPdf={setPdf} onReturnToProcessing={() => navigate(processingPath, { state: preservedOriginState() })}/>) }
         </div>
         <aside className="context-source-inspector min-w-0 xl:sticky xl:top-6"><SourceInspector chunk={selected} materials={materials} onOpenImage={() => selected && setImageViewerId(selected.id)} onOpenPdf={setPdf}/></aside>
       </div>
@@ -556,12 +578,12 @@ export default function LessonContextReview() {
               : !intelligence.materials.length && <div className="lesson-ai-empty-document">Generate lesson notes to create the academic handout.</div>}
           </div>
           <div id="lesson-workspace-assistant" inert={regenerating || undefined} className={`lesson-ai-pane lesson-ai-assistant-pane ${workspaceView === 'assistant' ? 'is-active' : ''}`}>
-            <LessonChatAssistant lessonId={lessonId} lessonTitle={intelligence.document?.title} materials={intelligence.materials} selectedMaterialId={selectedMaterialId} documentPageContext={documentPageContext} onMaterialsUpdated={updateEditedMaterials} onEditStateChange={updateDocumentEditState} onQuizCreated={() => refreshQuizDraft({ notify: true })} onReviewQuiz={() => refreshQuizDraft({ review: true })} onQuizUpdated={updateEditedQuiz}/>
+            <LessonChatAssistant lessonId={lessonId} lessonTitle={intelligence.document?.title} materials={intelligence.materials} quizzes={intelligence.quizzes} selectedMaterialId={selectedMaterialId} documentPageContext={documentPageContext} onMaterialsUpdated={updateEditedMaterials} onEditStateChange={updateDocumentEditState} onQuizCreated={() => refreshQuizDraft({ notify: true })} onReviewQuiz={quizId => quizId ? reviewQuizDraft(quizId) : refreshQuizDraft({ review: true })} onQuizUpdated={updateEditedQuiz}/>
           </div>
         </div>
       </section>
       <div id="lesson-quiz-drafts" className="scroll-mt-6 space-y-5">
-        {intelligence.quizzes.map(quiz => <QuizEditor key={quiz.id} lessonId={lessonId} navigationState={preservedOriginState()} quiz={quiz} expanded={expandedQuizId === quiz.id} busy={busy} onToggle={() => setExpandedQuizId(current => current === quiz.id ? '' : quiz.id)} onSave={saveQuestion} onDelete={removeQuestion} onManage={manageQuiz}/>) }
+        {intelligence.quizzes.map(quiz => <QuizEditor key={quiz.id} lessonId={lessonId} navigationState={preservedOriginState()} quiz={quiz} expanded={expandedQuizId === quiz.id} busy={busy} onToggle={() => setExpandedQuizId(current => current === quiz.id ? '' : quiz.id)} onSave={saveQuestion} onSavePublished={savePublishedQuizChanges} onDelete={removeQuestion} onManage={manageQuiz}/>) }
       </div>
     </section>}
     <ImageLightbox
@@ -580,21 +602,21 @@ export default function LessonContextReview() {
     <WorkspaceToast notification={quizToast} onDismiss={() => setQuizToast(null)} onReview={reviewQuizDraft}/>
     {quizAction && <ConfirmModal
       title={['delete', 'force-delete'].includes(quizAction.action)
-        ? <span className="inline-flex items-center gap-2 text-red-700 dark:text-red-300"><TriangleAlert size={20} aria-hidden="true"/>{quizAction.action === 'force-delete' ? 'Force delete quiz?' : 'Delete quiz permanently?'}</span>
+        ? <span className="inline-flex items-center gap-2 text-destructive-subtle-foreground dark:text-destructive-subtle-foreground"><TriangleAlert size={20} aria-hidden="true"/>{quizAction.action === 'force-delete' ? 'Force delete quiz?' : 'Delete quiz permanently?'}</span>
         : 'Disable this quiz?'}
       body={quizAction.action === 'force-delete'
         ? <div className="space-y-3">
             <p>This quiz has student attempts and recorded results. Force deleting it will permanently remove:</p>
             <ul className="list-disc space-y-1 pl-5"><li>the quiz</li><li>student attempts for this quiz</li><li>submitted answers</li><li>quiz scores/results</li><li>analytics derived from this quiz</li></ul>
-             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-lg bg-red-50 px-3 py-2 dark:bg-red-500/10"><dt className="font-semibold">Attempts:</dt><dd>{quizAction.attemptCount}</dd><dt className="font-semibold">Quiz:</dt><dd><GeneratedContent markdown={studentQuizTitle(quizAction.quiz.title)} quizText inline/></dd></dl>
-            <p className="font-semibold text-red-700 dark:text-red-200">This action cannot be undone.</p>
-            <label className="block text-sm font-semibold text-slate-800 dark:text-slate-100">Type DELETE to confirm
+             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-lg bg-destructive-subtle px-3 py-2 dark:bg-destructive-subtle"><dt className="font-semibold">Attempts:</dt><dd>{quizAction.attemptCount}</dd><dt className="font-semibold">Quiz:</dt><dd><GeneratedContent markdown={studentQuizTitle(quizAction.quiz.title)} quizText inline/></dd></dl>
+            <p className="font-semibold text-destructive-subtle-foreground dark:text-destructive-subtle-foreground">This action cannot be undone.</p>
+            <label className="block text-sm font-semibold text-foreground dark:text-foreground">Type DELETE to confirm
               <input
                 type="text"
                 autoComplete="off"
                 value={quizAction.confirmation || ''}
                 onChange={event => setQuizAction(current => ({ ...current, confirmation: event.target.value }))}
-                className="mt-2 block min-h-11 w-full rounded-lg border border-red-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-red-500 focus:ring-2 focus:ring-red-200 dark:border-red-400/40 dark:bg-slate-950 dark:text-white dark:focus:ring-red-500/20"
+                className="mt-2 block min-h-11 w-full rounded-lg border border-destructive/25 bg-card px-3 py-2 text-sm text-foreground outline-none focus:border-destructive focus:ring-2 focus:ring-destructive/20 dark:border-destructive/25 dark:bg-background dark:text-foreground dark:focus:ring-destructive/20"
               />
             </label>
             {quizAction.error && <Alert type="error" className="mb-0">{quizAction.error}</Alert>}
@@ -614,29 +636,30 @@ export default function LessonContextReview() {
   </DashboardLayout>;
 }
 
-function SourceCard({ chunk, materials, selected, draft, editing, onSelect, onToggleEdit, onPatch, onOpenImage, onOpenPdf }) {
+function SourceCard({ chunk, materials, selected, draft, editing, onSelect, onToggleEdit, onPatch, onOpenImage, onOpenPdf, onReturnToProcessing }) {
   const included = !chunk.removed;
+  const recognitionNeedsAttention = hasUnreadablePdfGlyphs(chunk);
   return <Card role="listitem" className={`context-source-card ${selected ? 'is-selected' : ''} ${included ? '' : 'is-excluded'}`}>
     <header className="context-source-card-header">
       <button type="button" aria-pressed={selected} onClick={onSelect} className="context-source-select">
         <span>{sourceTypeLabel(chunk.type)}</span>
         <strong>{sourceLabel(chunk)}</strong>
       </button>
-      <div className="context-source-state">{chunk.uncertain && <Badge status="UNCERTAIN"/>}<span className={included ? 'is-included' : 'is-excluded'}>{chunk.partiallyRemoved ? 'Partially included' : included ? 'Included' : 'Excluded'}</span></div>
+      <div className="context-source-state">{chunk.uncertain && <Badge status="UNCERTAIN"/>}{recognitionNeedsAttention && <span className="text-warning-subtle-foreground">Needs reprocessing</span>}<span className={included ? 'is-included' : 'is-excluded'}>{chunk.partiallyRemoved ? 'Partially included' : included ? 'Included' : 'Excluded'}</span></div>
     </header>
     <div className="context-source-card-body">
       <SourceThumbnail chunk={chunk} materials={materials} onOpenImage={onOpenImage} onOpenPdf={onOpenPdf}/>
       <div className="context-source-content">
-        <SourceCleanPreview chunk={chunk}/>
-        {chunk.isTranscriptGroup && chunk.source?.recordingId && <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/60">
-          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Lesson audio</p>
+        <SourceCleanPreview chunk={chunk} recognitionNeedsAttention={recognitionNeedsAttention} onReturnToProcessing={onReturnToProcessing}/>
+        {chunk.isTranscriptGroup && chunk.source?.recordingId && <div className="rounded-xl border border-border bg-surface-subtle p-3 dark:border-border dark:bg-surface/60">
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">Lesson audio</p>
           <ProtectedAudioPlayer url={`/api/audio-recordings/${chunk.source.recordingId}/audio`}/>
         </div>}
         {chunk.isTranscriptGroup && <TranscriptSegmentDetails chunk={chunk}/>}
-        {draft && <details open={editing} onToggle={event => onToggleEdit(event.currentTarget.open)}>
+        {draft && !recognitionNeedsAttention && <details open={editing} onToggle={event => onToggleEdit(event.currentTarget.open)}>
           <summary><Pencil size={15}/> {chunk.isTranscriptGroup ? 'Edit Transcript' : 'Edit interpreted content'}</summary>
           <label>{chunk.isTranscriptGroup ? 'Reviewed transcript' : 'Interpreted text'}<Textarea value={humanText(chunk.text)} onChange={event => onPatch({ text: event.target.value })}/></label>
-          {latexValues(chunk.math).length > 0 && <MathAwareEditor unified multiline label="Recognized mathematics" value={mathMarkdown(chunk.math)} onChange={value => onPatch({ math: mathValues(value) })}/>} 
+          {latexValues(chunk.math).length > 0 && <MathAwareEditor unified multiline label="Recognized mathematics" value={mathMarkdown(chunk.math)} onChange={value => onPatch({ math: mathValues(value) })}/>}
         </details>}
       </div>
     </div>
@@ -646,20 +669,26 @@ function SourceCard({ chunk, materials, selected, draft, editing, onSelect, onTo
 
 function TranscriptSegmentDetails({ chunk }) {
   const segments = chunk.transcriptSegments || [];
-  return <details className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950/40">
-    <summary className="cursor-pointer font-semibold text-slate-700 dark:text-slate-200">View timestamped segments ({segments.length})</summary>
+  return <details className="rounded-xl border border-border bg-card px-3 py-2 text-sm dark:border-border dark:bg-background/40">
+    <summary className="cursor-pointer font-semibold text-foreground dark:text-foreground">View timestamped segments ({segments.length})</summary>
     <ol className="mt-3 space-y-2">
-      {segments.map((segment, index) => <li key={`${segment.originalIndex}-${segment.lessonOffsetStartMs}-${index}`} className="grid grid-cols-[auto_1fr] gap-3 border-t border-slate-100 pt-2 first:border-0 first:pt-0 dark:border-slate-800">
+      {segments.map((segment, index) => <li key={`${segment.originalIndex}-${segment.lessonOffsetStartMs}-${index}`} className="grid grid-cols-[auto_1fr] gap-3 border-t border-border pt-2 first:border-0 first:pt-0 dark:border-border">
         <time className="font-mono text-xs font-semibold text-info">{formatTranscriptTime(segment.lessonOffsetStartMs)}</time>
-        <span className="min-w-0 whitespace-pre-wrap break-words text-slate-600 dark:text-slate-300">{humanText(segment.text)}</span>
+        <span className="min-w-0 whitespace-pre-wrap break-words text-muted-foreground dark:text-muted-foreground">{humanText(segment.text)}</span>
       </li>)}
     </ol>
   </details>;
 }
 
-function SourceCleanPreview({ chunk }) {
+function SourceCleanPreview({ chunk, recognitionNeedsAttention, onReturnToProcessing }) {
   const [expanded, setExpanded] = useState(false);
   const preview = useMemo(() => buildLessonContextPreview(humanText(chunk.text), latexValues(chunk.math)), [chunk.math, chunk.text]);
+  if (recognitionNeedsAttention) return <div className="context-source-preview">
+    <Alert type="warning" label="PDF recognition" title="Recognition needs attention" className="mb-0">
+      <p>The PDF’s embedded font produced unreadable symbols. Reprocess the file to run visual recognition on every page.</p>
+      <Btn type="button" size="sm" variant="secondary" className="mt-3" onClick={onReturnToProcessing}>Return to Processing</Btn>
+    </Alert>
+  </div>;
   return <div className="context-source-preview">
     <p className="context-source-preview-label">Recognized lesson content</p>
     {preview.full ? <GeneratedContent markdown={expanded || !preview.isLong ? preview.full : preview.concise} reviewIndicator/> : <p>No readable text or mathematics was recognized.</p>}
@@ -678,7 +707,7 @@ function SourceThumbnail({ chunk, materials, onOpenImage, onOpenPdf }) {
 }
 
 function SourceInspector({ chunk, materials, onOpenImage, onOpenPdf }) {
-  if (!chunk) return <Card className="p-5 text-sm text-slate-500">Select a source to inspect it.</Card>;
+  if (!chunk) return <Card className="p-5 text-sm text-muted-foreground">Select a source to inspect it.</Card>;
   const source = chunk.source || {};
   const material = materials.find(item => item.id === source.materialId);
   const imageUrl = sourceImageUrl(chunk, materials);
@@ -686,24 +715,72 @@ function SourceInspector({ chunk, materials, onOpenImage, onOpenPdf }) {
   return <Card className="source-inspector overflow-hidden p-4"><p>Source preview</p><h3>{sourceLabel(chunk)}</h3>
     {imageUrl && <button type="button" onClick={onOpenImage} className="source-inspector-image" aria-label={`Open ${sourceLabel(chunk)} in full-size viewer`}><ProtectedCaptureImage url={imageUrl} alt={sourceLabel(chunk)} className="max-h-[55vh] w-full bg-slate-950 object-contain"/><span><Maximize2 size={15}/> Inspect full size</span></button>}
     {chunk.type === 'PDF' && material && <Btn className="mt-4 w-full" variant="secondary" onClick={() => onOpenPdf({ ...material, initialPage: source.pdfPageNumber })}>Open protected PDF • Page {source.pdfPageNumber}</Btn>}
-    {chunk.type === 'SPEECH' && <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:bg-slate-900">The lesson audio and timestamped evidence are available in the transcript source card.</p>}
+    {chunk.type === 'SPEECH' && <p className="mt-4 rounded-lg bg-surface-subtle px-3 py-2 text-xs text-muted-foreground dark:bg-surface">The lesson audio and timestamped evidence are available in the transcript source card.</p>}
     <details className="source-raw-recognition"><summary>Advanced · View raw recognition</summary><div className="source-raw-panel">{identifiers.length > 0 && <dl>{identifiers.map(([label, value]) => <div key={label}><dt>{label} ID</dt><dd>{value}</dd></div>)}</dl>}<h4>Raw recognized text</h4><pre>{humanText(chunk.rawText) || 'No raw recognition text is available.'}</pre></div></details>
   </Card>;
 }
 
-function QuizEditor({ lessonId, navigationState, quiz, expanded, busy, onToggle, onSave, onDelete, onManage }) {
+function QuizEditor({ lessonId, navigationState, quiz, expanded, busy, onToggle, onSave, onSavePublished, onDelete, onManage }) {
+  const [editingPublishedQuiz, setEditingPublishedQuiz] = useState(false);
+  const [editSessionRevision, setEditSessionRevision] = useState(0);
+  const [removedQuestionIds, setRemovedQuestionIds] = useState([]);
+  const editingState = getQuizEditingState(quiz.status, editingPublishedQuiz);
   const hasUnresolvedMath = useMemo(() => quiz.questions.some(question => [question.prompt, question.explanation, question.correctAnswer, ...(question.choices || [])].some(value => normalizeLessonMathContent(value).needsReview.length > 0)), [quiz.questions]);
   const draftsRef = useRef(new Map());
-  const rememberDraft = useCallback((questionId, draft) => {
-    draftsRef.current.set(questionId, draft);
+  const previousStatusRef = useRef(quiz.status);
+  const rememberDraft = useCallback((questionId, draft, changed) => {
+    draftsRef.current.set(questionId, { draft, changed });
   }, []);
+  useEffect(() => {
+    if (previousStatusRef.current === quiz.status) return;
+    previousStatusRef.current = quiz.status;
+    draftsRef.current.clear();
+    setRemovedQuestionIds([]);
+    setEditingPublishedQuiz(false);
+    setEditSessionRevision(current => current + 1);
+  }, [quiz.status]);
+
+  function resetPublishedEditSession() {
+    draftsRef.current.clear();
+    setRemovedQuestionIds([]);
+    setEditingPublishedQuiz(false);
+    setEditSessionRevision(current => current + 1);
+  }
+
+  function openQuizEditor() {
+    if (!expanded) onToggle();
+    if (!editingState.isPublished) return;
+    draftsRef.current.clear();
+    setRemovedQuestionIds([]);
+    setEditingPublishedQuiz(true);
+    setEditSessionRevision(current => current + 1);
+  }
+
+  function stageQuestionRemoval(_quizId, question) {
+    setRemovedQuestionIds(current => current.includes(question.id) ? current : [...current, question.id]);
+    draftsRef.current.delete(question.id);
+  }
+
+  async function savePublishedChanges() {
+    const removed = new Set(removedQuestionIds);
+    const changedQuestions = quiz.questions
+      .filter(question => !removed.has(question.id))
+      .map(question => draftsRef.current.get(question.id))
+      .filter(entry => entry?.changed)
+      .map(entry => entry.draft);
+    if (await onSavePublished(quiz.id, changedQuestions, removedQuestionIds)) resetPublishedEditSession();
+  }
+
   const contentId = `quiz-content-${quiz.id}`;
   const toggleId = `quiz-toggle-${quiz.id}`;
   const status = String(quiz.status || 'DRAFT').replaceAll('_', ' ').toLowerCase();
+  const statusClass = editingState.isEditingPublishedQuiz ? 'published-editing' : status.replaceAll(' ', '-');
   const difficulty = String(quiz.difficulty || 'MEDIUM').toLowerCase();
   const created = quiz.createdAt ? new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' }).format(new Date(quiz.createdAt)) : '';
   const managementBusy = busy.endsWith(`-${quiz.id}`) && busy.startsWith('quiz-');
-  const managementLabel = busy === `quiz-publish-${quiz.id}` ? 'Publishing…' : busy === `quiz-disable-${quiz.id}` ? 'Disabling…' : busy === `quiz-enable-${quiz.id}` ? 'Enabling…' : busy === `quiz-delete-${quiz.id}` ? 'Deleting…' : '';
+  const managementLabel = busy === `quiz-publish-${quiz.id}` ? 'Publishing…' : busy === `quiz-save-${quiz.id}` ? 'Saving…' : busy === `quiz-disable-${quiz.id}` ? 'Disabling…' : busy === `quiz-enable-${quiz.id}` ? 'Enabling…' : busy === `quiz-delete-${quiz.id}` ? 'Deleting…' : '';
+  const removedQuestionSet = new Set(removedQuestionIds);
+  const visibleQuestions = quiz.questions.filter(question => !removedQuestionSet.has(question.id));
 
   return <Card className={`quiz-history-card ${expanded ? 'is-expanded' : ''}`}>
     <div className="quiz-management-heading">
@@ -718,26 +795,28 @@ function QuizEditor({ lessonId, navigationState, quiz, expanded, busy, onToggle,
           </span>
         </span>
         <span className="quiz-disclosure-action">
-          <span className={`quiz-disclosure-status is-${status.replaceAll(' ', '-')}`}>{status}</span>
+          <span className={`quiz-disclosure-status is-${statusClass}`}>{editingState.statusLabel}</span>
           <span>{managementLabel || (expanded ? 'Collapse' : 'Expand')}</span>
           {managementLabel ? <LoaderCircle className="animate-spin" size={17} aria-hidden="true"/> : <ChevronDown size={18} aria-hidden="true"/>}
         </span>
       </button>
     </h2>
-      <DropdownMenu>
-        <DropdownMenuTrigger className="quiz-management-trigger" aria-label={`Manage ${studentQuizTitle(quiz.title)}`} disabled={managementBusy}><MoreVertical size={19} aria-hidden="true"/></DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48">
-          <DropdownMenuItem onClick={() => { if (!expanded) onToggle(); }}><Pencil size={16}/>Edit Quiz</DropdownMenuItem>
-          {quiz.status === 'DRAFT' && <DropdownMenuItem disabled={hasUnresolvedMath} onClick={() => onManage('publish', quiz)}><CircleCheck size={16}/>Publish Quiz</DropdownMenuItem>}
-          {quiz.status === 'PUBLISHED' && <DropdownMenuItem onClick={() => onManage('disable', quiz)}><Ban size={16}/>Disable Quiz</DropdownMenuItem>}
-          {quiz.status === 'DISABLED' && <DropdownMenuItem onClick={() => onManage('enable', quiz)}><CircleCheck size={16}/>Enable Quiz</DropdownMenuItem>}
-          <DropdownMenuItem variant="destructive" onClick={() => onManage('delete', quiz)}><Trash2 size={16}/>Delete Quiz</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <div className="quiz-management-actions" aria-label={`Actions for ${studentQuizTitle(quiz.title)}`}>
+        {editingState.isEditingPublishedQuiz ? <>
+          <Btn size="sm" variant="ghost" disabled={managementBusy} onClick={resetPublishedEditSession}>Cancel</Btn>
+          <Btn size="sm" loading={busy === `quiz-save-${quiz.id}`} loadingText="Saving changes" onClick={savePublishedChanges}><CircleCheck size={16}/>Save Changes</Btn>
+        </> : <>
+          <Btn size="sm" variant="secondary" disabled={managementBusy} onClick={openQuizEditor}><Pencil size={16}/>Edit Quiz</Btn>
+          {editingState.canPublishQuiz && <Btn size="sm" disabled={managementBusy || hasUnresolvedMath} onClick={() => onManage('publish', quiz)}><CircleCheck size={16}/>Publish Quiz</Btn>}
+          {editingState.isPublished && <Btn size="sm" variant="outline" disabled={managementBusy} onClick={() => onManage('disable', quiz)}><Ban size={16}/>Disable</Btn>}
+          {editingState.isDisabled && <Btn size="sm" disabled={managementBusy} onClick={() => onManage('enable', quiz)}><CircleCheck size={16}/>Enable Quiz</Btn>}
+          <Btn size="sm" variant="ghost" className="quiz-action-delete" disabled={managementBusy} onClick={() => onManage('delete', quiz)}><Trash2 size={16}/>Delete</Btn>
+        </>}
+      </div>
     </div>
-    {quiz.status !== 'DRAFT' && <div className="flex flex-wrap items-center gap-3 border-t border-slate-200 px-4 py-3 dark:border-slate-700">
+    {quiz.status !== 'DRAFT' && <div className="flex flex-wrap items-center gap-3 border-t border-border px-4 py-3 dark:border-border">
       <Link to={`/instructor/quizzes/${quiz.id}/attempts`} state={{...navigationState,from:`/instructor/lessons/${lessonId}/review?view=workspace`}}><Btn variant="secondary">Review Attempts</Btn></Link>
-      <span className="text-xs text-slate-500">{quiz.questions.filter(question=>question.type==='PROBLEM_SOLVING').length} Problem Solving · View submissions and pending reviews</span>
+      <span className="text-xs text-muted-foreground">{quiz.questions.filter(question=>question.type==='PROBLEM_SOLVING').length} Problem Solving · View submissions and pending reviews</span>
     </div>}
     {expanded && <div id={contentId} className="quiz-disclosure-content" role="region" aria-labelledby={toggleId}>
       <div className="quiz-disclosure-toolbar">
@@ -747,17 +826,19 @@ function QuizEditor({ lessonId, navigationState, quiz, expanded, busy, onToggle,
         </div>
       </div>
       {quiz.status === 'DRAFT' && hasUnresolvedMath && <Alert type="warning" label="Math review" className="mb-4">Resolve the marked math fields and save each question before publishing.</Alert>}
-      <div className="quiz-disclosure-questions">{quiz.questions.map((question, questionIndex) => <QuizQuestionEditor
-        key={question.id}
+      <div className={`quiz-disclosure-questions ${editingState.canEditQuiz ? 'is-editable' : 'is-locked'}`}>{visibleQuestions.map((question, questionIndex) => <QuizQuestionEditor
+        key={`${question.id}-${editSessionRevision}`}
         quizId={quiz.id}
-        quizStatus={quiz.status}
+        canEditQuiz={editingState.canEditQuiz}
+        editingPublishedQuiz={editingState.isEditingPublishedQuiz}
+        canDelete={!editingState.isEditingPublishedQuiz || visibleQuestions.length > 1}
         question={question}
         questionIndex={questionIndex}
-        initialDraft={draftsRef.current.get(question.id)}
+        initialDraft={draftsRef.current.get(question.id)?.draft}
         busy={busy === question.id}
         onDraftChange={rememberDraft}
         onSave={onSave}
-        onDelete={onDelete}
+        onDelete={editingState.isEditingPublishedQuiz ? stageQuestionRemoval : onDelete}
       />)}</div>
     </div>}
   </Card>;

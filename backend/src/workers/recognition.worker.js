@@ -7,10 +7,11 @@ const recognitionService = require('../services/recognition.service');
 const lessonRecognitionService = require('../services/lesson-recognition.service');
 const lessonMaterialService = require('../services/lesson-material.service');
 const lessonContextService = require('../services/lesson-context.service');
-const providerGate = require('../services/providerRequestGate');
+const aiProvider = require('../services/aiProvider.service');
 const GeminiWhiteboardProvider = require('../recognition/providers/GeminiWhiteboardProvider');
 const GeminiLessonCompilationProvider = require('../recognition/providers/GeminiLessonCompilationProvider');
 const GeminiLessonMaterialProvider = require('../recognition/providers/GeminiLessonMaterialProvider');
+const { assertRecognizableMaterialContent } = require('../recognition/LessonMaterialResult');
 const { RecognitionProviderError, mapProviderError, providerHttpStatus } = require('../recognition/ProviderErrorMapper');
 const { reconcileRecognitionBlocks, plainTextFromBlocks } = require('../recognition/RecognitionReconciler');
 const {
@@ -26,8 +27,6 @@ const {
   RECOGNITION_RAW_OUTPUT_MAX_BYTES,
   RECOGNITION_MAX_IMAGE_MB,
   RECOGNITION_WORKER_ID,
-  GEMINI_SHARED_MIN_REQUEST_INTERVAL_MS,
-  GEMINI_SHARED_RATE_LIMIT_BACKOFF_MS,
 } = require('../config/env');
 
 const workerId = RECOGNITION_WORKER_ID || `${os.hostname()}-${process.pid}`;
@@ -227,11 +226,12 @@ async function processAttempt(attempt) {
     if (!storageKey) throw new RecognitionProviderError('IMAGE_NOT_FOUND', 'A polygon-masked corrected capture is required for recognition.', false);
     const imageBuffer = await readProtectedImage(storageKey);
     const sha256 = crypto.createHash('sha256').update(imageBuffer).digest('hex');
-    const gateDelay = await providerGate.reserveRequest(GEMINI_SHARED_MIN_REQUEST_INTERVAL_MS);
-    if (gateDelay > 0) await wait(gateDelay);
     requestStarted = true;
     logRequestStarted('CAPTURE', attempt, source);
-    const result = await provider.extract({ imageBuffer, mimeType: mimeFromKey(storageKey) });
+    const result = await aiProvider.run(
+      () => provider.extract({ imageBuffer, mimeType: mimeFromKey(storageKey) }),
+      { provider: RECOGNITION_PROVIDER, model: GEMINI_RECOGNITION_MODEL, operationType: 'RECOGNITION_CAPTURE', jobId: attempt.id }
+    );
     result.sanitizedOutput = retainedProviderOutput(result.sanitizedOutput);
     const sourceVariant = 'CORRECTED';
     const sourceWidth = source.corrected_width;
@@ -244,8 +244,8 @@ async function processAttempt(attempt) {
     const mapped = error?.code === 'OWNERSHIP_MISMATCH'
       ? new RecognitionProviderError('OWNERSHIP_MISMATCH', 'Capture ownership validation failed.', false, error)
       : mapProviderError(error);
+    if (error?.providerRetriesExhausted) mapped.retryable = false;
     logRawProviderFailure('CAPTURE', attempt, source, error, mapped, startedAt, requestStarted);
-    if (isRateLimited(mapped)) await providerGate.extendCooldown(GEMINI_SHARED_RATE_LIMIT_BACKOFF_MS).catch(() => {});
     console.error(`[Recognition] Attempt ${attempt.id} failed (${mapped.code}): ${mapped.message}`);
     await recognitionService.failAttempt(attempt, mapped);
     return { rateLimited: isRateLimited(mapped) };
@@ -272,11 +272,12 @@ async function processLessonAttempt(attempt) {
         pageSources.push({ id: region.plane?.id || capture.id, captured_at: capture.captured_at, captureId: capture.id, plane: region.plane });
       }
     }
-    const gateDelay = await providerGate.reserveRequest(GEMINI_SHARED_MIN_REQUEST_INTERVAL_MS);
-    if (gateDelay > 0) await wait(gateDelay);
     requestStarted = true;
     logRequestStarted('LESSON', attempt, source);
-    const result = await lessonProvider.compile({ images, captures: pageSources });
+    const result = await aiProvider.run(
+      () => lessonProvider.compile({ images, captures: pageSources }),
+      { provider: RECOGNITION_PROVIDER, model: GEMINI_RECOGNITION_MODEL, operationType: 'LESSON_COMPILATION', jobId: attempt.id }
+    );
     result.normalized = mergeLessonPlanePages(result.normalized, pageSources, source.captures);
     result.sanitizedOutput = retainedProviderOutput(result.sanitizedOutput);
     const captureSetSha256 = crypto.createHash('sha256').update(captureHashes.join('|')).digest('hex');
@@ -287,8 +288,8 @@ async function processLessonAttempt(attempt) {
     const mapped = error?.code === 'OWNERSHIP_MISMATCH'
       ? new RecognitionProviderError('OWNERSHIP_MISMATCH', 'Lesson ownership validation failed.', false, error)
       : mapProviderError(error);
+    if (error?.providerRetriesExhausted) mapped.retryable = false;
     logRawProviderFailure('LESSON', attempt, source, error, mapped, startedAt, requestStarted);
-    if (isRateLimited(mapped)) await providerGate.extendCooldown(GEMINI_SHARED_RATE_LIMIT_BACKOFF_MS).catch(() => {});
     console.error(`[Recognition] Lesson attempt ${attempt.id} failed (${mapped.code}): ${mapped.message}`);
     await lessonRecognitionService.failAttempt(attempt, mapped);
   } finally {
@@ -302,13 +303,24 @@ async function processMaterialAttempt(attempt) {
   try {
     source = await lessonMaterialService.getAttemptSource(attempt.id);
     const buffer = await lessonMaterialService.readBuffer(source);
-    const gateDelay = await providerGate.reserveRequest(GEMINI_SHARED_MIN_REQUEST_INTERVAL_MS);
-    if (gateDelay > 0) await wait(gateDelay);
+    // Rebuild PDF page metadata from the protected original on every attempt.
+    // Provider output replaces raw_extraction after completion, so relying on
+    // the previous row can make a later manual reprocess lose its PDF pages.
+    const nativePdfPages = source.material_type === 'PDF'
+      ? await lessonMaterialService.inspectPdf(buffer)
+      : [];
     requestStarted = true;
     logRequestStarted('MATERIAL', attempt, source);
-    const result = source.material_type === 'PDF'
-      ? await materialProvider.extractPdf(buffer, source.raw_extraction?.nativePages || [])
-      : await materialProvider.extractImage(buffer, source.mime_type);
+    const result = await aiProvider.run(
+      () => source.material_type === 'PDF'
+        ? materialProvider.extractPdf(buffer, nativePdfPages)
+        : materialProvider.extractImage(buffer, source.mime_type),
+      { provider: RECOGNITION_PROVIDER, model: GEMINI_RECOGNITION_MODEL, operationType: 'LESSON_MATERIAL', jobId: attempt.id }
+    );
+    assertRecognizableMaterialContent(result, {
+      materialType: source.material_type,
+      expectedPageCount: source.page_count,
+    });
     await lessonMaterialService.completeAttempt(attempt, result);
     logRequestSucceeded('MATERIAL', attempt, source, startedAt);
     console.log(`[Recognition] Processed lesson material ${source.material_id}, attempt ${attempt.attempt_number}.`);
@@ -316,8 +328,8 @@ async function processMaterialAttempt(attempt) {
     const mapped = error?.code === 'OWNERSHIP_MISMATCH'
       ? new RecognitionProviderError('OWNERSHIP_MISMATCH', 'Material ownership validation failed.', false, error)
       : mapProviderError(error);
+    if (error?.providerRetriesExhausted) mapped.retryable = false;
     logRawProviderFailure('MATERIAL', attempt, source, error, mapped, startedAt, requestStarted);
-    if (isRateLimited(mapped)) await providerGate.extendCooldown(GEMINI_SHARED_RATE_LIMIT_BACKOFF_MS).catch(() => {});
     console.error(`[Recognition] Material attempt ${attempt.id} failed (${mapped.code}): ${mapped.message}`);
     await lessonMaterialService.failAttempt(attempt, mapped);
   } finally {

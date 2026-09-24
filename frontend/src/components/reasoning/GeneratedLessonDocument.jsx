@@ -457,7 +457,7 @@ export default function GeneratedLessonDocument({ materials = [], documentModel,
       }}
       aria-label={continuousReader ? 'Continuous generated lesson document.' : 'Paginated generated lesson. Use left and right arrow keys to change pages.'}
     >
-      {(continuousReader ? blocks.length > 0 : pages[currentPage]) && <Paper key={continuousReader ? 'continuous' : currentPage} blocks={continuousReader ? blocks : pages[currentPage]} pageNumber={currentPage + 1} pageCount={pages.length} geometry={geometry} continuous={continuousReader} mobileReader={mobileStudentReader} pageMotion={pageMotion} selectedMaterialId={selectedMaterialId} changedMaterialId={changedMaterialId} editState={editState} audience={audience}/>} 
+      {(continuousReader ? blocks.length > 0 : pages[currentPage]) && <Paper key={continuousReader ? 'continuous' : currentPage} blocks={continuousReader ? blocks : pages[currentPage]} pageNumber={currentPage + 1} pageCount={pages.length} geometry={geometry} continuous={continuousReader} mobileReader={mobileStudentReader} pageMotion={pageMotion} selectedMaterialId={selectedMaterialId} changedMaterialId={changedMaterialId} editState={editState} audience={audience}/>}
       <div
         div
   ref={measureRef}

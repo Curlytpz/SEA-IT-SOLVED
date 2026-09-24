@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import AuthLayout from '../components/public/AuthLayout';
 import { Alert, Btn, FormField, Input, LoadingState } from '../components/ui';
 import { resetPassword, validatePasswordResetToken } from '../services/passwordResetApi';
+import { authFormClassName, authSuccessClassName } from '../components/public/authStyles';
 
 function PasswordInput({ id, value, onChange, placeholder, autoComplete, 'aria-describedby': describedBy }) {
   const [visible, setVisible] = useState(false);
@@ -53,14 +54,14 @@ export default function ResetPassword() {
     }
   }
 
-  const content = success ? <div className="auth-success-state mt-7" role="status">
+  const content = success ? <div className={`${authSuccessClassName} mt-7`} role="status">
     <CheckCircle2 size={30}/><h2>Password updated</h2><p>Your password has been changed successfully.</p><Link to="/login"><Btn className="w-full">Back to sign in</Btn></Link>
   </div> : validation === 'checking' ? <div className="mt-7"><LoadingState text="Checking reset link…"/></div>
-    : validation === 'invalid' ? <div className="auth-success-state mt-7"><Alert type="error">This password reset link is invalid or has expired.</Alert><Link to="/forgot-password"><Btn className="w-full">Request a new reset link</Btn></Link></div>
-      : validation === 'unavailable' ? <div className="auth-success-state mt-7"><Alert type="error">Unable to validate this reset link right now. Please try again.</Alert><Btn className="w-full" onClick={() => window.location.reload()}>Try again</Btn></div>
+    : validation === 'invalid' ? <div className={`${authSuccessClassName} mt-7`}><Alert type="error">This password reset link is invalid or has expired.</Alert><Link to="/forgot-password"><Btn className="w-full">Request a new reset link</Btn></Link></div>
+      : validation === 'unavailable' ? <div className={`${authSuccessClassName} mt-7`}><Alert type="error">Unable to validate this reset link right now. Please try again.</Alert><Btn className="w-full" onClick={() => window.location.reload()}>Try again</Btn></div>
         : <>
           {error && <Alert type="error" onClose={() => setError('')}>{error}</Alert>}
-          <form onSubmit={submit} className="public-auth-form">
+          <form onSubmit={submit} className={authFormClassName}>
             <FormField label="New password" hint="Use at least 8 characters."><PasswordInput value={form.password} onChange={event => setForm(current => ({ ...current, password: event.target.value }))} placeholder="Enter a new password" autoComplete="new-password"/></FormField>
             <FormField label="Confirm new password"><PasswordInput value={form.confirm} onChange={event => setForm(current => ({ ...current, confirm: event.target.value }))} placeholder="Re-enter your new password" autoComplete="new-password"/></FormField>
             <Btn type="submit" variant="primary" loading={loading} disabled={loading} className="mt-1 w-full">Update password</Btn>

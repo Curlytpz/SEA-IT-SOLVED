@@ -14,7 +14,11 @@ function normalizeRecognitionNumericArtifacts(value, { mathContext = false } = {
     .replace(STRAY_CURRENCY_DECIMAL, (_match, relation, decimals) => relation + '0.' + decimals)
     .replace(BARE_RELATIONAL_DECIMAL, (_match, relation, decimals) => relation + '0.' + decimals);
   if (mathContext) {
-    output = output.replace(/^(\s*)\\?[$\u00A2]\s*\.(\d+)/, (_match, spacing, decimals) => spacing + '0.' + decimals);
+    output = output
+      .replace(/^(\s*)\\?[$\u00A2]\s*\.(\d+)/, (_match, spacing, decimals) => spacing + '0.' + decimals)
+      // A remaining cent glyph in OCR/HMER math is normally a misread
+      // variable c. KaTeX has no metrics for the raw Unicode glyph.
+      .replace(/\u00A2/g, '\\mathrm{c}');
   }
   return output;
 }

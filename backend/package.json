@@ -32,6 +32,7 @@
     "verify-quiz-targeted-edits": "node scripts/verifyQuizTargetedEdits.js",
     "verify-quiz-tutor": "node scripts/verifyQuizTutor.js",
     "verify-solution-activities": "node scripts/verifySolutionActivities.js",
+    "verify-rate-limit-hardening": "node --test src/services/aiProviderExecutor.test.js src/utils/singleFlight.test.js",
     "create-admin": "node scripts/createAdmin.js",
     "recognition-worker": "node src/workers/recognition.worker.js",
     "transcription-worker": "node src/workers/transcription.worker.js"

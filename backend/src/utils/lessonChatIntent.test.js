@@ -3,6 +3,7 @@ const {
   explicitQuizGeneration, quizIntent, quizEditIntent, generateNotesIntent, editIntent, questionCount, quizDifficulty,
   extractQuizParameters, emptyQuizDraft, prepareQuizDraft, quizClarificationMessage, wholeLessonEditIntent,
 } = require('./lessonChatIntent');
+const { requestedQuizChange, quizEditPlan } = require('../../../shared/quizEditTargeting.cjs');
 
 assert.equal(generateNotesIntent('Generate notes.'), true);
 assert.equal(generateNotesIntent('Regenerate the lesson.'), true);
@@ -28,6 +29,14 @@ assert.equal(explicitQuizGeneration('make a hard multiple choice quiz'), true);
 assert.equal(explicitQuizGeneration('make 10 hard multiple choice questions'), true);
 assert.equal(explicitQuizGeneration('make a medium 15-item multiple choice quiz'), true);
 assert.equal(explicitQuizGeneration('make quiz 2 harder'), false);
+const mixedCreationPrompt = 'Generate Quiz 4 multiple choice and 1 problem solving';
+assert.equal(explicitQuizGeneration(mixedCreationPrompt), true);
+assert.equal(quizEditIntent(mixedCreationPrompt), false);
+assert.equal(quizEditIntent(mixedCreationPrompt, 'GENERATE_QUIZ'), false);
+assert.equal(quizIntent(mixedCreationPrompt), true);
+assert.equal(questionCount(mixedCreationPrompt), 5);
+assert.deepEqual(extractQuizParameters(mixedCreationPrompt), { questionCount:5, difficulty:null, questionType:'MIXED' });
+assert.deepEqual(prepareQuizDraft(mixedCreationPrompt).missingParameters, ['difficulty']);
 assert.deepEqual(prepareQuizDraft('5 easy questions').missingParameters, ['questionType']);
 assert.deepEqual(prepareQuizDraft('create 20 questions').missingParameters, ['difficulty','questionType']);
 assert.equal(quizIntent('give me 3 hard problem solving problems'), true);
@@ -54,5 +63,17 @@ assert.equal(editIntent('Add another example to Worked Example.'), 'EDIT');
 assert.equal(quizEditIntent('Make quiz 1 question 2 harder.'), true);
 assert.equal(quizEditIntent('Add another question.'), true);
 assert.equal(quizEditIntent('Remove question 5.'), true);
+assert.equal(requestedQuizChange('on question 5 add tip and formula'), 'enable_tip_and_formula');
+assert.equal(requestedQuizChange('on question 5 add formula'), 'enable_formula');
+assert.equal(requestedQuizChange('turn off the tip and formula on question 5'), 'disable_tip_and_formula');
+assert.deepEqual(quizEditPlan('on question 5 add tip and formula', { questionCount:5 }), {
+  quizNumber:1,
+  targetQuestionNumbers:[5],
+  requestedQuestionCount:null,
+  requestedChange:'enable_tip_and_formula',
+  changeInstruction:'enable_tip_and_formula',
+  usesRecentTargets:false,
+  operation:'update_question',
+});
 
 console.log('lesson chat intent routing: PASS');

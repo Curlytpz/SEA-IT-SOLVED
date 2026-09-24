@@ -7,6 +7,7 @@ import { Alert, Btn, Input, FormField } from '../components/ui';
 import AuthLayout from '../components/public/AuthLayout';
 import { isStudentEmail, STUDENT_EMAIL_HINT } from '../utils/authEmail';
 import { INSTRUCTOR_ACCESS_NOTICE_KEY, INSTRUCTOR_ACCESS_NOTICES, isInstructorAccessCode } from '../utils/instructorAccess';
+import { authChoiceDividerClassName, authFormClassName, authRegistrationActionsClassName, authSecondaryActionClassName } from '../components/public/authStyles';
 
 const ROLE_OPTIONS = [
   { key: 'student', label: 'Student', description: 'Access lessons', icon: GraduationCap },
@@ -102,9 +103,9 @@ export default function Login() {
             <motion.div key={key} variants={reducedMotion ? undefined : ROLE_CARD_MOTION}>
               <Link
                 to={`/login?role=${key}`}
-                className="flex flex-col items-start justify-between min-w-0 p-4 text-left border auth-role-card group min-h-28 rounded-2xl border-border bg-card focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                className="group flex h-full min-h-28 min-w-0 flex-col items-start justify-between rounded-2xl border border-border bg-card p-4 text-left transition-[transform,border-color,background-color,box-shadow] duration-200 ease-[cubic-bezier(.16,1,.3,1)] active:translate-y-0 active:scale-[.99] hover:-translate-y-0.5 hover:border-primary/35 hover:bg-primary-subtle/70 hover:shadow-[0_10px_28px_-22px_hsl(var(--primary)/.65)] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transform-none motion-reduce:transition-none dark:hover:border-primary/70 dark:hover:bg-primary/10"
               >
-                <span className="grid w-10 h-10 rounded-lg auth-role-icon place-items-center bg-primary-subtle text-primary-subtle-foreground">
+                <span className="grid h-10 w-10 place-items-center rounded-lg bg-primary-subtle text-primary-subtle-foreground transition-colors duration-200">
                   <Icon size={20} aria-hidden="true" />
                 </span>
                 <span className="min-w-0 mt-4">
@@ -131,7 +132,7 @@ export default function Login() {
               {INSTRUCTOR_ACCESS_NOTICES[approvalCode].message}
             </Alert>
           )}
-          <form onSubmit={handleSubmit} className="public-auth-form">
+          <form onSubmit={handleSubmit} className={authFormClassName}>
             <FormField label="Email address" hint={selectedRole === 'student' ? STUDENT_EMAIL_HINT : undefined}><Input type="email" required placeholder={selectedRole === 'student' ? 'you@student.hau.edu.ph' : 'you@hau.edu.ph'} value={form.email} onChange={set('email')} autoComplete="email"/></FormField>
             <FormField label="Password" action={selectedRole !== 'admin' ? <Link to={`/forgot-password?role=${selectedRole}`} className="text-xs font-semibold text-primary hover:text-primary-hover hover:underline">Forgot password?</Link> : null}><Input type="password" required placeholder="Enter your password" value={form.password} onChange={set('password')} autoComplete="current-password"/></FormField>
             {error && <Alert type="error" className="-mt-1">{error}</Alert>}
@@ -139,12 +140,12 @@ export default function Login() {
           </form>
 
           {selectedRole === 'student' && <>
-            <div className="auth-choice-divider"><span>New student?</span></div>
-            <div className="auth-registration-actions"><Link to="/register/student" className="auth-secondary-action">Create Student Account</Link></div>
+            <div className={authChoiceDividerClassName}><span>New student?</span></div>
+            <div className={authRegistrationActionsClassName}><Link to="/register/student" className={authSecondaryActionClassName}>Create Student Account</Link></div>
           </>}
           {selectedRole === 'instructor' && <>
-            <div className="auth-choice-divider"><span>New instructor?</span></div>
-            <div className="auth-registration-actions"><Link to="/register/instructor" className="auth-secondary-action">Register as Instructor</Link></div>
+            <div className={authChoiceDividerClassName}><span>New instructor?</span></div>
+            <div className={authRegistrationActionsClassName}><Link to="/register/instructor" className={authSecondaryActionClassName}>Register as Instructor</Link></div>
           </>}
           {selectedRole === 'admin' && <p className="mt-5 text-sm leading-6 text-center text-muted-foreground">Administrator accounts are managed by the system.</p>}
         </motion.div>

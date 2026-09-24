@@ -87,38 +87,38 @@ export default function AllUsers() {
       <PageHeader title="All Users" subtitle={`${total} user${total!==1?'s':''} found`} />
       {msg.text && <Alert type={msg.type} onClose={()=>setMsg({text:''})}>{msg.text}</Alert>}
 
-      <div className="glass-panel mb-5 flex flex-wrap gap-3 rounded-2xl p-4">
-        <div className="w-full sm:w-36"><label className="block mb-1 text-xs font-semibold text-slate-600">Role</label>
+      <div className="mb-5 flex min-w-0 max-w-full flex-wrap gap-3 rounded-xl border border-border bg-surface p-4 shadow-surface">
+        <div className="w-full sm:w-36"><label className="block mb-1 text-xs font-semibold text-muted-foreground">Role</label>
           <Select value={role} onChange={e=>setRole(e.target.value)}>{ROLES.map(r=><option key={r}>{r}</option>)}</Select></div>
-        <div className="w-full sm:w-40"><label className="block mb-1 text-xs font-semibold text-slate-600">Status</label>
+        <div className="w-full sm:w-40"><label className="block mb-1 text-xs font-semibold text-muted-foreground">Status</label>
           <Select value={status} onChange={e=>setStatus(e.target.value)}>{STATUSES.map(s=><option key={s}>{s}</option>)}</Select></div>
       </div>
 
       {loading ? <LoadingState /> : users.length===0
         ? <EmptyState icon={<Users size={23}/>} title="No users found" body="Try adjusting your filters." />
         : (
-          <div className="table-shell">
+          <div className="scrollbar-hidden max-w-full overflow-x-auto rounded-xl border border-border bg-surface shadow-sm [-webkit-overflow-scrolling:touch]">
             <table className="w-full text-sm">
-              <thead><tr className="border-b bg-slate-50 border-slate-200">
+              <thead><tr className="border-b bg-surface-subtle border-border">
                 {['Name','Email','Role','Status','Joined','Actions'].map(h=>(
-                  <th key={h} className="px-4 py-3 text-xs font-semibold tracking-wider text-left uppercase text-slate-500">{h}</th>
+                  <th key={h} className="px-4 py-3 text-xs font-semibold tracking-wider text-left uppercase text-muted-foreground">{h}</th>
                 ))}
               </tr></thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-border">
                 {users.map(u=>(
-                  <tr key={u.id} className="hover:bg-slate-50/60">
-                    <td className="px-4 py-3 font-semibold text-slate-800">{u.firstName} {u.lastName}</td>
-                    <td className="px-4 py-3 text-slate-500">{u.email}</td>
+                  <tr key={u.id} className="hover:bg-surface-subtle/60">
+                    <td className="px-4 py-3 font-semibold text-foreground">{u.firstName} {u.lastName}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{u.email}</td>
                     <td className="px-4 py-3"><Badge status={u.role} /></td>
                     <td className="px-4 py-3"><Badge status={u.status} /></td>
-                    <td className="px-4 py-3 text-slate-500">{new Date(u.createdAt).toLocaleDateString('en-PH')}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{new Date(u.createdAt).toLocaleDateString('en-PH')}</td>
                     <td className="px-4 py-3">
                       {u.role!=='ADMIN' && (
                         <div className="flex gap-1.5 flex-wrap">
                           {u.status==='SUSPENDED'
                             ? <Btn variant="success" size="sm" loading={al[u.id]} onClick={()=>setConfirm({type:'reactivate',user:u})}>Reactivate</Btn>
                             : <Btn variant="warning"  size="sm" loading={al[u.id]} disabled={u.status==='REJECTED'} onClick={()=>setConfirm({type:'suspend',user:u})}>Suspend</Btn>
-                            
+
                           }
                           <Btn variant="danger" size="sm" loading={al[u.id]} onClick={()=>setConfirm({type:'delete',user:u})}><Trash size={13}/> Delete</Btn>
                           {u.role === 'INSTRUCTOR' && (

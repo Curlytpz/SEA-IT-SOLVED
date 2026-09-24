@@ -8,7 +8,7 @@ export const landingStyles = {
   eyebrowDark: 'text-sm font-semibold text-primary-subtle-foreground',
   eyebrowLight: 'text-sm font-semibold text-primary',
   primaryButton: 'inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-primary px-6 text-sm font-bold text-primary-foreground transition-colors duration-200 hover:bg-primary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-  darkSecondaryButton: 'inline-flex min-h-12 items-center justify-center rounded-full border border-white/15 px-6 text-sm font-bold text-foreground transition-colors duration-200 hover:bg-white/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+  darkSecondaryButton: 'inline-flex min-h-12 items-center justify-center rounded-full border border-white/15 px-6 text-sm font-bold text-foreground transition-colors duration-200 hover:bg-card/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
   lightSecondaryButton: 'inline-flex min-h-12 items-center justify-center rounded-full border border-border px-6 text-sm font-bold text-foreground transition-colors duration-200 hover:border-primary hover:bg-primary-subtle hover:text-primary-subtle-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
   darkSurface: 'overflow-hidden rounded-[22px] border border-border bg-card shadow-[0_42px_120px_-62px_rgba(0,0,0,0.72)]',
   lightSurface: 'overflow-hidden rounded-[22px] border border-border bg-card shadow-[0_38px_100px_-62px_rgba(15,23,42,0.24)]',

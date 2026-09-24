@@ -1,18 +1,18 @@
 const router=require('express').Router();
-const rateLimit=require('express-rate-limit');
+const {createRateLimiter}=require('../middleware/rateLimit');
 const authenticate=require('../middleware/authenticate');
 const {authorizeActive}=require('../middleware/authorize');
 const controller=require('../controllers/phase6.controller');
 const solutions=require('../controllers/quiz-solution.controller');
 const solutionUpload=require('../middleware/solutionSubmissionUpload');
-const solutionAnalysisLimiter=rateLimit({windowMs:15*60*1000,max:20,standardHeaders:true,legacyHeaders:false,
-  message:{success:false,error:'Too many solution-analysis requests. Please try again later.'}});
+const solutionAnalysisLimiter=createRateLimiter({name:'quiz-solution-analysis',windowMs:15*60*1000,max:20,
+  message:'Too many solution-analysis requests. Please try again later.'});
 const student=[authenticate,authorizeActive('STUDENT')];
 const instructor=[authenticate,authorizeActive('INSTRUCTOR')];
 const admin=[authenticate,authorizeActive('ADMIN')];
-const studentExportLimiter=rateLimit({windowMs:15*60*1000,max:20,standardHeaders:true,legacyHeaders:false,message:{success:false,error:'Too many lesson downloads. Please wait a few minutes and try again.'}});
-const tutorGenerationLimiter=rateLimit({windowMs:15*60*1000,max:10,standardHeaders:true,legacyHeaders:false,
-  message:{success:false,error:'Too many AI Tutor requests. Please wait a few minutes and try again.'}});
+const studentExportLimiter=createRateLimiter({name:'student-export',windowMs:15*60*1000,max:20,message:'Too many lesson downloads. Please wait a few minutes and try again.'});
+const tutorGenerationLimiter=createRateLimiter({name:'ai-tutor-generation',windowMs:15*60*1000,max:10,
+  message:'Too many AI Tutor requests. Please wait a few minutes and try again.'});
 router.get('/student/learning',...student,controller.dashboard);
 router.get('/student/lessons/:lessonId',...student,controller.lesson);
 router.get('/student/lessons/:lessonId/export/:format',studentExportLimiter,...student,controller.lessonExport);

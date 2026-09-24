@@ -323,7 +323,7 @@ export default function CalibrationOverlay({ planes = [], selectedId, onPlaneCha
           if (name === 'reset') return resetPlane();
           setTool(name);
         }}
-        className={'rounded px-2 py-1 text-[10px] font-bold disabled:cursor-not-allowed disabled:opacity-35 ' + (tool === name ? 'bg-primary text-primary-foreground' : 'text-white hover:bg-white/15')}
+        className={'rounded px-2 py-1 text-[10px] font-bold disabled:cursor-not-allowed disabled:opacity-35 ' + (tool === name ? 'bg-primary text-primary-foreground' : 'text-white hover:bg-card/15')}
         aria-pressed={tool === name}>{label}</button>)}
     </div>
 
@@ -341,7 +341,7 @@ export default function CalibrationOverlay({ planes = [], selectedId, onPlaneCha
         setSelectedPointId(point.id);
         beginDrag(point.id, event);
       }}>
-      <span className={'pointer-events-none h-4 w-4 rounded-full border-2 border-primary bg-white ' + (selectedPoint?.id === point.id ? 'ring-4 ring-amber-300' : '')}/>
+      <span className={'pointer-events-none h-4 w-4 rounded-full border-2 border-primary bg-card ' + (selectedPoint?.id === point.id ? 'ring-4 ring-warning/30' : '')}/>
     </button>) }
 
   </div>;

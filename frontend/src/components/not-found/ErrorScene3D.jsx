@@ -212,11 +212,11 @@ function SceneContents({ theme, reducedMotion, onFailure, onReady }) {
   );
 }
 
-export default function ErrorScene3D({ theme, reducedMotion, onReady, onFailure }) {
+export default function ErrorScene3D({ visible, theme, reducedMotion, onReady, onFailure }) {
   const mobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches;
 
   return (
-    <div className="not-found-scene" aria-hidden="true">
+    <div className={`absolute inset-0 z-0 transition-opacity duration-300 motion-reduce:transition-none [&_canvas]:block [&_canvas]:h-full [&_canvas]:w-full ${visible ? 'opacity-100' : 'opacity-0'}`} aria-hidden="true">
       <Canvas
         dpr={mobile ? [1, 1.2] : [1, 1.5]}
         frameloop={reducedMotion ? 'demand' : 'always'}

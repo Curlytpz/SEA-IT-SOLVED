@@ -45,11 +45,13 @@ function isQuizEditFollowup(message) {
 
 function requestedQuizChange(message) {
   if (/\b(?:problem[-\s]+solving|solution[-\s]+required)\b/i.test(message)) return 'problem_solving';
-  const help = /\bformula\b/i.test(message) ? 'formula' : /\b(?:tip|hint)\b/i.test(message) ? 'tip' : null;
+  const hasTip = /\b(?:tip|hint)\b/i.test(message);
+  const hasFormula = /\b(?:formula|reference)\b/i.test(message);
+  const help = hasTip && hasFormula ? 'tip_and_formula' : hasFormula ? 'formula' : hasTip ? 'tip' : null;
   if (help) {
-    if (/\b(?:disable|off)\b/i.test(message)) return 'disable_' + help;
-    if (/\b(?:enable|on)\b/i.test(message)) return 'enable_' + help;
-    if (help === 'tip' && /\bless\s+revealing\b/i.test(message)) return 'less_revealing_tip';
+    if (/\b(?:disable|without)\b|\b(?:turn|switch|set)\s+(?:them|it|both|the\s+(?:tip|hint|formula|reference))?\s*off\b|\b(?:tip|hint|formula|reference)\s+off\b/i.test(message)) return 'disable_' + help;
+    if (/\b(?:enable|add|include|provide)\b|\b(?:turn|switch|set)\s+(?:them|it|both|the\s+(?:tip|hint|formula|reference))?\s*on\b|\b(?:tip|hint|formula|reference)\s+on\b/i.test(message)) return 'enable_' + help;
+    if (hasTip && !hasFormula && /\bless\s+revealing\b/i.test(message)) return 'less_revealing_tip';
     if (/\b(?:generate|regenerate|change|rewrite|update|edit|make)\b/i.test(message)) return 'generate_' + help;
   }
   if (/\b(?:harder|more\s+(?:challenging|difficult))\b/i.test(message)) return 'harder';
@@ -64,6 +66,11 @@ function explicitQuizGeneration(message) {
   const text = String(message || '');
   // Existing "create new questions instead" means whole-quiz replacement, not a second draft.
   if (/\bcreate\b[\s\S]{0,30}\bnew\b[\s\S]{0,20}\bquestions?\b[\s\S]{0,15}\binstead\b/i.test(text)) return false;
+  // Explicit creation verbs take precedence even when the quiz specification follows
+  // the word "quiz" (for example, "Generate quiz 4 multiple choice and 1 problem solving").
+  if (/\b(?:generate|create|build)\s+(?:(?:me|us)\s+)?(?:(?:a|an|new|another)\s+)?quiz\b/i.test(text)) return true;
+  // Keep the ambiguous "make quiz 2 harder" form available to the edit router.
+  if (/\bmake\s+(?:(?:me|us)\s+)?(?:a|an|new|another)\s+quiz\b/i.test(text)) return true;
   const number = '(?:\\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)';
   const questionType = '(?:multiple[-\\s]+choice|problem[-\\s]+solving|solution[-\\s]+required|true\\s*(?:/|or|-)\\s*false)';
   const modifiers = `(?:(?:a|an|new|another|easy|medium|hard|${questionType})\\s+)*`;
@@ -74,6 +81,7 @@ function explicitQuizGeneration(message) {
 }
 
 function quizEditIntent(message, explicit) {
+  if (['GENERATE_QUIZ', 'QUIZ'].includes(explicit)) return false;
   if (explicitQuizGeneration(message)) return false;
   if (explicit === 'EDIT_QUIZ') return true;
   const text = String(message || '');

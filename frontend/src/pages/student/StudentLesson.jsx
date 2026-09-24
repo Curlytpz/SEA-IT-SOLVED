@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import { Alert, Badge, Btn, Card, EmptyState, LoadingState, PageHeader } from '../../components/ui';
-import { ArrowLeft, BookOpen, Check, Download, Play } from '../../components/icons';
+import { Alert, BackButton, Badge, Btn, Card, EmptyState, LoadingState, PageHeader } from '../../components/ui';
+import { BookOpen, Check, Download, Play } from '../../components/icons';
 import GeneratedLessonDocument from '../../components/reasoning/GeneratedLessonDocument';
 import GeneratedContent from '../../components/reasoning/GeneratedContent';
 import { downloadStudentLesson, getStudentLesson, startQuizAttempt } from '../../services/phase6Api';
@@ -83,16 +83,16 @@ export default function StudentLesson() {
   if (!data) return <DashboardLayout><Alert>{error}</Alert></DashboardLayout>;
 
   const hasMaterials = (data.document?.sections?.length ?? data.materials.length) > 0;
-  return <DashboardLayout><div className="student-lesson-page">
-    <Link to="/student" className="mb-4 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-slate-600 dark:text-slate-300"><ArrowLeft size={17}/>Back to learning</Link>
+  return <DashboardLayout><div className="mx-auto w-full max-w-[1480px] overflow-x-clip">
+    <BackButton to="/student">Back to learning</BackButton>
     <PageHeader title={<GeneratedContent markdown={data.lesson.title} audience="student" inline/>} subtitle={`${data.lesson.subjectCode} • ${data.lesson.sectionName} • ${data.lesson.instructorName}`}><Badge status={data.lesson.status}/></PageHeader>
     {error && <Alert onClose={() => setError('')}>{error}</Alert>}
 
-    <section className="student-lesson-content">
-      <div className="student-lesson-material">
-        <div className="student-section-heading student-lesson-material-heading">
-          <div><h2>Lesson material</h2><p>Approved notes published by your instructor.</p></div>
-          {hasMaterials && <div className="student-lesson-downloads" role="group" aria-label="Download lesson material">
+    <section className="grid w-full min-w-0 max-w-full gap-9 overflow-x-clip">
+      <div className="student-lesson-material w-full min-w-0 max-w-full overflow-x-clip">
+        <div className="mb-3 flex items-end justify-between gap-4 max-md:flex-col max-md:items-stretch">
+          <div><h2 className="text-lg font-bold text-foreground">Lesson material</h2><p className="mt-[.2rem] text-sm text-muted-foreground">Approved notes published by your instructor.</p></div>
+          {hasMaterials && <div className="flex min-w-0 max-w-full flex-wrap justify-end gap-2 max-md:w-full max-md:justify-start max-[520px]:grid max-[520px]:grid-cols-1 max-[520px]:[&>button]:w-full" role="group" aria-label="Download lesson material">
             <Btn variant="outline" size="sm" disabled={Boolean(downloadBusy)} loading={downloadBusy === 'pdf'} loadingText="Preparing PDF…" onClick={() => downloadLesson('pdf')}><Download size={16}/>Download PDF</Btn>
             <Btn variant="outline" size="sm" disabled={Boolean(downloadBusy)} loading={downloadBusy === 'docx'} loadingText="Preparing DOCX…" onClick={() => downloadLesson('docx')}><Download size={16}/>Download DOCX</Btn>
           </div>}
@@ -100,15 +100,15 @@ export default function StudentLesson() {
         {hasMaterials ? <GeneratedLessonDocument materials={data.materials} documentModel={data.document} audience="student" documentMeta={{ lessonTitle:data.lesson.title, subjectCode:data.lesson.subjectCode, subjectName:data.lesson.subjectName, sectionName:data.lesson.sectionName, instructorName:data.lesson.instructorName, lessonDate:data.lesson.startedAt || data.lesson.endedAt }}/>:<EmptyState icon={<BookOpen/>} title="No published material" body="Your instructor has not published lesson material yet."/>}
       </div>
 
-      <div className="student-lesson-quizzes">
-        <div className="student-section-heading"><div><h2>Lesson quizzes</h2><p>Published assessments and their current availability.</p></div></div>
-        {data.quizzes.length ? <div className="student-available-quiz-grid">{data.quizzes.map(quiz => <Card key={quiz.id} className="student-available-quiz">
-          <div className="flex items-start justify-between gap-3"><div><Badge status={quiz.studentStatus === 'SUBMITTED_AWAITING_REVIEW' ? 'SUBMITTED' : quiz.studentStatus}/><h3 className="mt-2 font-semibold text-slate-900 dark:text-white"><GeneratedContent markdown={studentQuizTitle(quiz.title, data.lesson.title)} quizText audience="student" inline/></h3><p className="mt-1 text-sm text-slate-500">{quiz.questionCount} questions</p></div>{quiz.attempt && ['SUBMITTED','GRADED'].includes(quiz.attempt.status) && <Check className="text-emerald-500"/>}</div>
-          <GeneratedContent markdown={studentQuizInstructions(quiz.instructions, quiz.questionCount)} quizText audience="student" className="mt-3 text-sm text-slate-600 dark:text-slate-300"/>
+      <div className="w-full min-w-0 max-w-full pt-1">
+        <div className="mb-3 flex items-end justify-between gap-4 max-md:flex-col max-md:items-stretch"><div><h2 className="text-lg font-bold text-foreground">Lesson quizzes</h2><p className="mt-[.2rem] text-sm text-muted-foreground">Published assessments and their current availability.</p></div></div>
+        {data.quizzes.length ? <div className="grid gap-4 md:grid-cols-2">{data.quizzes.map(quiz => <Card key={quiz.id} className="min-w-0 p-5 [&_h3]:[overflow-wrap:anywhere]">
+          <div className="flex items-start justify-between gap-3"><div><Badge status={quiz.studentStatus === 'SUBMITTED_AWAITING_REVIEW' ? 'SUBMITTED' : quiz.studentStatus}/><h3 className="mt-2 font-semibold text-foreground dark:text-foreground"><GeneratedContent markdown={studentQuizTitle(quiz.title, data.lesson.title)} quizText audience="student" inline/></h3><p className="mt-1 text-sm text-muted-foreground">{quiz.questionCount} questions</p></div>{quiz.attempt && ['SUBMITTED','GRADED'].includes(quiz.attempt.status) && <Check className="text-success"/>}</div>
+          <GeneratedContent markdown={studentQuizInstructions(quiz.instructions, quiz.questionCount)} quizText audience="student" className="mt-3 text-sm text-muted-foreground dark:text-muted-foreground"/>
           {quiz.awaitingReview && <p className="mt-3 text-sm font-medium text-warning">Submitted · Awaiting instructor review</p>}
-          {!quiz.available && <p className="mt-3 rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">{quiz.availabilityMessage || 'This quiz is currently unavailable.'}</p>}
+          {!quiz.available && <p className="mt-3 rounded-lg bg-surface-elevated px-3 py-2 text-sm font-medium text-muted-foreground dark:bg-surface-elevated dark:text-muted-foreground">{quiz.availabilityMessage || 'This quiz is currently unavailable.'}</p>}
           <Btn className="mt-4 w-full" disabled={!quiz.available} loading={quizBusy === quiz.id} onClick={() => openQuiz(quiz)}><Play size={15}/>{!quiz.available ? 'Quiz not available yet' : quiz.studentStatus === 'IN_PROGRESS' ? 'Resume Quiz' : quiz.studentStatus === 'SUBMITTED_AWAITING_REVIEW' ? 'View Submission' : quiz.studentStatus === 'GRADED' ? 'View Results' : 'Answer Quiz'}</Btn>
-        </Card>)}</div>:<Card className="p-6 text-center text-sm text-slate-500">No published quiz is available.</Card>}
+        </Card>)}</div>:<Card className="p-6 text-center text-sm text-muted-foreground">No published quiz is available.</Card>}
       </div>
     </section>
   </div></DashboardLayout>;

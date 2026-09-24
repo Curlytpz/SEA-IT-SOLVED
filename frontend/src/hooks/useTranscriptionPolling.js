@@ -6,27 +6,29 @@ export default function useTranscriptionPolling(lessonId) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const activeRef = useRef(true);
-  const requestRef = useRef(false);
+  const requestRef = useRef(null);
 
   const refresh = useCallback(async ({ quiet = false } = {}) => {
     if (!lessonId || requestRef.current) return;
-    requestRef.current = true;
+    const controller = new AbortController();
+    requestRef.current = controller;
     if (!quiet) setLoading(true);
     try {
-      const next = await getLessonTranscription(lessonId);
+      const next = await getLessonTranscription(lessonId, { signal: controller.signal });
       if (activeRef.current) { setData(next); setError(''); }
     } catch (requestError) {
-      if (activeRef.current) setError(requestError.response?.data?.error || 'Unable to load the audio transcript.');
+      if (activeRef.current && requestError.code !== 'ERR_CANCELED') setError(requestError.response?.data?.error || 'Unable to load the audio transcript.');
     } finally {
-      requestRef.current = false;
-      if (activeRef.current && !quiet) setLoading(false);
+      const isCurrent = requestRef.current === controller;
+      if (isCurrent) requestRef.current = null;
+      if (isCurrent && activeRef.current && !quiet) setLoading(false);
     }
   }, [lessonId]);
 
   useEffect(() => {
     activeRef.current = true;
     refresh();
-    return () => { activeRef.current = false; };
+    return () => { activeRef.current = false; requestRef.current?.abort(); requestRef.current = null; };
   }, [refresh]);
 
   const running = ['PENDING', 'PROCESSING'].includes(data?.transcription?.status);

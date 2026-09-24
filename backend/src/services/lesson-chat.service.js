@@ -33,7 +33,7 @@ function safeMessage(row) {
   if(row.role==='ASSISTANT'&&looksLikePayload&&action==='MATERIAL_EDITED')content='Lesson material updated.';
   if(row.role==='ASSISTANT'&&looksLikePayload&&action==='MATERIALS_GENERATED')content='Lesson notes generated successfully.';
   if(row.role==='ASSISTANT'&&looksLikePayload&&action==='QUIZ_EDITED')content='Quiz updated.';
-  return {id:row.id,role:row.role,content,messageType:row.message_type||'ASK',sourceReferences:Array.isArray(row.source_references)?row.source_references:[],action,operation:row.metadata?.operation||null,changedMaterialId:row.metadata?.changedMaterialId||null,quizPrompt:row.metadata?.quizPrompt||null,quizDraft:row.metadata?.quizDraft||null,missingQuizParameters:row.metadata?.missingQuizParameters||null,createdAt:row.created_at};
+  return {id:row.id,role:row.role,content,messageType:row.message_type||'ASK',sourceReferences:Array.isArray(row.source_references)?row.source_references:[],action,operation:row.metadata?.operation||null,changedMaterialId:row.metadata?.changedMaterialId||null,quizId:row.metadata?.quizId||null,quizPrompt:row.metadata?.quizPrompt||null,quizDraft:row.metadata?.quizDraft||null,missingQuizParameters:row.metadata?.missingQuizParameters||null,createdAt:row.created_at};
 }
 function safeMaterial(row) { const content=row.content&&typeof row.content==='object'?row.content:{};return { id:row.id, type:row.material_type, title:normalizeGeneratedLessonTitle(row.title), content:{...content,markdown:normalizeGeneratedText(content.markdown,{markdown:true})}, sourceReferences:row.source_references||[], provider:row.provider, providerVersion:row.provider_version, outdated:row.outdated, generatedAt:row.generated_at, displayOrder:row.display_order }; }
 function snapshot(row) { return row ? { exists:true,title:row.title,content:row.content,sourceReferences:row.source_references||[],removed:row.removed,displayOrder:row.display_order,type:row.material_type } : { exists:false }; }
@@ -176,15 +176,15 @@ async function createQuiz(lessonId,instructorId,options={}) {
     const{difficulty,questionCount:count,questionType}=prepared.draft;
     const generationPrompt=String(options.quizDraft?.prompt||prompt).trim();
     await currentSession(lessonId,instructorId,false);
-    await intelligenceService.generateQuiz(lessonId,instructorId,{difficulty,questionCount:count,questionType,prompt:generationPrompt});
+    const quiz=await intelligenceService.generateQuiz(lessonId,instructorId,{difficulty,questionCount:count,questionType,prompt:generationPrompt});
     const{session}=await currentSession(lessonId,instructorId,true);
     const client=await pool.connect();
     try{
       await client.query('BEGIN');
       if(options.skipUserMessage!==true)await insertMessage(client,session,lessonId,instructorId,'USER',prompt,'QUIZ_ACTION');
-      const assistant=await insertMessage(client,session,lessonId,instructorId,'ASSISTANT',`I generated a ${count}-question ${difficulty.toLowerCase()} quiz draft based on the approved lesson context. Review and edit it before publishing.`,'QUIZ_ACTION',[],{action:'QUIZ_CREATED',difficulty,questionCount:Number(count),questionType});
+      const assistant=await insertMessage(client,session,lessonId,instructorId,'ASSISTANT',`I generated a ${count}-question ${difficulty.toLowerCase()} quiz draft based on the approved lesson context. Review and edit it before publishing.`,'QUIZ_ACTION',[],{action:'QUIZ_CREATED',quizId:quiz.id,difficulty,questionCount:Number(count),questionType});
       await client.query('COMMIT');
-      return{message:assistant,quizCreated:true};
+      return{message:assistant,quizCreated:true,quiz};
     }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
   });
 }
@@ -215,11 +215,18 @@ const { quizEditPlan, requestedQuizChange } = require('../../../shared/quizEditT
 
 function sameNumbers(left,right){return left.length===right.length&&left.every((number,index)=>number===right[index]);}
 
+function quizHelpTargets(requestedChange){
+  if(/tip_and_formula$/.test(requestedChange))return [['tip','allowTip'],['formula','allowFormula']];
+  if(/formula$/.test(requestedChange))return [['formula','allowFormula']];
+  if(/(?:tip$|less_revealing_tip$)/.test(requestedChange))return [['tip','allowTip']];
+  return [];
+}
+
 function quizEditConfirmation(operation,quiz,targetNumbers,requestedChange){
   if(operation==='update_question'||operation==='update_multiple_questions'){
     const names=targetNumbers.length<2?String(targetNumbers[0]):targetNumbers.slice(0,-1).join(', ')+' and '+targetNumbers.at(-1);
     const subject=targetNumbers.length===1?'Question':'Questions',verb=targetNumbers.length===1?'was':'were';
-    const change={harder:'made more challenging',easier:'made easier',multiple_choice:'updated to multiple choice',true_false:'updated to true/false',short_answer:'updated to short answer',problem_solving:'updated to solution required',enable_tip:'updated with Tip ON',disable_tip:'updated with Tip OFF',enable_formula:'updated with Formula ON',disable_formula:'updated with Formula OFF',generate_tip:'updated with a stored tip',generate_formula:'updated with a stored formula',less_revealing_tip:'updated with a less revealing tip'}[requestedChange]||'updated';
+    const change={harder:'made more challenging',easier:'made easier',multiple_choice:'updated to multiple choice',true_false:'updated to true/false',short_answer:'updated to short answer',problem_solving:'updated to solution required',enable_tip:'updated with Tip ON',disable_tip:'updated with Tip OFF',enable_formula:'updated with Formula ON',disable_formula:'updated with Formula OFF',enable_tip_and_formula:'updated with Tip and Formula ON',disable_tip_and_formula:'updated with Tip and Formula OFF',generate_tip:'updated with a stored tip',generate_formula:'updated with a stored formula',generate_tip_and_formula:'updated with a stored tip and formula',less_revealing_tip:'updated with a less revealing tip'}[requestedChange]||'updated';
     const others=quiz.questions.length-targetNumbers.length;
     return `${subject} ${names} ${verb} ${change}. ${others ? `The other ${others} ${others===1?'question was':'questions were'} left unchanged.` : 'The question count was preserved.'}`;
   }
@@ -269,7 +276,8 @@ async function editQuiz(lessonId,instructorId,message){
       return{message:assistant,quizEdited:false};
     }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
   }
-  const helpChange = /^(?:enable|disable|generate)_(?:tip|formula)$|^less_revealing_tip$/.test(editPlan.requestedChange);
+  const helpTargets=quizHelpTargets(editPlan.requestedChange);
+  const helpChange=helpTargets.length>0;
   const toggleHelp = /^(?:enable|disable)_/.test(editPlan.requestedChange);
   if (helpChange && targeted && editPlan.targetQuestionNumbers.some(number => plannedQuiz.questions[number-1]?.type !== 'PROBLEM_SOLVING')) {
     throw new AppError('Tip and Formula controls belong to solution-required questions. Convert the question first.',422);
@@ -277,7 +285,13 @@ async function editQuiz(lessonId,instructorId,message){
   const providerInstruction=targeted
     ? `${message}\n\nServer-resolved targets: update only quiz ${editPlan.quizNumber}, questions ${editPlan.targetQuestionNumbers.join(', ')}.\nRequested change: ${editPlan.changeInstruction}. Use the supplied canonical questions; their content is already available.`
     : message;
-  const result=toggleHelp && targeted ? {
+  const canApplyToggleWithoutProvider=toggleHelp&&targeted&&(
+    editPlan.requestedChange.startsWith('disable_')||editPlan.targetQuestionNumbers.every(number=>{
+      const settings=plannedQuiz.questions[number-1]?.problemSettings||{};
+      return helpTargets.every(([key])=>String(settings[key]||'').trim());
+    })
+  );
+  const result=canApplyToggleWithoutProvider ? {
     action:'UPDATE_QUIZ',operation:editPlan.operation,quizNumber:editPlan.quizNumber,
     targetQuestionNumbers:editPlan.targetQuestionNumbers,order:[],
     questions:editPlan.targetQuestionNumbers.map(number=>({...plannedQuiz.questions[number-1]})),
@@ -314,14 +328,22 @@ async function editQuiz(lessonId,instructorId,message){
     for(const [index,question] of questions.entries()){
       const current=targetQuiz.questions[targetNumbers[index]-1];
       if (helpChange && current) {
-        const key = /formula$/.test(editPlan.requestedChange) ? 'formula' : 'tip';
-        const flag = key === 'formula' ? 'allowFormula' : 'allowTip';
         const settings={...current.problemSettings};
-        if (toggleHelp) settings[flag]=editPlan.requestedChange.startsWith('enable_');
-        else {
-          const value=String(question.problemSettings?.[key]||'').trim();
-          if(!value)throw new AppError('AI did not return the requested stored help. No questions were changed.',422);
-          settings[key]=value;
+        for (const [key,flag] of helpTargets) {
+          if (toggleHelp) {
+            const enabled=editPlan.requestedChange.startsWith('enable_');
+            settings[flag]=enabled;
+            if(enabled&&!String(settings[key]||'').trim()){
+              const value=String(question.problemSettings?.[key]||'').trim();
+              if(!value)throw new AppError('AI did not return the requested stored help. No questions were changed.',422);
+              settings[key]=value;
+            }
+          }
+          else {
+            const value=String(question.problemSettings?.[key]||'').trim();
+            if(!value)throw new AppError('AI did not return the requested stored help. No questions were changed.',422);
+            settings[key]=value;
+          }
         }
         // Help-only requests cannot change the problem, rubric, points, or the other help.
         questions[index]={...current,problemSettings:settings};

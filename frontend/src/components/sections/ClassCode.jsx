@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Copy } from 'lucide-react';
 import { BrandLogo } from '../brand/BrandLogo';
 import { Btn } from '../ui';
+import WorkspaceToast from '../reasoning/WorkspaceToast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 
 async function writeClipboard(value) {
@@ -47,7 +48,7 @@ export default function ClassCode({ code, subjectCode, sectionName, compact = fa
 
   return (
     <>
-      <div className={compact ? 'flex min-w-0 items-center gap-2 border-t border-slate-200/70 px-3 py-2.5 dark:border-white/10' : 'mt-4 flex min-w-0 flex-wrap items-stretch gap-2'}>
+      <div className={compact ? 'flex min-w-0 items-center gap-2 border-t border-border/70 px-3 py-2.5 dark:border-border' : 'mt-4 flex min-w-0 flex-wrap items-stretch gap-2'}>
         <button
           type="button"
           onClick={() => setOpen(true)}
@@ -57,7 +58,7 @@ export default function ClassCode({ code, subjectCode, sectionName, compact = fa
           aria-label={`View class code ${normalizedCode}`}
         >
           <span className="min-w-0">
-            <span className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400">Class Code</span>
+            <span className="block text-[11px] font-semibold text-muted-foreground dark:text-muted-foreground">Class Code</span>
             <code className={`mt-0.5 block truncate font-mono font-bold tracking-[0.14em] text-primary-subtle-foreground dark:text-primary ${compact ? 'text-sm' : 'text-lg'}`}>{normalizedCode}</code>
           </span>
           <span className="shrink-0 text-xs font-semibold text-primary-subtle-foreground group-hover:text-primary-hover dark:text-primary">View</span>
@@ -67,7 +68,7 @@ export default function ClassCode({ code, subjectCode, sectionName, compact = fa
         </Btn>
       </div>
 
-      {copied && <div role="status" aria-live="polite" className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-[70] rounded-lg bg-slate-950 px-4 py-3 text-sm font-semibold text-white shadow-xl dark:bg-white dark:text-slate-950">Class code copied</div>}
+      <WorkspaceToast notification={copied ? { id: `class-code-${normalizedCode}`, text: 'Class code copied', description: 'The code is ready to share with students.' } : null} onDismiss={() => setCopied(false)}/>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-lg">
@@ -79,7 +80,7 @@ export default function ClassCode({ code, subjectCode, sectionName, compact = fa
           <div className="rounded-xl border border-primary/20 bg-primary-subtle px-4 py-8 text-center">
             <code className="block break-all font-mono text-[clamp(1.8rem,8vw,2.75rem)] font-bold leading-none tracking-[0.12em] text-primary-subtle-foreground">{normalizedCode}</code>
           </div>
-          <p className="text-center text-sm leading-6 text-slate-600 dark:text-slate-300">Students can enter this code from Join a Section.</p>
+          <p className="text-center text-sm leading-6 text-muted-foreground dark:text-muted-foreground">Students can enter this code from Join a Section.</p>
           <DialogFooter>
             <Btn type="button" variant="ghost" onClick={() => setOpen(false)}>Close</Btn>
             <Btn type="button" onClick={copyCode}><Copy size={16} aria-hidden="true" /> Copy Code</Btn>

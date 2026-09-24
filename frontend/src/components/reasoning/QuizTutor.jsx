@@ -158,7 +158,7 @@ export default function QuizTutor({ attemptId, attempt, questions }) {
         <div className="quiz-tutor-active-practice">
           {practiceStatus==='loading'&&<PracticeSkeleton/>}
           {practiceStatus==='error'&&<div className="quiz-tutor-practice-error" role="alert"><h4>Unable to generate the next practice problem.</h4><p>{practiceError}</p><Btn variant="secondary" onClick={createPractice}>Try Again</Btn></div>}
-          {activePractice&&['ready','answered'].includes(practiceStatus)&&<PracticeQuestion key={activePractice.id} attemptId={attemptId} practice={activePractice} onUpdate={updatePractice} onGenerateAnother={createPractice} practiceRemaining={tutor.practiceRemaining}/>} 
+          {activePractice&&['ready','answered'].includes(practiceStatus)&&<PracticeQuestion key={activePractice.id} attemptId={attemptId} practice={activePractice} onUpdate={updatePractice} onGenerateAnother={createPractice} practiceRemaining={tutor.practiceRemaining}/>}
           {practiceStatus==='idle'&&tutor.practiceRemaining<=0&&<p className="quiz-tutor-practice-limit">You've completed the available AI practice for this quiz.</p>}
         </div>
       </section>

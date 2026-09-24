@@ -4,7 +4,10 @@ import katex from 'katex';
 
 const component = fs.readFileSync(new URL('./QuizTutor.jsx', import.meta.url), 'utf8');
 const generatedContent = fs.readFileSync(new URL('./GeneratedContent.jsx', import.meta.url), 'utf8');
-const css = fs.readFileSync(new URL('../../index.css', import.meta.url), 'utf8');
+const css = [
+  fs.readFileSync(new URL('../../index.css', import.meta.url), 'utf8'),
+  fs.readFileSync(new URL('../../styles/learning-workspaces.css', import.meta.url), 'utf8'),
+].join('\n');
 
 assert.match(component, /const \[practiceStatus, setPracticeStatus\] = useState\('idle'\)/);
 assert.match(component, /const \[activePractice, setActivePractice\] = useState\(null\)/);

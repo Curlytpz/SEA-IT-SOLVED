@@ -1,6 +1,11 @@
 const pool = require('../db/pool');
 
 const PROVIDER_KEY = 'GEMINI';
+const ADVISORY_LOCK_NAMESPACE = 1397047625;
+
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 async function reserveRequest(minimumIntervalMs) {
   const client = await pool.connect();
@@ -42,4 +47,46 @@ async function extendCooldown(backoffMs) {
   );
 }
 
-module.exports = { reserveRequest, extendCooldown };
+// PostgreSQL advisory locks make the concurrency cap effective across the API,
+// recognition worker, and transcription worker (which run as separate Node
+// processes). A crashed process automatically releases its connection locks.
+async function acquireSlot(maxConcurrent) {
+  const slotCount = Math.max(1, Number(maxConcurrent) || 1);
+  while (true) {
+    const client = await pool.connect();
+    let acquired = false;
+    try {
+      for (let slot = 1; slot <= slotCount; slot += 1) {
+        const result = await client.query(
+          'SELECT pg_try_advisory_lock($1, $2) AS acquired',
+          [ADVISORY_LOCK_NAMESPACE, slot]
+        );
+        if (!result.rows[0]?.acquired) continue;
+        acquired = true;
+        let released = false;
+        return async () => {
+          if (released) return;
+          released = true;
+          let releaseError = null;
+          try {
+            await client.query('SELECT pg_advisory_unlock($1, $2)', [ADVISORY_LOCK_NAMESPACE, slot]);
+          } catch (error) {
+            releaseError = error;
+            console.error('[AIProvider] Failed to release provider concurrency slot', {
+              slot,
+              message: error.message,
+            });
+          } finally {
+            client.release(releaseError || undefined);
+          }
+        };
+      }
+    } finally {
+      // An acquired slot owns this connection until its release callback runs.
+      if (!acquired) client.release();
+    }
+    await wait(250);
+  }
+}
+
+module.exports = { reserveRequest, extendCooldown, acquireSlot };

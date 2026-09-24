@@ -11,15 +11,16 @@ export default function useLessonWorkflowPolling(lessonId, { enabled = true } = 
   const [error, setError] = useState('');
   const [pollingTimedOut, setPollingTimedOut] = useState(false);
   const activeRef = useRef(false);
-  const requestRef = useRef(false);
+  const requestRef = useRef(null);
   const pollCountRef = useRef(0);
 
   const refresh = useCallback(async ({ quiet = false } = {}) => {
     if (!lessonId || requestRef.current) return null;
-    requestRef.current = true;
+    const controller = new AbortController();
+    requestRef.current = controller;
     if (!quiet && activeRef.current) setLoading(true);
     try {
-      const response = await api.get(`/lessons/${lessonId}`);
+      const response = await api.get(`/lessons/${lessonId}`, { signal: controller.signal });
       const next = response.data.data.lesson;
       if (activeRef.current) {
         setLesson(next);
@@ -27,11 +28,12 @@ export default function useLessonWorkflowPolling(lessonId, { enabled = true } = 
       }
       return next;
     } catch (requestError) {
-      if (activeRef.current) setError(requestError.response?.data?.error || 'Unable to check lesson processing status.');
+      if (activeRef.current && requestError.code !== 'ERR_CANCELED') setError(requestError.response?.data?.error || 'Unable to check lesson processing status.');
       return null;
     } finally {
-      requestRef.current = false;
-      if (!quiet && activeRef.current) setLoading(false);
+      const isCurrent = requestRef.current === controller;
+      if (isCurrent) requestRef.current = null;
+      if (isCurrent && !quiet && activeRef.current) setLoading(false);
     }
   }, [lessonId]);
 
@@ -40,7 +42,7 @@ export default function useLessonWorkflowPolling(lessonId, { enabled = true } = 
     pollCountRef.current = 0;
     setPollingTimedOut(false);
     refresh();
-    return () => { activeRef.current = false; };
+    return () => { activeRef.current = false; requestRef.current?.abort(); requestRef.current = null; };
   }, [refresh]);
 
   const readiness = useMemo(() => lessonContextReadiness(lesson), [lesson]);
@@ -71,4 +73,3 @@ export default function useLessonWorkflowPolling(lessonId, { enabled = true } = 
 
   return { lesson, loading, error, pollingTimedOut, readiness, refresh, retry };
 }
-

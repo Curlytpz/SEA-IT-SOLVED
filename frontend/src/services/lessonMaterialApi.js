@@ -1,7 +1,7 @@
 import api from './api';
 
-export async function listLessonMaterials(lessonId) {
-  const { data } = await api.get(`/lessons/${lessonId}/materials`);
+export async function listLessonMaterials(lessonId, config = {}) {
+  const { data } = await api.get(`/lessons/${lessonId}/materials`, config);
   return data.data.materials;
 }
 export async function uploadLessonMaterial(lessonId, file) {

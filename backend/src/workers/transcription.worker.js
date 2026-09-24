@@ -4,7 +4,7 @@ const { audioStorage } = require('../storage');
 const pool = require('../db/pool');
 const transcriptionService = require('../services/transcription.service');
 const lessonContextService = require('../services/lesson-context.service');
-const providerGate = require('../services/providerRequestGate');
+const aiProvider = require('../services/aiProvider.service');
 const GeminiSpeechTranscriptionProvider = require('../transcription/GeminiSpeechTranscriptionProvider');
 const { TranscriptionProviderError, mapTranscriptionError } = require('../transcription/transcriptionErrorMapper');
 const { materializeStorageFile, sha256File, cleanupTemporaryDirectory } = require('../utils/storageTempFile');
@@ -22,8 +22,6 @@ const {
   FFMPEG_PATH,
   GEMINI_FILE_POLL_INTERVAL_MS,
   GEMINI_FILE_READY_TIMEOUT_MS,
-  GEMINI_SHARED_MIN_REQUEST_INTERVAL_MS,
-  GEMINI_SHARED_RATE_LIMIT_BACKOFF_MS,
 } = require('../config/env');
 
 const workerId = TRANSCRIPTION_WORKER_ID || `${os.hostname()}-${process.pid}`;
@@ -94,13 +92,14 @@ async function processAttempt(attempt) {
       sourceMime: source.mime_type,
       ffmpegPath: FFMPEG_PATH,
     });
-    const gateDelay = await providerGate.reserveRequest(GEMINI_SHARED_MIN_REQUEST_INTERVAL_MS);
-    if (gateDelay > 0) await wait(gateDelay);
-    const result = await provider.transcribe({
-      audioPath: prepared.audioPath,
-      mimeType: prepared.mimeType,
-      durationMs: Number(source.duration_ms),
-    });
+    const result = await aiProvider.run(
+      () => provider.transcribe({
+        audioPath: prepared.audioPath,
+        mimeType: prepared.mimeType,
+        durationMs: Number(source.duration_ms),
+      }),
+      { provider: 'GEMINI', model: GEMINI_TRANSCRIPTION_MODEL, operationType: 'TRANSCRIPTION', jobId: attempt.id }
+    );
     result.sanitizedOutput = retainedProviderOutput(result.sanitizedOutput);
     await transcriptionService.completeAttempt(attempt, result, { ...source, sha256 });
     console.log(`[Transcription] Completed lesson ${source.lesson_id}, attempt ${attempt.attempt_number}.`);
@@ -108,9 +107,7 @@ async function processAttempt(attempt) {
     const mapped = error?.code === 'OWNERSHIP_MISMATCH'
       ? new TranscriptionProviderError('OWNERSHIP_MISMATCH', 'Recording ownership validation failed.', false, error)
       : mapTranscriptionError(error);
-    if (mapped.code === 'PROVIDER_RATE_LIMITED') {
-      await providerGate.extendCooldown(GEMINI_SHARED_RATE_LIMIT_BACKOFF_MS).catch(() => {});
-    }
+    if (error?.providerRetriesExhausted) mapped.retryable = false;
     console.error(`[Transcription] Attempt ${attempt.id} failed (${mapped.code}): ${mapped.message}`);
     await transcriptionService.failAttempt(attempt, mapped);
   } finally {

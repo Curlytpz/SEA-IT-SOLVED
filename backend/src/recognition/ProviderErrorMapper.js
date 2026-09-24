@@ -40,7 +40,7 @@ function mapProviderError(error) {
     return new RecognitionProviderError('NO_RECOGNIZABLE_CONTENT', 'No recognizable whiteboard content was found.', false, error);
   }
   if (error instanceof ZodError || error instanceof SyntaxError || error?.code === 'INVALID_PROVIDER_OUTPUT') {
-    return new RecognitionProviderError('INVALID_PROVIDER_OUTPUT', 'The recognition service returned an invalid response.', true, error);
+    return new RecognitionProviderError('INVALID_PROVIDER_OUTPUT', 'The recognition service returned an invalid response.', false, error);
   }
   const status = providerHttpStatus(error);
   const message = errorMessages(error);

@@ -1,10 +1,17 @@
 const asyncHandler = require('../utils/asyncHandler');
 const service = require('../services/lesson-intelligence.service');
+const singleFlight = require('../utils/singleFlight');
 
 const list = asyncHandler(async (req, res) => res.json({ success: true, data: await service.list(req.params.lessonId, req.user.id) }));
-const generateMaterials = asyncHandler(async (req, res) => res.status(201).json({ success: true, data: { materials: await service.generateMaterials(req.params.lessonId, req.user.id) } }));
+const generateMaterials = asyncHandler(async (req, res) => res.status(201).json({ success: true, data: { materials: await singleFlight.run(
+  singleFlight.key(['lesson-materials', req.user.id, req.params.lessonId]),
+  () => service.generateMaterials(req.params.lessonId, req.user.id)
+) } }));
 const publishMaterials = asyncHandler(async (req, res) => res.json({ success: true, data: { materials: await service.publishMaterials(req.params.lessonId, req.user.id) } }));
-const generateQuiz = asyncHandler(async (req, res) => res.status(201).json({ success: true, data: { quiz: await service.generateQuiz(req.params.lessonId, req.user.id, req.body || {}) } }));
+const generateQuiz = asyncHandler(async (req, res) => res.status(201).json({ success: true, data: { quiz: await singleFlight.run(
+  singleFlight.key(['lesson-quiz', req.user.id, req.params.lessonId, req.body || {}]),
+  () => service.generateQuiz(req.params.lessonId, req.user.id, req.body || {})
+) } }));
 const updateQuiz = asyncHandler(async (req, res) => res.json({ success: true, data: { quiz: await service.updateQuiz(req.params.quizId, req.user.id, req.body || {}) } }));
 const updateQuestion = asyncHandler(async (req, res) => res.json({ success: true, data: { question: await service.updateQuestion(req.params.quizId, req.params.questionId, req.user.id, req.body || {}) } }));
 const deleteQuestion = asyncHandler(async (req, res) => { await service.deleteQuestion(req.params.quizId, req.params.questionId, req.user.id); res.json({ success: true }); });

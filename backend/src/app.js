@@ -2,7 +2,6 @@ require('./config/env');
 const express    = require('express');
 const cors       = require('cors');
 const helmet     = require('helmet');
-const rateLimit  = require('express-rate-limit');
 
 const errorHandler   = require('./middleware/errorHandler');
 const authRoutes     = require('./routes/auth.routes');
@@ -23,6 +22,8 @@ const sectionService = require('./services/section.service');
 const authenticate   = require('./middleware/authenticate');
 const { authorizeActive } = require('./middleware/authorize');
 const asyncHandler   = require('./utils/asyncHandler');
+const { createRateLimiter } = require('./middleware/rateLimit');
+const { API_RATE_LIMIT_MAX } = require('./config/env');
 
 const app = express();
 // One trusted hop: browser -> Cloudflare tunnel -> this Express app.
@@ -33,26 +34,26 @@ app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173', cred
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-const apiLimiter = rateLimit({
+// Health checks must never consume the application request budget.
+app.get('/api/health', (_req,res) => res.json({ success:true, message:'SEA-IT-SOLVED API is running.' }));
+
+const apiLimiter = createRateLimiter({
+  name: 'general-api',
   windowMs: 15 * 60 * 1000,
-  max: 200,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success:false, error:'Too many requests.' },
+  max: API_RATE_LIMIT_MAX,
+  message: 'Too many requests. Please wait a moment and try again.',
   skip: req => {
-    if (req.path === '/auth' || req.path.startsWith('/auth/')) return true;
+    // These endpoints have their own focused limiters. Skipping them here
+    // prevents accidental limiter stacking while retaining route protection.
+    if (req.method === 'POST' && /^\/auth\/(?:login|register\/(?:student|instructor)|forgot-password|reset-password(?:\/validate)?)\/?$/.test(req.path)) return true;
     if (req.method === 'GET' && /^\/student\/lessons\/[^/]+\/export\/(?:pdf|docx)\/?$/.test(req.path)) return true;
-    return req.method === 'GET' && /^\/(?:lessons\/[^/]+\/(?:recognitions|transcription|materials|context|intelligence)|captures\/[^/]+\/recognition)\/?$/.test(req.path);
+    if (req.method === 'GET' && /^\/(?:lessons\/[^/]+\/(?:recognitions|transcription)|captures\/[^/]+\/recognition)\/?$/.test(req.path)) return true;
+    if (req.method === 'POST' && /^\/student\/attempts\/[^/]+\/tutor(?:\/practice)?\/?$/.test(req.path)) return true;
+    return req.method === 'POST' && /^\/(?:instructor\/quiz-answers\/[^/]+\/(?:recognize|analyze)|solution-submissions\/[^/]+\/analyze)\/?$/.test(req.path);
   },
 });
 
-
-
-
-const authLimiter = rateLimit({ windowMs:15*60*1000, max:20,  standardHeaders:true, legacyHeaders:false, message:{success:false,error:'Too many login attempts. Try again later.'} });
-
 app.use('/api', apiLimiter);
-app.use('/api/auth', authLimiter);
 
 app.use('/api/auth',        authRoutes);
 app.use('/api/admin',       adminRoutes);
@@ -78,7 +79,6 @@ app.get('/api/subjects',
   })
 );
 
-app.get('/api/health', (_req,res) => res.json({ success:true, message:'SEA-IT-SOLVED API is running.' }));
 app.use((req,res) => res.status(404).json({ success:false, error:`Route not found: ${req.method} ${req.path}` }));
 app.use(errorHandler);
 module.exports = app;

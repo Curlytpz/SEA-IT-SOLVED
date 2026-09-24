@@ -53,7 +53,7 @@ const SECONDARY_FEATURES = [
 
 function CapabilityIcon({ icon: Icon }) {
   return (
-    <span className="capability-icon grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/[0.045] text-primary">
+    <span className="capability-icon grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/10 bg-card/[0.045] text-primary">
       <Icon size={18} aria-hidden="true" />
     </span>
   );

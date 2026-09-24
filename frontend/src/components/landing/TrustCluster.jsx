@@ -18,7 +18,7 @@ export default function TrustCluster() {
               viewport={viewportOnce}
               transition={{ duration: 0.6, delay: i * 0.07 }}
               style={{ left: `${(i / (BADGES.length - 1)) * 100}%`, top: `${(i % 2) * 26}%` }}
-              className="absolute grid h-11 w-11 -translate-x-1/2 place-items-center rounded-full border border-white/15 bg-white/[0.06] text-[10px] font-bold text-primary"
+              className="absolute grid h-11 w-11 -translate-x-1/2 place-items-center rounded-full border border-white/15 bg-card/[0.06] text-[10px] font-bold text-primary"
             >
               {initials}
             </motion.span>

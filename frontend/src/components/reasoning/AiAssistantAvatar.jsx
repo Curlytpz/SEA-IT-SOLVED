@@ -10,9 +10,9 @@ const STATE_TONES = {
 };
 
 const SIZE_CLASS = {
-  sm: 'is-small',
-  md: 'is-medium',
-  lg: 'is-large',
+  sm: 'h-[30px] w-[30px] [&>i]:-bottom-px [&>i]:-right-px [&>i]:h-[7px] [&>i]:w-[7px] [&>i]:border-[1.5px]',
+  md: 'h-[42px] w-[42px]',
+  lg: 'h-[54px] w-[54px]',
 };
 
 export default function AiAssistantAvatar({ state = 'idle', size = 'md', className = '' }) {
@@ -50,7 +50,7 @@ export default function AiAssistantAvatar({ state = 'idle', size = 'md', classNa
   };
 
   return <motion.span
-    className={`ai-assistant-avatar ${SIZE_CLASS[size] || SIZE_CLASS.md} is-${state} ${className}`}
+    className={`ai-assistant-avatar relative inline-flex shrink-0 origin-[50%_55%] items-center justify-center drop-shadow-[0_5px_9px_hsl(var(--ai)/.15)] dark:drop-shadow-[0_5px_10px_hsl(var(--ai)/.2)] [&>svg]:block [&>svg]:h-full [&>svg]:w-full [&>svg]:overflow-visible [&>i]:absolute [&>i]:bottom-px [&>i]:right-px [&>i]:h-2 [&>i]:w-2 [&>i]:rounded-full [&>i]:border-2 [&>i]:border-white dark:[&>i]:border-slate-900 ${SIZE_CLASS[size] || SIZE_CLASS.md} ${className}`}
     animate={shellAnimation}
     transition={shellTransition}
     aria-hidden="true"

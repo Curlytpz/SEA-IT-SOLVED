@@ -16,7 +16,7 @@ function DialogOverlay({ className, ...props }) {
 function DialogContent({ className, children, showCloseButton = true, ...props }) {
   return <DialogPortal>
     <DialogOverlay/>
-    <DialogPrimitive.Popup data-slot="dialog-content" className={cn('fixed left-1/2 top-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 scale-100 gap-4 overflow-y-auto rounded-xl border border-border bg-popover p-5 text-sm text-popover-foreground opacity-100 shadow-2xl outline-none transition-[opacity,transform] duration-200 data-[ending-style]:scale-[.97] data-[ending-style]:opacity-0 data-[starting-style]:scale-[.97] data-[starting-style]:opacity-0 motion-reduce:transition-none sm:max-w-md sm:p-6', className)} {...props}>
+    <DialogPrimitive.Popup data-slot="dialog-content" className={cn('fixed left-1/2 top-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 scale-100 gap-4 overflow-y-auto rounded-xl border border-border bg-popover p-5 text-sm text-popover-foreground opacity-100 shadow-[0_20px_55px_-28px_rgb(15_23_42/.48)] outline-none transition-[opacity,transform] duration-200 data-[ending-style]:scale-[.98] data-[ending-style]:opacity-0 data-[starting-style]:scale-[.98] data-[starting-style]:opacity-0 motion-reduce:transition-none sm:max-w-md sm:p-6', className)} {...props}>
       {children}
       {showCloseButton && <DialogPrimitive.Close render={<Button variant="ghost" size="icon-sm" className="absolute right-2 top-2"/>}><XIcon/><span className="sr-only">Close</span></DialogPrimitive.Close>}
     </DialogPrimitive.Popup>

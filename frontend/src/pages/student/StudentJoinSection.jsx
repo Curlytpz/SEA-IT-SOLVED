@@ -61,21 +61,21 @@ export default function StudentJoinSection() {
           {error && <Alert type="error" onClose={() => setError('')}>{error}</Alert>}
           {requestSent ? (
             <div className="py-2 text-center" role="status" aria-live="polite">
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Request sent</h2>
-              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600 dark:text-slate-300">Your request has been sent to the instructor for approval.</p>
+              <h2 className="text-xl font-bold text-foreground dark:text-foreground">Request sent</h2>
+              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground dark:text-muted-foreground">Your request has been sent to the instructor for approval.</p>
               <Btn disabled className="mt-5 w-full">Pending Approval</Btn>
             </div>
           ) : preview ? (
             <div className="rounded-xl border border-primary/20 bg-primary-subtle p-5 transition-colors" aria-live="polite">
-              <h2 className="text-base font-bold text-slate-900 dark:text-white">Confirm this section</h2>
+              <h2 className="text-base font-bold text-foreground dark:text-foreground">Confirm this section</h2>
               <dl className="mt-4 grid gap-3 text-sm">
-                <div className="grid grid-cols-[6rem_1fr] gap-3"><dt className="font-medium text-slate-500 dark:text-slate-400">Subject</dt><dd className="font-semibold text-slate-900 dark:text-white">{preview.subjectCode}</dd></div>
-                <div className="grid grid-cols-[6rem_1fr] gap-3"><dt className="font-medium text-slate-500 dark:text-slate-400">Section</dt><dd className="font-semibold text-slate-900 dark:text-white">{preview.sectionName}</dd></div>
-                <div className="grid grid-cols-[6rem_1fr] gap-3"><dt className="font-medium text-slate-500 dark:text-slate-400">Instructor</dt><dd className="font-semibold text-slate-900 dark:text-white">{preview.instructorName}</dd></div>
+                <div className="grid grid-cols-[6rem_1fr] gap-3"><dt className="font-medium text-muted-foreground dark:text-muted-foreground">Subject</dt><dd className="font-semibold text-foreground dark:text-foreground">{preview.subjectCode}</dd></div>
+                <div className="grid grid-cols-[6rem_1fr] gap-3"><dt className="font-medium text-muted-foreground dark:text-muted-foreground">Section</dt><dd className="font-semibold text-foreground dark:text-foreground">{preview.sectionName}</dd></div>
+                <div className="grid grid-cols-[6rem_1fr] gap-3"><dt className="font-medium text-muted-foreground dark:text-muted-foreground">Instructor</dt><dd className="font-semibold text-foreground dark:text-foreground">{preview.instructorName}</dd></div>
               </dl>
-              <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-                <Btn loading={loading === 'request'} disabled={Boolean(loading)} onClick={requestToJoin} className="w-full">Request to Join</Btn>
-                <Btn variant="secondary" disabled={Boolean(loading)} onClick={cancelPreview} className="w-full">Cancel</Btn>
+              <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <Btn loading={loading === 'request'} disabled={Boolean(loading)} onClick={requestToJoin} className="min-w-0 w-full">Request to Join</Btn>
+                <Btn variant="secondary" disabled={Boolean(loading)} onClick={cancelPreview} className="min-w-0 w-full">Cancel</Btn>
               </div>
             </div>
           ) : (

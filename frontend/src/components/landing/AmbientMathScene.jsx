@@ -33,6 +33,11 @@ export default function AmbientMathScene({ compact = false, restrained = false, 
   const sceneY = useTransform(smoothY, [-0.5, 0.5], outer ? [-5, 5] : restrained ? [-3, 3] : [-8, 8]);
   const gradientId = useId().replaceAll(':', '');
   const visibleSymbols = outer ? OUTER_SYMBOLS : restrained ? SYMBOLS.slice(0, 5) : SYMBOLS;
+  const ambientBackground = symbolsOnly
+    ? ''
+    : restrained
+      ? "before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_18%_24%,hsl(var(--primary)/.085),transparent_26rem),radial-gradient(circle_at_78%_68%,hsl(var(--ambient-2)/.06),transparent_23rem)] before:content-['']"
+      : "before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_18%_22%,hsl(var(--primary)/.16),transparent_31rem),radial-gradient(circle_at_80%_64%,hsl(var(--ambient-2)/.1),transparent_28rem)] before:content-['']";
 
   useEffect(() => {
     const pointerQuery = window.matchMedia(outer
@@ -60,10 +65,10 @@ export default function AmbientMathScene({ compact = false, restrained = false, 
   return (
     <div
       aria-hidden="true"
-      className={`landing-ambient ${compact ? 'landing-ambient-compact' : ''} ${restrained ? 'landing-ambient-restrained' : ''} ${outer ? 'landing-ambient-outer' : ''}`}
+      className={`pointer-events-none absolute inset-0 z-0 overflow-hidden ${ambientBackground}`}
     >
-      <motion.div className="landing-ambient-layer" style={reducedMotion ? undefined : { x: sceneX, y: sceneY }}>
-        {!symbolsOnly && <svg className="landing-ambient-curve" viewBox="0 0 900 560" preserveAspectRatio="none">
+      <motion.div className="absolute inset-0 h-full w-full" style={reducedMotion ? undefined : { x: sceneX, y: sceneY }}>
+        {!symbolsOnly && <svg className={`absolute inset-0 h-full w-full ${restrained ? 'opacity-[.42] max-md:opacity-30' : 'opacity-50 max-md:opacity-30'}`} viewBox="0 0 900 560" preserveAspectRatio="none">
           <defs>
             <linearGradient id={gradientId} x1="0" x2="1">
               <stop offset="0" stopColor="hsl(var(--primary))" stopOpacity="0" />
@@ -89,7 +94,7 @@ export default function AmbientMathScene({ compact = false, restrained = false, 
         {visibleSymbols.map((symbol, index) => (
           <motion.span
             key={`${symbol.value}-${index}`}
-            className="landing-ambient-symbol"
+            className={`absolute whitespace-nowrap font-serif leading-none ${compact ? 'text-[clamp(1.1rem,2vw,2rem)]' : 'text-[clamp(1.35rem,2.4vw,2.9rem)]'} ${outer ? 'font-medium text-[rgb(76,84,106)] max-lg:text-[rgba(76,84,106,.82)]' : restrained ? 'text-[rgba(167,243,208,.72)]' : 'text-[rgba(167,243,208,.2)]'} ${outer && index >= 3 ? 'max-lg:hidden' : ''} ${outer && index >= 2 ? 'max-md:hidden' : ''} ${restrained && index >= 3 ? 'max-lg:hidden' : ''} ${index >= 5 ? 'max-md:hidden' : ''} ${index >= 4 ? 'max-[390px]:hidden' : ''}`}
             style={{ left: symbol.left, top: symbol.top }}
             animate={reducedMotion
               ? { opacity: outer ? ([0, 3, 5].includes(index) ? 0.25 : 0.18) : restrained ? 0.055 : 0.12 }

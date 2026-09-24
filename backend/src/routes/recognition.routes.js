@@ -1,16 +1,15 @@
 const router = require('express').Router();
-const rateLimit = require('express-rate-limit');
+const { createRateLimiter } = require('../middleware/rateLimit');
 const controller = require('../controllers/recognition.controller');
 const authenticate = require('../middleware/authenticate');
 const { authorizeActive } = require('../middleware/authorize');
 
 const guard = [authenticate, authorizeActive('INSTRUCTOR')];
-const recognitionReadLimiter = rateLimit({
+const recognitionReadLimiter = createRateLimiter({
+  name: 'recognition-status',
   windowMs: 15 * 60 * 1000,
   max: 300,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, error: 'Recognition status is being refreshed too frequently. Please wait a moment.' },
+  message: 'Recognition status is being refreshed too frequently. Please wait a moment.',
 });
 
 

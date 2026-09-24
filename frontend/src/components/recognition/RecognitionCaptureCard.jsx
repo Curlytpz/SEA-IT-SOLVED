@@ -29,14 +29,14 @@ export default function RecognitionCaptureCard({ item, busy, onReprocess }) {
   return (
     <Card className="overflow-hidden">
       <div className="grid lg:grid-cols-[minmax(280px,0.9fr)_minmax(0,1.1fr)]">
-        <div className="border-b border-slate-200/80 bg-slate-950 p-3 dark:border-white/10 lg:border-b-0 lg:border-r">
+        <div className="border-b border-border/80 bg-slate-950 p-3 dark:border-border lg:border-b-0 lg:border-r">
           <ProtectedCaptureImage url={imageUrl} alt={`Whiteboard captured ${new Date(capture.capturedAt).toLocaleString()}`} className="max-h-[420px] w-full rounded-xl object-contain" />
         </div>
         <div className="min-w-0 p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Whiteboard capture</p>
-              <p className="mt-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Whiteboard capture</p>
+              <p className="mt-1 text-sm font-semibold text-foreground dark:text-foreground">
                 {new Date(capture.capturedAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}
               </p>
             </div>
@@ -45,21 +45,21 @@ export default function RecognitionCaptureCard({ item, busy, onReprocess }) {
 
           {recognition?.hasPreviousResult && <Alert type="warning" label="Recognition status" className="mb-0 mt-4">The previous successful transcription remains visible while this newer attempt is {status === 'FAILED' ? 'unavailable' : 'processing'}.</Alert>}
 
-          {!recognition && <p className="mt-5 text-sm text-slate-500">This capture has not been processed yet.</p>}
-          {['PENDING', 'PROCESSING'].includes(status) && !result && <p className="mt-5 text-sm text-slate-500">The whiteboard is being prepared for transcription.</p>}
+          {!recognition && <p className="mt-5 text-sm text-muted-foreground">This capture has not been processed yet.</p>}
+          {['PENDING', 'PROCESSING'].includes(status) && !result && <p className="mt-5 text-sm text-muted-foreground">The whiteboard is being prepared for transcription.</p>}
           {status === 'FAILED' && !result && <Alert type="error" label="Recognition failed" className="mb-0 mt-5">{friendlyFailure(recognition)}</Alert>}
 
           {result && (
             <div className="mt-5 space-y-3">
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Recognized content</h3>
+              <h3 className="text-sm font-bold text-foreground dark:text-foreground">Recognized content</h3>
               {blocks.length ? blocks.map((block, index) => (
-                <div key={`${block.order}-${index}`} className="rounded-xl border border-slate-200/80 bg-white/60 p-3 dark:border-white/10 dark:bg-white/[.035]">
+                <div key={`${block.order}-${index}`} className="rounded-xl border border-border/80 bg-card/60 p-3 dark:border-border dark:bg-card/[.035]">
                   {block.type === 'math'
                     ? <MathExpression latex={block.latex} />
-                    : <GeneratedContent markdown={block.text} className="recognition-math-content text-sm leading-6 text-slate-700 dark:text-slate-200" reviewIndicator mathFallback/>}
+                    : <GeneratedContent markdown={block.text} className="recognition-math-content text-sm leading-6 text-foreground dark:text-foreground" reviewIndicator mathFallback/>}
                   {block.uncertain && <div className="mt-2"><UncertaintyBadge reason={block.uncertaintyReason} /></div>}
                 </div>
-              )) : <GeneratedContent markdown={recognition.plainText} className="recognition-math-content text-sm leading-6 text-slate-700 dark:text-slate-200" reviewIndicator mathFallback/>}
+              )) : <GeneratedContent markdown={recognition.plainText} className="recognition-math-content text-sm leading-6 text-foreground dark:text-foreground" reviewIndicator mathFallback/>}
               {(uncertainty.length > 0 || result.warnings?.length > 0) && <Alert type="warning" label="Review needed" title="Check highlighted content against the whiteboard image" className="mb-0">{result.warnings?.map((warning, index) => <div key={index}>{warning}</div>)}</Alert>}
             </div>
           )}

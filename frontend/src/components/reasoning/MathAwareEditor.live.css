@@ -205,8 +205,8 @@
 }
 
 .dark .math-editor-fallback.has-error {
-  border-color: #f59e0b;
-  background: #2b2112;
+  border-color: hsl(var(--warning));
+  background: hsl(var(--warning-subtle));
 }
 
 .math-editor-retry {
@@ -229,11 +229,11 @@
 }
 
 .dark .math-editor-retry {
-  color: #fcd34d;
+  color: hsl(var(--warning-subtle-foreground));
 }
 
 .dark .math-editor-retry:hover {
-  background: #422d12;
+  background: hsl(var(--warning-subtle));
 }
 
 .visual-math-dialog-keyboard {

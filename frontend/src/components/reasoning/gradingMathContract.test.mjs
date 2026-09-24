@@ -23,7 +23,10 @@ assert.match(savedFeedback.content, /\$\\lim_\{x \\to 2\} f\(x\)\$/);
 assert.match(savedFeedback.content, /\$\\frac\{x\^2-4\}\{x-2\}\$/);
 assert.match(savedFeedback.content, /\$\\int_0\^2 f\(x\)\\,dx\$/);
 
-const css = fs.readFileSync(new URL('../../index.css', import.meta.url), 'utf8');
+const css = [
+  fs.readFileSync(new URL('../../index.css', import.meta.url), 'utf8'),
+  fs.readFileSync(new URL('../../styles/learning-workspaces.css', import.meta.url), 'utf8'),
+].join('\n');
 assert.match(css, /\.math-content \.katex\s*\{[\s\S]*?overflow-wrap: normal;[\s\S]*?word-break: normal;[\s\S]*?white-space: nowrap;/);
 assert.match(css, /\.math-content \.math-block[\s\S]*?min-width: 0;[\s\S]*?overflow-x: auto;/);
 assert.match(css, /\.quiz-ai-suggestion-grid[\s\S]*?minmax\(180px,260px\) minmax\(0,1fr\)/);

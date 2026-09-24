@@ -123,68 +123,68 @@ export default function InstructorSections() {
         ? <EmptyState icon={<BookOpen size={23}/>} title="Start your teaching workspace" body="Create a folder for a semester or subject group, then add your first section.">
             <div className="flex flex-wrap justify-center gap-2"><Btn variant="ghost" onClick={() => setDialog({ type: 'create-folder' })}>Create Folder</Btn><Btn onClick={() => setDialog({ type: 'create-section' })}>Create Section</Btn></div>
           </EmptyState>
-        : <div className="teaching-workspace">
-            <aside className="teaching-folder-nav scrollbar-hidden glass-panel rounded-2xl p-3" aria-label="Teaching folders">
+        : <div className="grid items-start gap-4 min-[900px]:grid-cols-[minmax(14rem,18rem)_minmax(0,1fr)]">
+            <aside className="scrollbar-hidden static flex max-w-full min-w-0 touch-pan-x gap-[.4rem] overflow-x-auto overscroll-x-contain rounded-xl border border-border bg-surface p-[.6rem] shadow-surface [-webkit-overflow-scrolling:touch] min-[900px]:sticky min-[900px]:top-[5.5rem] min-[900px]:block min-[900px]:overflow-visible min-[900px]:p-3 [&>button]:shrink-0 [&>div]:shrink-0 [&>details]:shrink-0 [&>.my-3]:hidden min-[900px]:[&>.my-3]:block [&>div:nth-of-type(2)]:hidden min-[900px]:[&>div:nth-of-type(2)]:flex [&>.space-y-1]:flex [&>.space-y-1]:gap-[.4rem] min-[900px]:[&>.space-y-1]:block" aria-label="Teaching folders">
               <FolderNavItem active={selectedKey === UNORGANIZED} name="Unorganized" count={workspace.unorganized.sectionCount} icon={<BookOpen size={17}/>} onClick={() => setSelectedKey(UNORGANIZED)} />
-              <div className="my-3 border-t border-slate-200/70 dark:border-white/10" />
-              <div className="mb-2 flex items-center justify-between px-2"><span className="text-[11px] font-black uppercase tracking-wider text-slate-500">Folders</span><Btn size="sm" variant="ghost" aria-label="Create folder" onClick={() => setDialog({ type: 'create-folder' })}><Plus size={14}/></Btn></div>
+              <div className="my-3 border-t border-border/70 dark:border-border" />
+              <div className="mb-2 flex items-center justify-between px-2"><span className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">Folders</span><Btn size="sm" variant="ghost" aria-label="Create folder" onClick={() => setDialog({ type: 'create-folder' })}><Plus size={14}/></Btn></div>
               <div className="space-y-1">
                 {activeFolders.map((folder, index) => <FolderNavItem key={folder.id} active={selectedKey === folder.id} name={folder.name} count={folder.sectionCount} icon={<Folder size={17}/>} onClick={() => setSelectedKey(folder.id)} actions={
                   <span className="flex shrink-0">
-                    <button type="button" className="folder-icon-action" aria-label={`Move ${folder.name} up`} disabled={index === 0 || busy === 'reorder'} onClick={event => { event.stopPropagation(); moveFolder(folder, -1); }}><ChevronUp size={13}/></button>
-                    <button type="button" className="folder-icon-action" aria-label={`Move ${folder.name} down`} disabled={index === activeFolders.length - 1 || busy === 'reorder'} onClick={event => { event.stopPropagation(); moveFolder(folder, 1); }}><ChevronDown size={13}/></button>
+                    <button type="button" className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-primary-subtle hover:text-primary-subtle-foreground disabled:opacity-30 motion-reduce:transition-none" aria-label={`Move ${folder.name} up`} disabled={index === 0 || busy === 'reorder'} onClick={event => { event.stopPropagation(); moveFolder(folder, -1); }}><ChevronUp size={13}/></button>
+                    <button type="button" className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-primary-subtle hover:text-primary-subtle-foreground disabled:opacity-30 motion-reduce:transition-none" aria-label={`Move ${folder.name} down`} disabled={index === activeFolders.length - 1 || busy === 'reorder'} onClick={event => { event.stopPropagation(); moveFolder(folder, 1); }}><ChevronDown size={13}/></button>
                   </span>
                 } />)}
-                {!activeFolders.length && <p className="px-2 py-3 text-xs text-slate-400">No active folders.</p>}
+                {!activeFolders.length && <p className="px-2 py-3 text-xs text-muted-foreground">No active folders.</p>}
               </div>
-              {archivedFolders.length > 0 && <details className="mt-4 border-t border-slate-200/70 pt-3 dark:border-white/10">
-                <summary className="cursor-pointer px-2 text-[11px] font-black uppercase tracking-wider text-slate-500">Archived ({archivedFolders.length})</summary>
-                <div className="mt-2 space-y-1">{archivedFolders.map(folder => <FolderNavItem key={folder.id} active={selectedKey === folder.id} name={folder.name} count={folder.sectionCount} icon={<Archive size={16}/>} onClick={() => setSelectedKey(folder.id)} />)}</div>
+              {archivedFolders.length > 0 && <details className="mt-0 border-t-0 border-border/70 pt-0 dark:border-border min-[900px]:mt-4 min-[900px]:border-t min-[900px]:pt-3">
+                <summary className="cursor-pointer px-2 text-[11px] font-black uppercase tracking-wider text-muted-foreground">Archived ({archivedFolders.length})</summary>
+                <div className="mt-2 flex gap-[.4rem] space-y-1 min-[900px]:block">{archivedFolders.map(folder => <FolderNavItem key={folder.id} active={selectedKey === folder.id} name={folder.name} count={folder.sectionCount} icon={<Archive size={16}/>} onClick={() => setSelectedKey(folder.id)} />)}</div>
               </details>}
             </aside>
 
             <main className="min-w-0">
-              <section className="glass-panel rounded-2xl p-4 sm:p-5">
-                <div className="flex flex-col gap-3 border-b border-slate-200/70 pb-4 dark:border-white/10 sm:flex-row sm:items-center sm:justify-between">
-                  <div><div className="flex items-center gap-2"><h2 className="text-lg font-black text-slate-900 dark:text-white">{selectedFolder.name}</h2>{selectedFolder.archivedAt && <Badge status="ARCHIVED"/>}</div><p className="mt-1 text-xs text-slate-500">{selectedFolder.sectionCount} section{selectedFolder.sectionCount !== 1 ? 's' : ''} • grouped automatically by subject</p></div>
+              <section className="min-w-0 max-w-full rounded-xl border border-border bg-surface p-4 shadow-surface sm:p-5">
+                <div className="flex flex-col gap-3 border-b border-border/70 pb-4 dark:border-border sm:flex-row sm:items-center sm:justify-between">
+                  <div><div className="flex items-center gap-2"><h2 className="text-lg font-black text-foreground dark:text-foreground">{selectedFolder.name}</h2>{selectedFolder.archivedAt && <Badge status="ARCHIVED"/>}</div><p className="mt-1 text-xs text-muted-foreground">{selectedFolder.sectionCount} section{selectedFolder.sectionCount !== 1 ? 's' : ''} • grouped automatically by subject</p></div>
                   {selectedKey !== UNORGANIZED && <div className="flex flex-wrap gap-1.5">
                     <Btn size="sm" variant="ghost" onClick={() => setDialog({ type: 'rename', folder: selectedFolder })}><Pencil size={14}/> Rename</Btn>
                     <Btn size="sm" variant="ghost" loading={busy === `folder-${selectedFolder.id}`} onClick={() => run(`folder-${selectedFolder.id}`, () => setTeachingFolderArchived(selectedFolder.id, !selectedFolder.archivedAt), selectedFolder.archivedAt ? 'Folder restored.' : 'Folder archived.')}>{selectedFolder.archivedAt ? <Folder size={14}/> : <Archive size={14}/>} {selectedFolder.archivedAt ? 'Restore' : 'Archive'}</Btn>
-                    <Btn size="sm" variant="ghost" className="text-red-500 hover:text-red-700" onClick={() => setConfirm({ type: 'folder', item: selectedFolder })}><Trash size={14}/> Delete Folder</Btn>
+                    <Btn size="sm" variant="ghost" className="text-destructive hover:text-destructive-subtle-foreground" onClick={() => setConfirm({ type: 'folder', item: selectedFolder })}><Trash size={14}/> Delete Folder</Btn>
                   </div>}
                 </div>
 
                 {!selectedFolder.subjectGroups.length
-                  ? <div className="py-12 text-center"><Folder size={26} className="mx-auto text-slate-400"/><h3 className="mt-3 font-bold text-slate-700 dark:text-slate-200">No sections here</h3><p className="mt-1 text-sm text-slate-500">Move a section here or create a new one.</p>{!selectedFolder.archivedAt && <Btn className="mt-4" onClick={() => setDialog({ type: 'create-section' })}><Plus size={15}/> Create Section</Btn>}</div>
+                  ? <div className="py-12 text-center"><Folder size={26} className="mx-auto text-muted-foreground"/><h3 className="mt-3 font-bold text-foreground dark:text-foreground">No sections here</h3><p className="mt-1 text-sm text-muted-foreground">Move a section here or create a new one.</p>{!selectedFolder.archivedAt && <Btn className="mt-4" onClick={() => setDialog({ type: 'create-section' })}><Plus size={15}/> Create Section</Btn>}</div>
                   : <div className="mt-5 space-y-6">{selectedFolder.subjectGroups.map(group => <section key={group.subjectId}>
-                      <div className="mb-3 flex items-center gap-2"><Badge status={group.subjectCode}/><h3 className="font-bold text-slate-800 dark:text-slate-100">{group.subjectName}</h3><span className="text-xs text-slate-400">{group.sections.length}</span></div>
+                      <div className="mb-3 flex items-center gap-2"><Badge status={group.subjectCode}/><h3 className="font-bold text-foreground dark:text-foreground">{group.subjectName}</h3><span className="text-xs text-muted-foreground">{group.sections.length}</span></div>
                       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{group.sections.map(section => <SectionCard key={section.id} section={section} folders={activeFolders} moving={busy === `move-${section.id}`} deleting={busy === `section-${section.id}`} onMove={folderId => run(`move-${section.id}`, () => moveSectionToFolder(section.id, folderId), 'Section moved.')} onDelete={() => setConfirm({ type: 'section', item: section })} />)}</div>
                     </section>)}</div>}
               </section>
             </main>
           </div>}
 
-      {(dialog?.type === 'create-folder' || dialog?.type === 'rename') && <FolderModal folder={dialog.folder} loading={busy === 'create-folder' || busy.startsWith('folder-')} onClose={() => setDialog(null)} onSubmit={handleFolderSubmit}/>} 
-      {dialog?.type === 'create-section' && <CreateSectionModal subjects={subjects} folders={activeFolders} initialFolderId={selectedKey !== UNORGANIZED && !selectedFolder.archivedAt ? selectedKey : ''} onClose={() => setDialog(null)} onCreated={() => { setDialog(null); load(); }}/>} 
-      {confirm && <ConfirmModal title={confirm.type === 'folder' ? 'Delete this folder?' : 'Delete this section?'} body={confirm.type === 'folder' ? `“${confirm.item.name}” will be removed. Its sections and all academic records will remain intact and move to Unorganized.` : `Students will lose access to "${confirm.item.sectionName}". This action cannot be undone.`} confirmLabel={confirm.type === 'folder' ? 'Delete Folder' : 'Delete Section'} confirmVariant="danger" loading={busy === `folder-${confirm.item.id}` || busy === `section-${confirm.item.id}`} onConfirm={handleConfirm} onCancel={() => setConfirm(null)}/>} 
+      {(dialog?.type === 'create-folder' || dialog?.type === 'rename') && <FolderModal folder={dialog.folder} loading={busy === 'create-folder' || busy.startsWith('folder-')} onClose={() => setDialog(null)} onSubmit={handleFolderSubmit}/>}
+      {dialog?.type === 'create-section' && <CreateSectionModal subjects={subjects} folders={activeFolders} initialFolderId={selectedKey !== UNORGANIZED && !selectedFolder.archivedAt ? selectedKey : ''} onClose={() => setDialog(null)} onCreated={() => { setDialog(null); load(); }}/>}
+      {confirm && <ConfirmModal title={confirm.type === 'folder' ? 'Delete this folder?' : 'Delete this section?'} body={confirm.type === 'folder' ? `“${confirm.item.name}” will be removed. Its sections and all academic records will remain intact and move to Unorganized.` : `Students will lose access to "${confirm.item.sectionName}". This action cannot be undone.`} confirmLabel={confirm.type === 'folder' ? 'Delete Folder' : 'Delete Section'} confirmVariant="danger" loading={busy === `folder-${confirm.item.id}` || busy === `section-${confirm.item.id}`} onConfirm={handleConfirm} onCancel={() => setConfirm(null)}/>}
     </DashboardLayout>
   );
 }
 
 function FolderNavItem({ active, name, count, icon, actions, onClick }) {
-  return <button type="button" className={`teaching-folder-item ${active ? 'is-active' : ''}`} onClick={onClick}><span className="shrink-0">{icon}</span><span className="min-w-0 flex-1 truncate text-left">{name}</span><span className="folder-count">{count}</span>{actions}</button>;
+  return <button type="button" className={`flex min-h-11 w-auto min-w-36 items-center gap-[.55rem] rounded-[.8rem] border px-[.55rem] py-[.45rem] text-[.78rem] font-bold transition-[background-color,border-color,box-shadow] motion-reduce:transition-none min-[900px]:w-full min-[900px]:min-w-0 ${active ? 'border-primary/35 bg-primary/10 text-primary-subtle-foreground shadow-[0_0_0_2px_hsl(var(--primary)/.06)] dark:bg-primary/20 dark:shadow-[0_0_20px_hsl(var(--primary)/.1)]' : 'border-transparent text-muted-foreground hover:border-border hover:bg-surface-subtle dark:text-muted-foreground'}`} onClick={onClick}><span className="shrink-0">{icon}</span><span className="min-w-0 flex-1 truncate text-left">{name}</span><span className="inline-flex h-[1.4rem] min-w-[1.4rem] items-center justify-center rounded-full bg-slate-400/15 px-[.35rem] text-[.65rem]">{count}</span>{actions}</button>;
 }
 
 function SectionCard({ section, folders, moving, deleting, onMove, onDelete }) {
-  return <article className="teaching-section-card">
+  return <article className="min-w-0 overflow-hidden rounded-xl border border-slate-400/25 bg-white/45 transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-glass active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none dark:border-border dark:bg-surface-elevated/30 dark:hover:border-primary/30 [&_select]:max-sm:text-base">
     <Link to={`/instructor/sections/${section.id}`} className="block p-4">
-      <div className="flex items-start justify-between gap-2"><h4 className="font-black text-slate-800 dark:text-white">{section.sectionName}</h4>{section.pendingCount > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">{section.pendingCount} pending</span>}</div>
-      <div className="mt-3 flex items-center gap-1 text-xs text-slate-500"><Users size={13}/> {section.enrolledCount} enrolled</div>
+      <div className="flex items-start justify-between gap-2"><h4 className="font-black text-foreground dark:text-foreground">{section.sectionName}</h4>{section.pendingCount > 0 && <span className="rounded-full bg-warning-subtle px-2 py-0.5 text-[10px] font-bold text-warning-subtle-foreground dark:bg-warning-subtle dark:text-warning-subtle-foreground">{section.pendingCount} pending</span>}</div>
+      <div className="mt-3 flex items-center gap-1 text-xs text-muted-foreground"><Users size={13}/> {section.enrolledCount} enrolled</div>
     </Link>
     <ClassCode compact code={section.joinCode} subjectCode={section.subjectCode} sectionName={section.sectionName} />
-    <div className="grid gap-2 border-t border-slate-200/70 p-3 dark:border-white/10">
-      <label className="text-[10px] font-black uppercase tracking-wider text-slate-500" htmlFor={`folder-${section.id}`}>Folder</label>
-      <div className="flex gap-2"><Select id={`folder-${section.id}`} value={section.teachingFolderId || ''} disabled={moving} onChange={event => onMove(event.target.value || null)} className="min-w-0 flex-1 text-xs"><option value="">Unorganized</option>{folders.map(folder => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</Select><Btn size="sm" variant="ghost" loading={deleting} aria-label={`Delete ${section.sectionName}`} className="shrink-0 text-red-500 hover:text-red-700" onClick={onDelete}><Trash size={14}/></Btn></div>
+    <div className="grid gap-2 border-t border-border/70 p-3 dark:border-border">
+      <label className="text-[10px] font-black uppercase tracking-wider text-muted-foreground" htmlFor={`folder-${section.id}`}>Folder</label>
+      <div className="flex gap-2"><Select id={`folder-${section.id}`} value={section.teachingFolderId || ''} disabled={moving} onChange={event => onMove(event.target.value || null)} className="min-w-0 flex-1 text-xs"><option value="">Unorganized</option>{folders.map(folder => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</Select><Btn size="sm" variant="ghost" loading={deleting} aria-label={`Delete ${section.sectionName}`} className="shrink-0 text-destructive hover:text-destructive-subtle-foreground" onClick={onDelete}><Trash size={14}/></Btn></div>
     </div>
   </article>;
 }

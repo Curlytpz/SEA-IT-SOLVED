@@ -22,7 +22,7 @@ export default defineConfig({
 
     allowedHosts: [
       'localhost',
-      'tampa-couple-caribbean-interference.trycloudflare.com',
+      'chance-past-happy-fingers.trycloudflare.com',
     ],
 
     proxy: {

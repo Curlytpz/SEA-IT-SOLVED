@@ -54,7 +54,7 @@ export default function AutoCaptureSettingsPanel(){
           <FormField label="Sensitivity" hint="Low is conservative, Medium is balanced, and High responds faster."><Select value={settings.boardFillSensitivity} disabled={loading||!settings.autoCaptureEnabled||settings.autoCaptureMode!=='SMART_AUTO'} onChange={event=>update('boardFillSensitivity',event.target.value)}><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option></Select></FormField>
           <FormField label="Capture While Paused" hint="Off by default to avoid unexpected paused captures."><Toggle enabled={settings.captureWhilePaused} disabled={loading||!settings.autoCaptureEnabled} onChange={value=>update('captureWhilePaused',value)}/></FormField>
         </div>
-        <div className="mt-1 flex flex-wrap gap-2 border-t border-slate-200/80 pt-4 dark:border-white/10"><Btn loading={saving} disabled={loading} onClick={save}>Save Auto Capture Settings</Btn><Btn variant="ghost" disabled={saving} onClick={cancel}>Cancel</Btn></div>
+        <div className="mt-1 flex flex-wrap gap-2 border-t border-border/80 pt-4 dark:border-border"><Btn loading={saving} disabled={loading} onClick={save}>Save Auto Capture Settings</Btn><Btn variant="ghost" disabled={saving} onClick={cancel}>Cancel</Btn></div>
       </>}
     </Card>
   </section>;

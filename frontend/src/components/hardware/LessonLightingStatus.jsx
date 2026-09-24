@@ -25,6 +25,6 @@ export default function LessonLightingStatus({lesson,onStatusChange}){
   useEffect(()=>{onStatusChange?.(lighting);},[lighting,onStatusChange]);
 
   const ambient=Math.round(100*(lighting.filteredNormalized??lighting.ambientNormalized??0));
-  if(lighting.status==='ERROR')return <button type="button" onClick={()=>navigate('/instructor/settings#lighting-settings',{state:{fromLesson:true,returnTo:location.pathname}})} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/40"><Lightbulb size={14}/> Lighting unavailable</button>;
-  return <span className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-slate-600 dark:text-slate-300"><Lightbulb size={14} className={lighting.ledOn?'text-amber-500':'text-slate-400'}/> Lighting {lighting.mode} • {ambient}% ambient • LED {lighting.ledOn?'ON':'OFF'}</span>;
+  if(lighting.status==='ERROR')return <button type="button" onClick={()=>navigate('/instructor/settings#lighting-settings',{state:{fromLesson:true,returnTo:location.pathname}})} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-warning-subtle-foreground hover:bg-warning-subtle dark:text-warning-subtle-foreground dark:hover:bg-warning-subtle"><Lightbulb size={14}/> Lighting unavailable</button>;
+  return <span className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-muted-foreground dark:text-muted-foreground"><Lightbulb size={14} className={lighting.ledOn?'text-warning':'text-muted-foreground'}/> Lighting {lighting.mode} • {ambient}% ambient • LED {lighting.ledOn?'ON':'OFF'}</span>;
 }

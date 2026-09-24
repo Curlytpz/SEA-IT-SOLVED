@@ -211,7 +211,7 @@ export function AnswerReview({ row, onUpdate, refresh, onGrade }) {
       <div className="quiz-grade-save-actions">
         {gradeSaveStatus==='saved'&&!isEditingGrade?<><Btn size="sm" variant="success" disabled><Check size={16}/>Saved!</Btn><Btn size="sm" variant="secondary" onClick={()=>{setIsEditingGrade(true);setGradeSaveStatus('idle');}}><Pencil size={15}/>Edit Grade</Btn></>:<><Btn size="sm" disabled={Boolean(busy)||!scoreValid||!isGradeDirty} aria-busy={gradeSaveStatus==='saving'||undefined} onClick={saveGrade}>{gradeSaveStatus==='saving'?<><Spinner/>Saving...</>:row.gradedAt?'Save Changes':'Save Official Grade'}</Btn>{row.gradedAt&&<Btn size="sm" variant="secondary" disabled={Boolean(busy)} onClick={cancelGradeEdit}><X size={15}/>Cancel Edit</Btn>}</>}
       </div>
-      <p className="text-xs text-slate-500">{row.gradedAt ? 'Official grade saved.' : 'Awaiting professor review.'} The final quiz result is released when every manual question is graded.</p>
+      <p className="text-xs text-muted-foreground">{row.gradedAt ? 'Official grade saved.' : 'Awaiting professor review.'} The final quiz result is released when every manual question is graded.</p>
     </div>
     {confirmSuggestion&&<ConfirmModal title="Apply AI suggestion?" body="This will replace your current score and feedback fields. You can still review and edit them before saving." confirmLabel="Apply Suggestion" onConfirm={applySuggestion} onCancel={()=>setConfirmSuggestion(false)}/>}
     {confirmReprocess&&<ConfirmModal title="Reprocess AI analysis?" body="This will replace the current AI suggestion, but will not change the official instructor grade or feedback." confirmLabel="Reprocess" onConfirm={reprocessAnalysis} onCancel={()=>setConfirmReprocess(false)}/>}
@@ -234,11 +234,11 @@ export default function QuizSolutionReview({ quizId }) {
     return () => { active = false; };
   }, [open, quizId]);
   const row = rows.find(item => item.id === selected);
-  return <section className="min-w-0 p-4 mb-5 border rounded-lg border-slate-200 dark:border-slate-700">
+  return <section className="min-w-0 p-4 mb-5 border rounded-lg border-border dark:border-border">
     <button type="button" className="quiz-review-disclosure" aria-expanded={open} onClick={() => setOpen(value => !value)}><ChevronRight size={17} aria-hidden="true" className={open?'is-open':''}/><span>{open?'Hide submitted answers':'Review submitted answers'}</span></button>
     {open && <>{error && <Alert>{error}</Alert>}{loading ? <p className="mt-3 text-sm">Loading submissions…</p> : rows.length ? <>
       <Select className="mt-3" aria-label="Submitted answer" value={selected} onChange={event => setSelected(event.target.value)}>{rows.map(item => <option key={item.id} value={item.id}>{item.student.name} · Question {item.order} · {item.gradedAt ? 'Graded' : 'Awaiting review'}</option>)}</Select>
       {row && <AnswerReview key={row.id} row={row} refresh={refresh} onUpdate={updated => setRows(current => current.map(item => item.id === updated.id ? updated : item))}/>}
-    </> : <p className="mt-3 text-sm text-slate-500">No submitted answers requiring manual review yet.</p>}</>}
+    </> : <p className="mt-3 text-sm text-muted-foreground">No submitted answers requiring manual review yet.</p>}</>}
   </section>;
 }

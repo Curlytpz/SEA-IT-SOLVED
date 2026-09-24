@@ -54,6 +54,20 @@ assert.equal(
   'The kit costs $5.49.',
   'Ordinary currency must not be changed.',
 );
+assert.equal(
+  mathContentApi.normalizeRecognitionNumericArtifacts('The item costs 50¢.'),
+  'The item costs 50¢.',
+  'A cent sign in ordinary prose must remain unchanged.',
+);
+assert.equal(
+  mathContentApi.normalizeRecognitionNumericArtifacts(String.raw`x \to ¢`, { mathContext: true }),
+  String.raw`x \to \mathrm{c}`,
+  'A stray cent glyph inside recognized math must use a KaTeX-supported variable.',
+);
+const strayCentMath = normalizeMath(String.raw`$x \to ¢$`);
+assert.equal(strayCentMath.needsReview.length, 0);
+assert.doesNotMatch(strayCentMath.content, /¢/);
+assert.match(strayCentMath.content, /\\mathrm\{c\}/);
 
 const nestedFraction = katex.renderToString(
   String.raw`\frac{\frac{x+1}{x-1}}{\frac{x-2}{x+2}}`,
@@ -123,7 +137,10 @@ assert.deepEqual(tree.children[2].properties.className, ['math-inline', 'math-in
 assert.match(tree.children[3].properties.className.join(' '), /math-invalid-source/);
 assert.equal(tree.children[3].children[0].value, String.raw`\frac{x}{`);
 
-const css = fs.readFileSync(new URL('../../index.css', import.meta.url), 'utf8');
+const css = [
+  new URL('../../index.css', import.meta.url),
+  new URL('../../styles/learning-workspaces.css', import.meta.url),
+].map(file => fs.readFileSync(file, 'utf8')).join('\n');
 assert.match(css, /\.math-content \.math-block\s*\{[\s\S]*?overflow-x: auto;[\s\S]*?overflow-y: visible;/);
 assert.match(css, /\.math-content \.math-block:focus-visible\s*\{/);
 assert.doesNotMatch(css, /\.math-content \.math-block > \.katex-display\s*\{/, 'Shared layout must not override the KaTeX display node.');

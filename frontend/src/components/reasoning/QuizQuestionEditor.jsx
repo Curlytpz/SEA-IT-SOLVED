@@ -34,7 +34,7 @@ function MathFieldReview({ label, value }) {
   </Alert>;
 }
 
-function QuizQuestionEditor({ quizId, quizStatus, question, questionIndex, initialDraft, busy, onDraftChange, onSave, onDelete }) {
+function QuizQuestionEditor({ quizId, canEditQuiz, editingPublishedQuiz, canDelete = true, question, questionIndex, initialDraft, busy, onDraftChange, onSave, onDelete }) {
   const preparedQuestion = useMemo(() => editableQuestion(question), [question]);
   const [draft, setDraft] = useState(() => initialDraft || preparedQuestion);
   const draftRef = useRef(draft);
@@ -44,7 +44,7 @@ function QuizQuestionEditor({ quizId, quizStatus, question, questionIndex, initi
   const commitDraft = useCallback(next => {
     draftRef.current = next;
     setDraft(next);
-    onDraftChange(question.id, next);
+    onDraftChange(question.id, next, snapshot(next) !== baselineRef.current);
   }, [onDraftChange, question.id]);
 
   useEffect(() => {
@@ -57,7 +57,7 @@ function QuizQuestionEditor({ quizId, quizStatus, question, questionIndex, initi
   }, [commitDraft, preparedQuestion]);
 
   useEffect(() => {
-    onDraftChange(question.id, draftRef.current);
+    onDraftChange(question.id, draftRef.current, snapshot(draftRef.current) !== baselineRef.current);
   }, [onDraftChange, question.id]);
 
   const changed = snapshot(draft) !== baselineRef.current;
@@ -83,7 +83,7 @@ function QuizQuestionEditor({ quizId, quizStatus, question, questionIndex, initi
       <h3>Question {questionIndex + 1}</h3>
       <span>{draft.type.replaceAll('_', ' ')}</span>
     </div>
-    {['DRAFT', 'DISABLED'].includes(quizStatus) ? <>
+    {canEditQuiz ? <>
       <div className="quiz-editor-field">
         <h4>Question stem</h4>
         <MathAwareEditor unified preview={false} label={`Question ${questionIndex + 1}`} value={draft.prompt} onChange={value => patch({ prompt: value })}/>
@@ -138,18 +138,22 @@ function QuizQuestionEditor({ quizId, quizStatus, question, questionIndex, initi
         </div>}
       </div>
       <div className="quiz-editor-actions">
-        <span aria-live="polite">{changed ? 'Unsaved changes' : 'Saved'}</span>
+        <span aria-live="polite">{changed ? 'Unsaved changes' : editingPublishedQuiz ? 'No changes to this question' : 'Saved'}</span>
         <div>
-          <Btn size="sm" variant="danger" disabled={busy} onClick={() => onDelete(quizId, draft)}><Trash size={14}/> Delete</Btn>
-          <Btn size="sm" loading={busy} onClick={() => onSave(quizId, draft)}>Save Question</Btn>
+          <Btn size="sm" variant={editingPublishedQuiz ? 'ghost' : 'danger'} className={editingPublishedQuiz ? 'quiz-action-delete' : ''} disabled={busy || !canDelete} title={!canDelete ? 'A quiz must keep at least one question.' : undefined} onClick={() => onDelete(quizId, draft)}><Trash size={14}/> {editingPublishedQuiz ? 'Remove' : 'Delete'}</Btn>
+          {editingPublishedQuiz
+            ? <span className="quiz-save-from-header">Use Save Changes in the quiz header to apply this edit.</span>
+            : <Btn size="sm" loading={busy} onClick={() => onSave(quizId, draft)}>Save Question</Btn>}
         </div>
       </div>
     </> : <>
-      <GeneratedContent markdown={draft.prompt} quizText/>
+      <div className="quiz-locked-question-field" title="Click Edit Quiz to modify this published quiz.">
+        <MathAwareEditor unified preview={false} label={`Question ${questionIndex + 1}`} value={draft.prompt} disabled/>
+      </div>
       {!['SHORT_ANSWER','PROBLEM_SOLVING'].includes(draft.type) && <div className="mt-3 grid gap-2">{draft.choices.map((choice, index) => <div key={`${choice}-${index}`} className={`quiz-published-choice ${choice === draft.correctAnswer ? 'is-correct' : ''}`}><strong>{String.fromCharCode(65 + index)}.</strong><GeneratedContent markdown={choice} quizText/></div>)}</div>}
-      {draft.type === 'PROBLEM_SOLVING' ? <p className="mt-3 text-sm font-semibold">Handwritten solution · {draft.maxPoints} points · Professor grading required</p> : <p className="mt-3 text-sm font-bold text-emerald-600">Correct answer</p>}
+      {draft.type === 'PROBLEM_SOLVING' ? <p className="mt-3 text-sm font-semibold">Handwritten solution · {draft.maxPoints} points · Professor grading required</p> : <p className="mt-3 text-sm font-bold text-success-subtle-foreground">Correct answer</p>}
       <GeneratedContent markdown={draft.correctAnswer} quizText/>
-      {draft.explanation && <div className="mt-3 text-sm text-slate-600 dark:text-slate-300"><GeneratedContent markdown={draft.explanation} quizText/></div>}
+      {draft.explanation && <div className="mt-3 text-sm text-muted-foreground dark:text-muted-foreground"><GeneratedContent markdown={draft.explanation} quizText/></div>}
     </>}
   </section>;
 }

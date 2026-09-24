@@ -127,9 +127,9 @@ export default function ProductPreview() {
           <GlowCard tilt className="rounded-[22px] border-border bg-card shadow-[0_45px_130px_-60px_rgba(0,0,0,0.78)]">
             <div className="flex min-h-14 items-center gap-3 border-b border-border px-3 sm:px-5">
               <div className="hidden gap-1.5 sm:flex" aria-hidden="true">
-                <span className="w-2 h-2 rounded-full bg-white/20" />
-                <span className="w-2 h-2 rounded-full bg-white/20" />
-                <span className="w-2 h-2 rounded-full bg-white/20" />
+                <span className="w-2 h-2 rounded-full bg-card/20" />
+                <span className="w-2 h-2 rounded-full bg-card/20" />
+                <span className="w-2 h-2 rounded-full bg-card/20" />
               </div>
               <div role="tablist" aria-label="Instructor authoring workspace preview" className="landing-scroll-strip flex min-w-0 flex-1 gap-1 overflow-x-auto py-1">
                 {TABS.map(([key, label], index) => {

@@ -55,10 +55,10 @@ export default function AdvancedCalibrationOverlay({ points, onChange, onDragEnd
     </svg>
     {ADVANCED_POINT_ORDER.map(name => <button key={name} type="button" disabled={disabled}
       aria-label={`Move ${name.replace(/([A-Z])/g, ' $1').toLowerCase()} advanced calibration point`}
-      className="calibration-handle absolute" style={{ left: `${points[name].x * 100}%`, top: `${points[name].y * 100}%`, '--plane-color': '#2563eb' }}
+      className="absolute z-[5] h-11 w-11 -translate-x-1/2 -translate-y-1/2 touch-none cursor-grab rounded-full border-0 bg-transparent p-0 before:absolute before:inset-[.65rem] before:rounded-full before:border-[3px] before:border-white before:bg-[var(--plane-color,#2563eb)] before:shadow-[0_0_0_2px_var(--plane-color,#2563eb),0_3px_10px_rgba(15,23,42,.38)] before:content-[''] active:cursor-grabbing focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-1 focus-visible:outline-amber-400" style={{ left: `${points[name].x * 100}%`, top: `${points[name].y * 100}%`, '--plane-color': '#2563eb' }}
       onPointerDown={event => pointerDown(name, event)}
       onPointerMove={event => { if (event.currentTarget.hasPointerCapture(event.pointerId)) update(name, event.clientX, event.clientY); }}
       onPointerUp={onDragEnd} onPointerCancel={onDragEnd}
-      onKeyDown={event => keyDown(name, event)}><span>{LABELS[name]}</span></button>)}
+      onKeyDown={event => keyDown(name, event)}><span className="pointer-events-none absolute left-1/2 top-[2.35rem] -translate-x-1/2 whitespace-nowrap rounded-[.4rem] bg-slate-950/90 px-[.38rem] py-[.18rem] text-[.6rem] font-bold text-white">{LABELS[name]}</span></button>)}
   </div>;
 }

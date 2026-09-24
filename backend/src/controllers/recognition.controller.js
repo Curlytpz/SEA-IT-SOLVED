@@ -2,14 +2,21 @@ const asyncHandler = require('../utils/asyncHandler');
 const recognitionService = require('../services/recognition.service');
 const lessonRecognitionService = require('../services/lesson-recognition.service');
 const lessonPipelineService = require('../services/lesson-pipeline.service');
+const singleFlight = require('../utils/singleFlight');
 
 const queueCapture = asyncHandler(async (req, res) => {
-  const result = await recognitionService.queueCapture(req.params.captureId, req.user.id);
+  const result = await singleFlight.run(
+    singleFlight.key(['capture-recognition', req.user.id, req.params.captureId]),
+    () => recognitionService.queueCapture(req.params.captureId, req.user.id)
+  );
   res.status(202).json({ success: true, data: result });
 });
 
 const reprocessCapture = asyncHandler(async (req, res) => {
-  const result = await recognitionService.queueCapture(req.params.captureId, req.user.id, { reprocess: true });
+  const result = await singleFlight.run(
+    singleFlight.key(['capture-recognition', req.user.id, req.params.captureId]),
+    () => recognitionService.queueCapture(req.params.captureId, req.user.id, { reprocess: true })
+  );
   res.status(202).json({ success: true, data: result });
 });
 
@@ -19,7 +26,10 @@ const getCaptureRecognition = asyncHandler(async (req, res) => {
 });
 
 const queueLesson = asyncHandler(async (req, res) => {
-  const result = await lessonPipelineService.processCompleteLesson(req.params.lessonId, req.user.id);
+  const result = await singleFlight.run(
+    singleFlight.key(['lesson-pipeline', req.user.id, req.params.lessonId]),
+    () => lessonPipelineService.processCompleteLesson(req.params.lessonId, req.user.id)
+  );
   res.status(202).json({ success: true, data: result });
 });
 

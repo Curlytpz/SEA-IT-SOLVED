@@ -1,7 +1,7 @@
 import api from './api';
 
-export async function getLessonRecognitions(lessonId) {
-  const { data } = await api.get(`/lessons/${lessonId}/recognitions`);
+export async function getLessonRecognitions(lessonId, config = {}) {
+  const { data } = await api.get(`/lessons/${lessonId}/recognitions`, config);
   return data.data;
 }
 

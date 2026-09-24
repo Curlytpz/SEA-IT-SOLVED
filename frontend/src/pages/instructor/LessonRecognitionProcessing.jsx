@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import { Alert, Btn, EmptyState, LoadingState, PageHeader } from '../../components/ui';
-import { ArrowLeft, BookOpen, Scan } from '../../components/icons';
+import { Alert, BackButton, Btn, EmptyState, LoadingState, PageHeader } from '../../components/ui';
+import { BookOpen, Scan } from '../../components/icons';
 import CaptureAlbum from '../../components/recognition/CaptureAlbum';
 import SelectedCapturePreview from '../../components/recognition/SelectedCapturePreview';
 import CompiledLessonRecognition from '../../components/recognition/CompiledLessonRecognition';
@@ -130,7 +130,7 @@ export default function LessonRecognitionProcessing() {
   if (loading && !data) return <DashboardLayout><LoadingState text="Loading lesson workspace…" /></DashboardLayout>;
 
   return <DashboardLayout>
-    <button type="button" onClick={() => navigate(backTarget,{replace:true})} className="mb-4 inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-muted-foreground transition hover:-translate-y-0.5 hover:bg-primary-subtle hover:text-primary-subtle-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"><ArrowLeft size={17}/> {sectionOrigin ? sectionBackLabel(sectionOrigin) : 'Back to My Teaching'}</button>
+    <BackButton to={backTarget} replace>{sectionOrigin ? sectionBackLabel(sectionOrigin) : 'Back to My Teaching'}</BackButton>
     <PageHeader title="Lesson Processing Workspace" subtitle={data?.lesson ? `${data.lesson.title}${data.lesson.topic ? ` — ${data.lesson.topic}` : ''}` : 'Compile whiteboard pages with the protected lesson transcript.'}>
       <Btn variant="secondary" className="w-full sm:w-auto" disabled={reviewBlocked} onClick={() => navigate(`/instructor/lessons/${lessonId}/review${approved?'?view=workspace':''}`,{state:{...navigationState,from:processingPath}})}>{reviewLabel}</Btn>
       <Btn variant="primary" className="w-full sm:w-auto" loading={busy} disabled={busy || completeLessonRunning} onClick={compileLesson}><Scan size={16}/> {lessonRecognition ? 'Reprocess Complete Lesson' : 'Process Complete Lesson'}</Btn>
@@ -138,9 +138,9 @@ export default function LessonRecognitionProcessing() {
     {message.text && <Alert type={message.type} onClose={() => setMessage({ text: '' })}>{message.text}</Alert>}
     {error && <Alert type="error">{error}</Alert>}
     {workflow.error && <Alert type="error">{workflow.error}</Alert>}
-    <section aria-label="Lesson processing stages" className="mb-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-      <ol className="grid gap-3 sm:grid-cols-5">{stages.map(([name,status])=><li key={name}><p className="text-xs font-semibold text-slate-500">{name}</p><p className={`mt-1 text-sm font-semibold ${status==='Needs attention'?'text-amber-700 dark:text-amber-300':'text-slate-800 dark:text-slate-100'}`}>{status}</p></li>)}</ol>
-      {transcript.data?.transcription?.status==='FAILED' && <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">The recording is saved. Retry the transcript or review the available whiteboard and uploaded sources.</p>}
+    <section aria-label="Lesson processing stages" className="mb-6 rounded-xl border border-border bg-card p-4 dark:border-border dark:bg-surface">
+      <ol className="grid gap-3 sm:grid-cols-5">{stages.map(([name,status])=><li key={name}><p className="text-xs font-semibold text-muted-foreground">{name}</p><p className={`mt-1 text-sm font-semibold ${status==='Needs attention'?'text-warning-subtle-foreground dark:text-warning-subtle-foreground':'text-foreground dark:text-foreground'}`}>{status}</p></li>)}</ol>
+      {transcript.data?.transcription?.status==='FAILED' && <p className="mt-3 text-sm text-muted-foreground dark:text-muted-foreground">The recording is saved. Retry the transcript or review the available whiteboard and uploaded sources.</p>}
     </section>
 
     <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(330px,410px)]">

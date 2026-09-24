@@ -40,7 +40,7 @@ export default function FloatingIconChips() {
           <motion.div
             animate={{ y: [0, -12, 0] }}
             transition={{ repeat: Infinity, duration, delay, ease: 'easeInOut' }}
-            className="grid h-12 w-12 place-items-center rounded-2xl border border-white/10 bg-white/[0.04] text-primary shadow-[0_14px_34px_-14px_hsl(var(--primary)/0.55)] backdrop-blur-sm"
+            className="grid h-12 w-12 place-items-center rounded-2xl border border-white/10 bg-card/[0.04] text-primary shadow-[0_14px_34px_-14px_hsl(var(--primary)/0.55)] backdrop-blur-sm"
           >
             <Icon size={18} />
           </motion.div>

@@ -514,14 +514,14 @@ function VisualMathAuthoringField({ value, onChange, label, multiline, disabled 
       >
         {previewValue ? <GeneratedContent markdown={previewValue} quizText reviewIndicator={false}/> : <span className="visual-math-placeholder">Enter content</span>}
       </div>
-      {!disabled && <TooltipProvider>
+      <TooltipProvider>
         <Tooltip>
-          <TooltipTrigger render={<button type="button" className="visual-math-edit-button" aria-label="Edit math" title="Edit math" onClick={openEditor} onPointerEnter={() => loadMathLive().catch(() => {})}/> }>
+          <TooltipTrigger render={<button type="button" className="visual-math-edit-button" disabled={disabled} aria-label={disabled ? `${label} editing locked` : 'Edit math'} title={disabled ? 'Click Edit Quiz to modify this published quiz.' : 'Edit math'} onClick={openEditor} onPointerEnter={() => { if (!disabled) loadMathLive().catch(() => {}); }}/> }>
             <Sigma size={18}/>
           </TooltipTrigger>
-          <TooltipContent>Edit math</TooltipContent>
+          <TooltipContent>{disabled ? 'Click Edit Quiz to modify this published quiz.' : 'Edit math'}</TooltipContent>
         </Tooltip>
-      </TooltipProvider>}
+      </TooltipProvider>
     </div>
 
     <Dialog open={open} onOpenChange={changeOpen}>

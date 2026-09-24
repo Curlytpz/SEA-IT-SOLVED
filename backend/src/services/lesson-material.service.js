@@ -3,6 +3,7 @@ const pool = require('../db/pool');
 const AppError = require('../utils/AppError');
 const { lessonMaterialStorage } = require('../storage');
 const { validateMaterialFile } = require('../utils/lessonMaterialFile');
+const { isUsableRecognizedText } = require('../recognition/LessonMaterialResult');
 const {
   GEMINI_RECOGNITION_MODEL,
   RECOGNITION_PROVIDER,
@@ -74,7 +75,11 @@ async function inspectPdf(buffer) {
       const page = await document.getPage(number);
       const content = await page.getTextContent();
       const text = content.items.map(item => item.str || '').join(' ').replace(/\s+/g, ' ').trim();
-      pages.push({ pageNumber: number, text, reliable: text.length >= 24 });
+      pages.push({
+        pageNumber: number,
+        text,
+        reliable: isUsableRecognizedText(text, { minCharacters: 24 }),
+      });
     }
     return pages;
   } catch (error) {
@@ -331,5 +336,5 @@ async function recoverStaleAttempts(timeoutMs) {
 
 module.exports = {
   upload, list, openFile, remove, reprocess, ownedLesson,
-  claimNextAttempt, getAttemptSource, readBuffer, completeAttempt, failAttempt, recoverStaleAttempts,
+  inspectPdf, claimNextAttempt, getAttemptSource, readBuffer, completeAttempt, failAttempt, recoverStaleAttempts,
 };

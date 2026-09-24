@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const rateLimit = require('express-rate-limit');
+const { createRateLimiter } = require('../middleware/rateLimit');
 const authenticate = require('../middleware/authenticate');
 const { authorize, authorizeActive } = require('../middleware/authorize');
 const upload = require('../middleware/solutionSubmissionUpload');
@@ -7,9 +7,10 @@ const controller = require('../controllers/solution-activity.controller');
 
 const instructor = [authenticate, authorizeActive('INSTRUCTOR')];
 const student = [authenticate, authorize('STUDENT')];
-const analysisLimiter = rateLimit({
+const analysisLimiter = createRateLimiter({
+  name: 'solution-activity-analysis',
   windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false,
-  message: { success: false, error: 'Too many solution-analysis requests. Please try again later.' },
+  message: 'Too many solution-analysis requests. Please try again later.',
 });
 
 router.get('/lessons/:lessonId/solution-activities', ...instructor, controller.listInstructor);

@@ -12,17 +12,72 @@ const quizRow = status => ({
 });
 
 async function verifyStatusAndOwnership() {
+  const originalPublishedAt = new Date('2026-01-02T03:04:05.000Z').toISOString();
+  let currentStatus = 'PUBLISHED';
+  let closedAt = null;
+  let updateCount = 0;
   pool.query = async (sql, values) => {
-    if (sql.includes('UPDATE lesson_quizzes')) return { rows: [quizRow(values[2])] };
+    if (sql.includes('UPDATE lesson_quizzes')) {
+      updateCount += 1;
+      assert.match(sql, /status=\$3::varchar/);
+      assert.match(sql, /CASE WHEN \$4::boolean/);
+      assert.match(sql, /status=\$5::varchar/);
+      assert.equal(typeof values[3], 'boolean');
+      if (values[4] !== currentStatus) return { rows: [] };
+      currentStatus = values[2];
+      closedAt = values[3] ? new Date().toISOString() : null;
+      return { rows: [{ ...quizRow(currentStatus), published_at: originalPublishedAt, closed_at: closedAt }] };
+    }
     if (sql.includes('lesson_quiz_questions')) return { rows: [] };
+    if (sql.includes('SELECT status')) return { rows: [{ status: currentStatus }] };
     return { rows: [] };
   };
-  assert.equal((await service.setQuizStatus('quiz-1', 'owner-1', 'DISABLED')).status, 'DISABLED');
-  assert.equal((await service.setQuizStatus('quiz-1', 'owner-1', 'PUBLISHED')).status, 'PUBLISHED');
+  const disabled = await service.setQuizStatus('quiz-1', 'owner-1', 'DISABLED');
+  assert.equal(disabled.status, 'DISABLED');
+  assert.equal(disabled.publishedAt, originalPublishedAt, 'Disabling preserves the original publication timestamp.');
+  assert.ok(closedAt, 'Disabling records a close timestamp.');
+  const enabled = await service.setQuizStatus('quiz-1', 'owner-1', 'PUBLISHED');
+  assert.equal(enabled.status, 'PUBLISHED');
+  assert.equal(enabled.publishedAt, originalPublishedAt, 'Re-enabling preserves the original publication timestamp.');
+  assert.equal(closedAt, null, 'Re-enabling clears the close timestamp.');
+
+  const updatesBeforeInvalidStatus = updateCount;
+  await assert.rejects(service.setQuizStatus('quiz-1', 'owner-1', 'DRAFT'), error => error.statusCode === 400);
+  assert.equal(updateCount, updatesBeforeInvalidStatus, 'Invalid status is rejected before SQL executes.');
 
   pool.query = async () => ({ rows: [] });
   await assert.rejects(service.setQuizStatus('quiz-2', 'other-owner', 'DISABLED'), error => error.statusCode === 404);
-  await assert.rejects(service.setQuizStatus('quiz-1', 'owner-1', 'DRAFT'), error => error.statusCode === 400);
+}
+
+async function verifyDraftPublication() {
+  const question = {
+    id: 'question-1', quiz_id: 'quiz-1', question_order: 1, question_type: 'MULTIPLE_CHOICE',
+    topic: 'Limits', difficulty: 'MEDIUM', prompt: 'What is 1 + 1?', choices: ['1', '2', '3', '4'],
+    correct_answer: '2', explanation: 'One plus one is two.', source_references: [], manual_grading: false,
+    max_points: 1, problem_settings: {},
+  };
+  let committed = false;
+  const client = {
+    async query(sql, values) {
+      if (sql === 'BEGIN') return { rows: [] };
+      if (sql === 'COMMIT') { committed = true; return { rows: [] }; }
+      if (sql === 'ROLLBACK') return { rows: [] };
+      if (sql.includes('SELECT * FROM lesson_quizzes')) return { rows: [quizRow('DRAFT')] };
+      if (sql.includes('SELECT * FROM lesson_quiz_questions')) return { rows: [question] };
+      if (sql.includes('UPDATE lesson_quiz_questions')) return { rows: [{
+        ...question, prompt: values[1], choices: JSON.parse(values[2]), correct_answer: values[3], explanation: values[4],
+      }] };
+      if (sql.includes("SET status='PUBLISHED'")) return { rows: [quizRow('PUBLISHED')] };
+      throw new Error(`Unexpected SQL in draft publication test: ${sql}`);
+    },
+    release() {},
+  };
+  pool.connect = async () => client;
+  const published = await service.publishQuiz('quiz-1', 'owner-1');
+  assert.equal(published.status, 'PUBLISHED');
+  assert.ok(published.publishedAt);
+  assert.equal(published.questions.length, 1);
+  assert.equal(committed, true);
 }
 
 function deletionClient(attemptCount, { ownerId = 'owner-1', deleteRowCount = 1, failOn = '' } = {}) {
@@ -112,6 +167,7 @@ async function verifyDeletionSafety() {
 
 (async () => {
   try {
+    await verifyDraftPublication();
     await verifyStatusAndOwnership();
     await verifyDeletionSafety();
     console.log('Quiz management verification passed.');

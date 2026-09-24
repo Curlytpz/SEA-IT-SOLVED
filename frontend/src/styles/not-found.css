@@ -1,0 +1,32 @@
+/* The 404 scene keeps only its multi-layer theme backgrounds and inline SVG grain. */
+.not-found-page {
+  background:
+    radial-gradient(circle at 50% 27%, hsl(172 67% 74% / .24), transparent 36%),
+    radial-gradient(circle at 78% 82%, hsl(187 70% 78% / .28), transparent 43%),
+    radial-gradient(circle at 48% 58%, hsl(var(--card) / .7), transparent 42%),
+    hsl(var(--background));
+}
+
+.dark .not-found-page {
+  background:
+    radial-gradient(circle at 48% 24%, hsl(174 63% 32% / .23), transparent 38%),
+    radial-gradient(circle at 80% 79%, hsl(185 64% 28% / .2), transparent 44%),
+    radial-gradient(circle at 50% 54%, hsl(var(--surface) / .5), transparent 43%),
+    hsl(var(--background));
+}
+
+.not-found-grain {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.88' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+  mix-blend-mode: multiply;
+  opacity: .046;
+}
+
+.dark .not-found-grain {
+  mix-blend-mode: soft-light;
+  opacity: .034;
+}

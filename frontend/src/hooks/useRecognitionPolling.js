@@ -6,23 +6,25 @@ export default function useRecognitionPolling(lessonId) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const activeRef = useRef(true);
-  const requestRef = useRef(false);
+  const requestRef = useRef(null);
 
   const refresh = useCallback(async ({ quiet = false } = {}) => {
     if (!lessonId || requestRef.current) return;
-    requestRef.current = true;
+    const controller = new AbortController();
+    requestRef.current = controller;
     if (!quiet) setLoading(true);
     try {
-      const next = await getLessonRecognitions(lessonId);
+      const next = await getLessonRecognitions(lessonId, { signal: controller.signal });
       if (activeRef.current) {
         setData(next);
         setError('');
       }
     } catch (requestError) {
-      if (activeRef.current) setError(requestError.response?.data?.error || 'Unable to load whiteboard processing.');
+      if (activeRef.current && requestError.code !== 'ERR_CANCELED') setError(requestError.response?.data?.error || 'Unable to load whiteboard processing.');
     } finally {
-      requestRef.current = false;
-      if (activeRef.current && !quiet) setLoading(false);
+      const isCurrent = requestRef.current === controller;
+      if (isCurrent) requestRef.current = null;
+      if (isCurrent && activeRef.current && !quiet) setLoading(false);
     }
   }, [lessonId]);
 
@@ -36,7 +38,7 @@ export default function useRecognitionPolling(lessonId) {
   useEffect(() => {
     activeRef.current = true;
     refresh();
-    return () => { activeRef.current = false; };
+    return () => { activeRef.current = false; requestRef.current?.abort(); requestRef.current = null; };
   }, [refresh]);
 
   const hasRunningJobs = ['PENDING', 'PROCESSING'].includes(data?.lessonRecognition?.status) || data?.items?.some(item => ['PENDING', 'PROCESSING'].includes(item.recognition?.status));

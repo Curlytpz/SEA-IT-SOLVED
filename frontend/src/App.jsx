@@ -96,6 +96,7 @@ function AppRoutes() {
         <Route path="/student" element={<ProtectedRoute roles={['STUDENT']}><StudentDashboard /></ProtectedRoute>} />
         <Route path="/student/join-section" element={<ProtectedRoute roles={['STUDENT']}><StudentJoinSection /></ProtectedRoute>} />
         <Route path="/student/classes" element={<ProtectedRoute roles={['STUDENT']}><StudentClasses /></ProtectedRoute>} />
+        <Route path="/student/classes/:sectionId" element={<ProtectedRoute roles={['STUDENT']}><StudentClasses /></ProtectedRoute>} />
         <Route path="/student/lessons/:lessonId" element={<ProtectedRoute roles={['STUDENT']}><StudentLesson /></ProtectedRoute>} />
         <Route path="/student/attempts/:attemptId" element={<ProtectedRoute roles={['STUDENT']}><StudentQuizAttempt /></ProtectedRoute>} />
         <Route path="/student/results" element={<ProtectedRoute roles={['STUDENT']}><StudentQuizHistory /></ProtectedRoute>} />

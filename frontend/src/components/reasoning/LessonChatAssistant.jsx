@@ -5,6 +5,8 @@ import { Alert, Btn, ConfirmModal, Input } from '../ui';
 import AiAssistantAvatar from './AiAssistantAvatar';
 import GeneratedContent from './GeneratedContent';
 import LessonChatHistory from './LessonChatHistory';
+import QuizDraftPreview from './QuizDraftPreview';
+import { quizDraftPresentation } from '../../utils/quizDraftResponse';
 import '../../../../shared/quizEditTargeting.cjs';
 import { deleteLessonChatConversation, generateQuizFromLessonChat, getLessonChat, sendLessonChatMessage, undoLastLessonEdit } from '../../services/lessonChatApi';
 
@@ -135,7 +137,7 @@ function restoredQuizOptions(messages) {
   };
 }
 
-export default function LessonChatAssistant({ lessonId, lessonTitle, materials, selectedMaterialId, documentPageContext, onMaterialsUpdated, onEditStateChange, onQuizCreated, onReviewQuiz, onQuizUpdated }) {
+export default function LessonChatAssistant({ lessonId, lessonTitle, materials, quizzes = [], selectedMaterialId, documentPageContext, onMaterialsUpdated, onEditStateChange, onQuizCreated, onReviewQuiz, onQuizUpdated }) {
   const reduceMotion = useReducedMotion();
   const [messages, setMessages] = useState([]);
   const [conversations, setConversations] = useState([]);
@@ -166,6 +168,10 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
   const taskTimersRef = useRef([]);
   const requestInFlightRef = useRef(false);
   const suggestedActions = useMemo(() => GENERAL_ACTIONS, []);
+  const displayMessages = useMemo(() => messages.map(message => ({
+    ...message,
+    quizPresentation: quizDraftPresentation(message, quizzes),
+  })), [messages, quizzes]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -408,7 +414,10 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
       });
       upsertConversation(result);
       setMessages(current => current.map(item => item.localId === optimisticId ? { ...item, pending: false, failed: false } : item));
-      const appendResultMessage = () => setMessages(current => [...current, result.message]);
+      const resultMessage = result.quiz
+        ? { ...result.message, quiz: result.quiz, quizId: result.quiz.id }
+        : result.message;
+      const appendResultMessage = () => setMessages(current => [...current, resultMessage]);
       if (result.requiresQuizOptions) {
         appendResultMessage();
         const draft=result.quizDraft||{};
@@ -507,7 +516,11 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
       setDocumentTask(current => current ? { ...current, status: 'completed', progress: 100, detail: '✓ Update complete', stages: current.stages.map(stage => ({ ...stage, status: 'completed' })) } : current);
       if (!reduceMotion) await new Promise(resolve => window.setTimeout(resolve, 520));
       setDocumentTask(null);
-      setMessages(current => [...current, result.message]);
+      const resultMessage = result.quiz
+        ? { ...result.message, quiz: result.quiz, quizId: result.quiz.id }
+        : result.message;
+      setMessages(current => [...current, resultMessage]);
+      if (result.quiz) onQuizUpdated?.(result.quiz);
       if (result.quizCreated) onQuizCreated?.();
       showActivity('Quiz draft created');
     } catch (nextError) {
@@ -622,7 +635,7 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
               </motion.div>}
             </AnimatePresence>
             {loading && <div className="lesson-chat-loading"><AiAssistantAvatar state="thinking" size="sm"/><span>Loading conversation...</span></div>}
-            {messages.map((message, index) => {
+            {displayMessages.map((message, index) => {
               const userMessage = message.role === 'USER';
               const author = userMessage ? 'You' : message.messageType === 'EDIT' ? 'Document Editor' : 'Assistant';
               return <motion.article
@@ -636,9 +649,10 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
                 {!userMessage && <AiAssistantAvatar state={activity && index === messages.length - 1 ? 'done' : 'idle'} size="sm"/>}
                 <div className="lesson-chat-message-content">
                   {userMessage && <p className="lesson-chat-message-author">{author}</p>}
-                  <GeneratedContent markdown={message.content} assistantText={!userMessage}/>
+                  <GeneratedContent markdown={message.quizPresentation?.messageText || message.content} assistantText={!userMessage}/>
+                  {message.quizPresentation && <QuizDraftPreview quiz={message.quizPresentation.quiz} onOpen={onReviewQuiz}/>}
                   {message.sourceReferences?.length > 0 && <details><summary>Sources · {message.sourceReferences.length}</summary><ul>{message.sourceReferences.map((source, sourceIndex) => <li key={`${source}-${sourceIndex}`}>{source}</li>)}</ul></details>}
-                  {message.action === 'QUIZ_CREATED' && <Btn size="sm" variant="secondary" onClick={onReviewQuiz}>Open Quiz Draft</Btn>}
+                  {message.action === 'QUIZ_CREATED' && !message.quizPresentation && <Btn size="sm" variant="secondary" onClick={onReviewQuiz}>Open Quiz Draft</Btn>}
                 </div>
               </motion.article>;
             })}

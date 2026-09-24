@@ -1,7 +1,7 @@
 import api from './api';
 
-export async function getLessonTranscription(lessonId) {
-  const { data } = await api.get(`/lessons/${lessonId}/transcription`);
+export async function getLessonTranscription(lessonId, config = {}) {
+  const { data } = await api.get(`/lessons/${lessonId}/transcription`, config);
   return data.data;
 }
 

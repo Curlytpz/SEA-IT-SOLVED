@@ -7,6 +7,8 @@ const productionEnvironment = { DB_PASSWORD: 'configured', TRUST_PROXY_HOPS: '1'
 function productionConfig(overrides = {}) {
   return {
     NODE_ENV: 'production',
+    DB_HOST: 'db.example.edu',
+    DB_SSL: false,
     JWT_SECRET: 'x'.repeat(32),
     FRONTEND_URL: 'https://app.example.edu',
     GEMINI_API_KEY: 'configured',
@@ -28,6 +30,21 @@ test('production configuration fails closed on unsafe secrets, URLs, mail, and p
 
 test('complete production configuration passes validation', () => {
   assert.doesNotThrow(() => validateProductionConfiguration(productionConfig(), productionEnvironment));
+});
+
+test('production Supabase configuration requires database SSL', () => {
+  const supabaseConfig = productionConfig({
+    DB_HOST: 'aws-0-ap-southeast-1.pooler.supabase.com',
+  });
+
+  assert.throws(
+    () => validateProductionConfiguration(supabaseConfig, productionEnvironment),
+    /DB_SSL=true is required for Supabase PostgreSQL connections/
+  );
+  assert.doesNotThrow(() => validateProductionConfiguration({
+    ...supabaseConfig,
+    DB_SSL: true,
+  }, productionEnvironment));
 });
 
 test('production resend configuration requires its API key and sender', () => {

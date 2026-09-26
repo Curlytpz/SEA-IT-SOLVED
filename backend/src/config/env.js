@@ -24,10 +24,17 @@ const mediaResolutionMap = {
   HIGH: 'MEDIA_RESOLUTION_HIGH',
 };
 const configuredMediaResolution = String(process.env.GEMINI_MEDIA_RESOLUTION || 'HIGH').toUpperCase();
+const configuredDbSsl = String(process.env.DB_SSL || '').trim().toLowerCase();
+if (configuredDbSsl && !['true', 'false'].includes(configuredDbSsl)) {
+  throw new Error('DB_SSL must be true or false.');
+}
 
 module.exports = {
   PORT:         parseInt(process.env.PORT || '4000', 10),
   NODE_ENV:     process.env.NODE_ENV      || 'development',
+  DB_HOST:      process.env.DB_HOST       || 'localhost',
+  DB_SSL:       configuredDbSsl === 'true',
+  DB_SSL_CA_PATH: process.env.DB_SSL_CA_PATH || '',
   JWT_SECRET:   process.env.JWT_SECRET,
   JWT_EXPIRES:  process.env.JWT_EXPIRES_IN || '7d',
   FRONTEND_URL: process.env.FRONTEND_URL   || 'http://localhost:5173',
@@ -141,6 +148,9 @@ function validateProductionConfiguration(config, environment = process.env) {
     problems.push('FRONTEND_URL must be the public HTTPS frontend URL');
   }
   if (!String(environment.DB_PASSWORD || '')) problems.push('DB_PASSWORD is required');
+  if (/\.supabase\.com$/i.test(String(config.DB_HOST || '').trim()) && config.DB_SSL !== true) {
+    problems.push('DB_SSL=true is required for Supabase PostgreSQL connections');
+  }
   if (!/^\d+$/.test(String(environment.TRUST_PROXY_HOPS || ''))) problems.push('TRUST_PROXY_HOPS must be explicitly configured');
   if (!String(config.GEMINI_API_KEY || '')) problems.push('GEMINI_API_KEY is required');
   const mailProvider = String(config.MAIL_PROVIDER || '').trim().toLowerCase();

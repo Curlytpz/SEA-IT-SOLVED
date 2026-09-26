@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const { geminiLessonJsonSchema } = require('../lessonGeminiSchema');
 const { normalizeLessonCompilation } = require('../LessonRecognitionNormalizer');
 const { RecognitionProviderError, mapProviderError } = require('../ProviderErrorMapper');
@@ -14,6 +15,66 @@ const USER_INSTRUCTION = `Extract all ordered whiteboard pages. Page numbers cor
 Return exactly one page entry for every image, with sequential pageNumber values starting at 1.`;
 
 function wait(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+function balancedJsonObjects(text) {
+  const candidates=[];
+  for(let start=0;start<text.length;start+=1){
+    if(text[start]!=='{')continue;
+    let depth=0,inString=false,escaped=false;
+    for(let index=start;index<text.length;index+=1){
+      const character=text[index];
+      if(inString){
+        if(escaped)escaped=false;
+        else if(character==='\\')escaped=true;
+        else if(character==='"')inString=false;
+        continue;
+      }
+      if(character==='"'){inString=true;continue;}
+      if(character==='{')depth+=1;
+      else if(character==='}'&&--depth===0){candidates.push(text.slice(start,index+1));break;}
+    }
+  }
+  return candidates.sort((left,right)=>right.length-left.length);
+}
+
+function structuredJsonCandidates(value) {
+  const text=String(value||'').trim();
+  const candidates=[text];
+  const fenced=text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  if(fenced)candidates.push(fenced[1].trim());
+  candidates.push(...balancedJsonObjects(text));
+  return [...new Set(candidates.filter(Boolean))];
+}
+
+function parseStructuredJson(value) {
+  let lastError;
+  for(const candidate of structuredJsonCandidates(value)){
+    try{
+      const parsed=JSON.parse(candidate);
+      if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))return parsed;
+    }catch(error){lastError=error;}
+  }
+  const error=new SyntaxError(lastError?.message||'The provider response did not contain a JSON object.');
+  error.code='INVALID_PROVIDER_OUTPUT';error.recognitionStage='json_parse';
+  throw error;
+}
+
+function structuredOutputDiagnostic(error,value) {
+  const text=String(value||'');
+  const issues=Array.isArray(error?.issues)?error.issues.slice(0,10).map(issue=>({
+    path:issue.path?.join('.')||'(root)',code:issue.code,expected:issue.expected,
+  })):[];
+  return {
+    stage:error?.recognitionStage||(issues.length?'schema_validation':'normalization'),
+    errorName:error?.name||'Error',errorCode:error?.code||'INVALID_PROVIDER_OUTPUT',
+    responseBytes:Buffer.byteLength(text,'utf8'),responseSha256:crypto.createHash('sha256').update(text).digest('hex').slice(0,16),
+    fenced:/^```/i.test(text.trim()),issueCount:Array.isArray(error?.issues)?error.issues.length:0,issues,
+  };
+}
+
+function logInvalidStructuredOutput(error,value) {
+  console.error('[Recognition] Invalid structured lesson response',structuredOutputDiagnostic(error,value));
+}
 
 class GeminiLessonCompilationProvider {
   constructor({ apiKey, model, mediaResolution, timeoutMs, filePollIntervalMs = 2000, fileReadyTimeoutMs = 120000 }) {
@@ -56,8 +117,13 @@ class GeminiLessonCompilationProvider {
         mediaResolution:this.mediaResolution,abortSignal:controller.signal,
       }});
       if(!response.text) throw new RecognitionProviderError('PROVIDER_BLOCKED','The recognition provider returned no content.',false);
-      let parsed; try{parsed=JSON.parse(response.text);}catch(error){error.code='INVALID_PROVIDER_OUTPUT';throw error;}
-      return {normalized:normalizeLessonCompilation(parsed,captures),sanitizedOutput:parsed,providerVersion:this.model};
+      let parsed;
+      try{parsed=parseStructuredJson(response.text);}
+      catch(error){logInvalidStructuredOutput(error,response.text);throw error;}
+      let normalized;
+      try{normalized=normalizeLessonCompilation(parsed,captures);}
+      catch(error){error.recognitionStage=Array.isArray(error?.issues)?'schema_validation':'normalization';logInvalidStructuredOutput(error,response.text);throw error;}
+      return {normalized,sanitizedOutput:parsed,providerVersion:this.model};
     } catch(error) { throw mapProviderError(error); }
     finally {
       clearTimeout(timeout);
@@ -68,3 +134,5 @@ class GeminiLessonCompilationProvider {
 }
 
 module.exports = GeminiLessonCompilationProvider;
+module.exports.parseStructuredJson = parseStructuredJson;
+module.exports.structuredOutputDiagnostic = structuredOutputDiagnostic;

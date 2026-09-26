@@ -1,3 +1,5 @@
+import { validateRecordingBlob } from '../../utils/audioRecording.js';
+
 const MIME_CANDIDATES = [
   'audio/webm;codecs=opus',
   'audio/webm',
@@ -121,9 +123,16 @@ export default class BrowserMicrophoneAdapter {
       const recorder=this.recorder;const completedAt=new Date();
       if(recorder.state==='recording')this.activeDurationMs+=performance.now()-this.activeStartedAt;
       if(this.openPause){this.openPause.resumedAt=completedAt.toISOString();this.pauses.push(this.openPause);this.openPause=null;}
-      recorder.onerror=()=>reject(new Error('The recording could not be finalized.'));
-      recorder.onstop=()=>{const blob=new Blob(this.chunks,{type:recorder.mimeType||this.supportedMimeType()||'audio/webm'});if(!blob.size)return reject(new Error('The recording could not be finalized.'));this.recorder=null;this.chunks=[];this.status='READY';resolve({blob,mimeType:blob.type,durationMs:Math.max(0,Math.round(this.activeDurationMs)),startedAt:this.startedAt.toISOString(),completedAt:completedAt.toISOString(),pauses:[...this.pauses]});};
-      try{recorder.stop();}catch{reject(new Error('The recording could not be finalized.'));}
+      recorder.onerror=()=>{this.stop();reject(new Error('The recording could not be finalized.'));};
+      recorder.onstop=()=>{
+        const blob=new Blob(this.chunks,{type:recorder.mimeType||this.supportedMimeType()||'audio/webm'});
+        this.recorder=null;this.chunks=[];this.status='READY';
+        try{validateRecordingBlob(blob);}
+        catch(error){this.stop();reject(error);return;}
+        resolve({blob,mimeType:blob.type,durationMs:Math.max(0,Math.round(this.activeDurationMs)),startedAt:this.startedAt.toISOString(),completedAt:completedAt.toISOString(),pauses:[...this.pauses]});
+      };
+      try{recorder.requestData?.();recorder.stop();}
+      catch{this.stop();reject(new Error('The recording could not be finalized.'));}
     });
   }
 

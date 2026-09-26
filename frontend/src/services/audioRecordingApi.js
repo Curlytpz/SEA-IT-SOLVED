@@ -1,17 +1,8 @@
 import api from './api';
-
-function extensionFor(blob){
-  if(blob.type.includes('ogg'))return 'ogg';
-  if(blob.type.includes('wav'))return 'wav';
-  return 'webm';
-}
+import { buildAudioRecordingFormData } from '../utils/audioRecording.js';
 
 export async function createAudioRecording(lessonId,payload){
-  const form=new FormData();
-  form.append('audio',payload.blob,`lesson-recording.${extensionFor(payload.blob)}`);
-  for(const [key,value] of Object.entries(payload.metadata)){
-    if(value!==undefined&&value!==null)form.append(key,key==='pauses'?JSON.stringify(value):String(value));
-  }
+  const form=buildAudioRecordingFormData(payload);
   const {data}=await api.post(`/lessons/${lessonId}/audio-recording`,form,{headers:{'Content-Type':'multipart/form-data'}});
   return data.data.recording;
 }

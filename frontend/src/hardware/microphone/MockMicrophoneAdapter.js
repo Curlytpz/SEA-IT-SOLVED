@@ -16,7 +16,9 @@ export default class MockMicrophoneAdapter extends BrowserMicrophoneAdapter {
     if (this.generatorContext.state==='suspended') await this.generatorContext.resume();
     const destination = this.generatorContext.createMediaStreamDestination();
     const gain = this.generatorContext.createGain();
-    gain.gain.value = 0;
+    // A zero-gain source lets Opus collapse a long demo recording into a
+    // header-only WebM. Keep the simulated signal quiet but encodable.
+    gain.gain.value = 0.025;
     this.oscillator = this.generatorContext.createOscillator();
     this.oscillator.connect(gain).connect(destination);
     this.oscillator.start();

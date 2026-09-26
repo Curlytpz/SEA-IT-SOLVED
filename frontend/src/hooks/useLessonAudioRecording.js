@@ -91,7 +91,7 @@ export default function useLessonAudioRecording(lesson){
       const saved=await createAudioRecording(lesson.id,{blob:result.blob,metadata:{hardwareMode:current.mode||settings.microphoneMode,sourceKey:current.sourceKey||settings.microphoneSourceKey,durationMs:result.durationMs,startedAt:result.startedAt,completedAt:result.completedAt,pauses:result.pauses}});
       setSavedRecording(saved);setPendingResult(null);pendingRef.current=null;await lessonAudioSession.discard();
       setMessage({text:'Lesson audio recording saved.',type:'success'});return saved;
-    }catch(err){const friendly=new Error(err.response?.data?.error||'Your lesson recording could not be saved.');friendly.audioSaveFailure=true;setMessage({text:friendly.message,type:'error'});throw friendly;}
+    }catch(err){const friendly=new Error(err.code==='INVALID_AUDIO_RECORDING'?err.message:(err.response?.data?.error||'Your lesson recording could not be saved.'));friendly.audioSaveFailure=true;setMessage({text:friendly.message,type:'error'});throw friendly;}
     finally{setUploading(false);}
   },[lesson?.id,settings]);
 
@@ -105,7 +105,7 @@ export default function useLessonAudioRecording(lesson){
       if(result){pendingRef.current=result;setPendingResult(result);}
       if(!result)return null;
       return await uploadResult(result);
-    }catch(err){if(err.audioSaveFailure)throw err;const friendly=new Error('Your lesson recording could not be saved.');friendly.audioSaveFailure=true;setMessage({text:friendly.message,type:'error'});throw friendly;}
+    }catch(err){if(err.audioSaveFailure)throw err;const friendly=new Error(err.code==='INVALID_AUDIO_RECORDING'?err.message:'Your lesson recording could not be saved.');friendly.audioSaveFailure=true;setMessage({text:friendly.message,type:'error'});throw friendly;}
   },[savedRecording,lesson?.id,uploadResult]);
 
   const discardForEnd=useCallback(async()=>{await lessonAudioSession.discard();pendingRef.current=null;setPendingResult(null);setMessage({text:'Lesson ended without saving the audio recording.',type:'warning'});},[]);

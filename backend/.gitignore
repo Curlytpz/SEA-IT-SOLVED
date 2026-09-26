@@ -6,8 +6,8 @@ node_modules/
 .env.*
 !.env.example
 
-# Runtime / uploads
-storage/
+# Runtime / uploads (repository-root relative; do not ignore src/storage code)
+/storage/
 
 # QA artifacts
 .demo-qa/

@@ -4,6 +4,11 @@ const bcrypt = require('bcryptjs');
 const config = require('../src/config/env');
 const pool = require('../src/db/pool');
 const { signToken } = require('../src/utils/jwt');
+const fs = require('node:fs');
+const path = require('node:path');
+const emailService = require('../src/services/email.service');
+const verificationDeliveries = [];
+emailService.sendStudentVerificationEmail = async payload => { verificationDeliveries.push(payload); return { provider: 'test' }; };
 
 async function request(base, method, path, { body, token } = {}) {
   const response = await fetch(`${base}${path}`, {
@@ -18,6 +23,7 @@ async function request(base, method, path, { body, token } = {}) {
 }
 
 async function main() {
+  await pool.query(fs.readFileSync(path.join(__dirname, '../src/db/migration_student_email_verification.sql'), 'utf8'));
   const suffix = crypto.randomBytes(6).toString('hex');
   const password = 'CorrectPass123!';
   const passwordHash = await bcrypt.hash(password, 4);
@@ -56,8 +62,11 @@ async function main() {
     if (studentId) userIds.push(studentId);
     assert.equal(studentRegistration.status, 201);
     assert.equal(studentRegistration.body.data.user.role, 'STUDENT');
-    assert.equal(studentRegistration.body.data.user.status, 'ACTIVE');
+    assert.equal(studentRegistration.body.data.user.status, 'PENDING');
     assert.equal(studentRegistration.body.data.token, undefined);
+    const verificationToken = new URL(verificationDeliveries.at(-1).verificationUrl).searchParams.get('token');
+    const verification = await request(base, 'POST', '/auth/verify-email', { body: { token: verificationToken } });
+    assert.equal(verification.status, 200);
 
     const register = email => request(base, 'POST', '/auth/register/instructor', {
       body: { firstName: 'Approval', lastName: 'Test', email, password },
@@ -154,7 +163,7 @@ async function main() {
     console.log('PASS admin approval enables a fresh instructor login, not an old token');
     console.log('PASS suspension and reactivation revoke existing instructor sessions');
     console.log('PASS rejected instructors cannot sign in');
-    console.log('PASS student registration/login and admin login remain available');
+    console.log('PASS verified student registration/login and admin login remain available');
   } finally {
     if (server) await new Promise(resolve => server.close(resolve));
     if (userIds.length) await pool.query('DELETE FROM users WHERE id=ANY($1::uuid[])', [userIds]);

@@ -230,7 +230,7 @@ async function processAttempt(attempt) {
     logRequestStarted('CAPTURE', attempt, source);
     const result = await aiProvider.run(
       () => provider.extract({ imageBuffer, mimeType: mimeFromKey(storageKey) }),
-      { provider: RECOGNITION_PROVIDER, model: GEMINI_RECOGNITION_MODEL, operationType: 'RECOGNITION_CAPTURE', jobId: attempt.id }
+      { provider: RECOGNITION_PROVIDER, model: GEMINI_RECOGNITION_MODEL, operationType: 'RECOGNITION_CAPTURE', jobId: attempt.id, userId: source.instructor_id }
     );
     result.sanitizedOutput = retainedProviderOutput(result.sanitizedOutput);
     const sourceVariant = 'CORRECTED';
@@ -258,6 +258,7 @@ async function processLessonAttempt(attempt) {
   try {
     source = await lessonRecognitionService.getAttemptSource(attempt.id);
     const images = [], pageSources = [], captureHashes = [];
+    let actualInputBytes = 0;
     for (const capture of source.captures) {
       if (!capture.corrected_storage_key) {
         throw new RecognitionProviderError('IMAGE_NOT_FOUND', 'A polygon-masked corrected capture is required for lesson recognition.', false);
@@ -265,10 +266,17 @@ async function processLessonAttempt(attempt) {
       const regionSources = [{ storageKey: capture.corrected_storage_key, mimeType: null, plane: null }];
       for (const region of regionSources) {
         if (!region.storageKey) throw new RecognitionProviderError('IMAGE_NOT_FOUND', 'A lesson capture image is unavailable.', false);
-        const buffer = await readProtectedImage(region.storageKey);
-        const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
-        captureHashes.push(`${capture.id}:${region.plane?.calibration_plane_id || 'board'}:${sha256}`);
-        images.push({ buffer, mimeType: region.mimeType || mimeFromKey(region.storageKey) });
+        images.push({
+          mimeType: region.mimeType || mimeFromKey(region.storageKey),
+          load: async () => {
+            const buffer = await readProtectedImage(region.storageKey);
+            actualInputBytes += buffer.length;
+            lessonRecognitionService.assertRecognitionBudget(source.captures.length, actualInputBytes);
+            const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
+            captureHashes.push(`${capture.id}:${region.plane?.calibration_plane_id || 'board'}:${sha256}`);
+            return buffer;
+          },
+        });
         pageSources.push({ id: region.plane?.id || capture.id, captured_at: capture.captured_at, captureId: capture.id, plane: region.plane });
       }
     }
@@ -276,7 +284,7 @@ async function processLessonAttempt(attempt) {
     logRequestStarted('LESSON', attempt, source);
     const result = await aiProvider.run(
       () => lessonProvider.compile({ images, captures: pageSources }),
-      { provider: RECOGNITION_PROVIDER, model: GEMINI_RECOGNITION_MODEL, operationType: 'LESSON_COMPILATION', jobId: attempt.id }
+      { provider: RECOGNITION_PROVIDER, model: GEMINI_RECOGNITION_MODEL, operationType: 'LESSON_COMPILATION', jobId: attempt.id, userId: source.instructor_id }
     );
     result.normalized = mergeLessonPlanePages(result.normalized, pageSources, source.captures);
     result.sanitizedOutput = retainedProviderOutput(result.sanitizedOutput);
@@ -315,7 +323,7 @@ async function processMaterialAttempt(attempt) {
       () => source.material_type === 'PDF'
         ? materialProvider.extractPdf(buffer, nativePdfPages)
         : materialProvider.extractImage(buffer, source.mime_type),
-      { provider: RECOGNITION_PROVIDER, model: GEMINI_RECOGNITION_MODEL, operationType: 'LESSON_MATERIAL', jobId: attempt.id }
+      { provider: RECOGNITION_PROVIDER, model: GEMINI_RECOGNITION_MODEL, operationType: 'LESSON_MATERIAL', jobId: attempt.id, userId: source.instructor_id }
     );
     assertRecognizableMaterialContent(result, {
       materialType: source.material_type,

@@ -12,6 +12,7 @@ const RegisterStudent = lazy(() => import('./pages/RegisterStudent'));
 const RegisterInstructor = lazy(() => import('./pages/RegisterInstructor'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const InstructorRequests = lazy(() => import('./pages/admin/InstructorRequests'));
 const AllUsers = lazy(() => import('./pages/admin/AllUsers'));
@@ -77,6 +78,7 @@ function AppRoutes() {
         <Route path="/register/instructor" element={<PublicRoute><PageTransition><RegisterInstructor /></PageTransition></PublicRoute>} />
         <Route path="/forgot-password" element={<PageTransition><ForgotPassword /></PageTransition>} />
         <Route path="/reset-password" element={<PageTransition><ResetPassword /></PageTransition>} />
+        <Route path="/verify-email" element={<PublicRoute><PageTransition><VerifyEmail /></PageTransition></PublicRoute>} />
 
         <Route path="/admin" element={<ProtectedRoute roles={['ADMIN']}><AdminDashboard /></ProtectedRoute>} />
         <Route path="/admin/instructor-requests" element={<ProtectedRoute roles={['ADMIN']}><InstructorRequests /></ProtectedRoute>} />

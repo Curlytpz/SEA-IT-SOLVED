@@ -38,7 +38,10 @@ function mapTranscriptionError(error) {
   const code = String(error?.code || '').toUpperCase();
   if (error?.name === 'AbortError' || code === 'ABORT_ERR' || /timeout|timed out|operation was aborted/i.test(details.message)) return new TranscriptionProviderError('PROVIDER_TIMEOUT', 'The transcription service timed out.', true, error);
   if (error?.code === 'UNSUPPORTED_AUDIO') return new TranscriptionProviderError('UNSUPPORTED_AUDIO', 'The lesson recording format could not be transcribed.', false, error);
-  if (error?.code === 'FFMPEG_NOT_FOUND') return new TranscriptionProviderError('AUDIO_CONVERSION_UNAVAILABLE', 'Audio conversion is not configured on the server.', false, error);
+  if (['MEDIA_TOOL_NOT_FOUND','FFMPEG_NOT_FOUND','FFPROBE_NOT_FOUND'].includes(error?.code)) return new TranscriptionProviderError('AUDIO_CONVERSION_UNAVAILABLE', 'Audio processing is not configured on the server.', false, error);
+  if (error?.code === 'AUDIO_DURATION_PROBE_FAILED') return new TranscriptionProviderError('UNSUPPORTED_AUDIO', 'The lesson recording duration could not be verified.', false, error);
+  if (error?.code === 'AUDIO_CONVERSION_TIMEOUT') return new TranscriptionProviderError('AUDIO_CONVERSION_TIMEOUT', 'Audio preparation exceeded its time limit.', false, error);
+  if (error?.code === 'AUDIO_OUTPUT_LIMIT') return new TranscriptionProviderError('AUDIO_OUTPUT_LIMIT', 'The prepared recording exceeded the server limit.', false, error);
   if (error?.code === 'AUDIO_CONVERSION_FAILED') return new TranscriptionProviderError('AUDIO_CONVERSION_FAILED', 'The lesson recording could not be prepared for transcription.', false, error);
   if (error?.code === 'ENOENT') return new TranscriptionProviderError('AUDIO_NOT_FOUND', 'The lesson recording is unavailable.', false, error);
   const { status, message } = details;

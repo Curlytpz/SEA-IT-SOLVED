@@ -52,6 +52,9 @@ const authenticate = asyncHandler(async (req, res, next) => {
   if (user.role === 'INSTRUCTOR' && user.status === 'PENDING') {
     throw new AppError('Your instructor account is awaiting admin approval.', 403, { code: 'INSTRUCTOR_PENDING' });
   }
+  if (user.role === 'STUDENT' && user.status === 'PENDING') {
+    throw new AppError('Verify your student email before accessing student features.', 403, { code: 'STUDENT_EMAIL_UNVERIFIED' });
+  }
   if (user.status === 'SUSPENDED') {
     throw new AppError('Your account has been suspended. Contact the administrator.', 403, {
       code: user.role === 'INSTRUCTOR' ? 'INSTRUCTOR_SUSPENDED' : undefined,

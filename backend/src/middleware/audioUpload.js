@@ -14,7 +14,7 @@ const upload = multer({
     destination: (_req, _file, callback) => callback(null, temporaryRoot),
     filename: (_req, _file, callback) => callback(null, crypto.randomUUID()),
   }),
-  limits: { fileSize: MAX_AUDIO_BYTES, files: 1, fields: 16 },
+  limits: { fileSize: MAX_AUDIO_BYTES, files: 1, fields: 16, fieldNestingDepth: 2, fieldArrayIndexLimit: 100 },
   fileFilter: (_req, file, callback) => {
     if (!ALLOWED_AUDIO_MIME_TYPES.has(normalizeAudioMime(file.mimetype))) {
       return callback(new AppError('Audio recording must be WebM, Ogg, or WAV.', 400));

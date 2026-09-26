@@ -9,6 +9,8 @@ module.exports = multer({
     fileSize: Math.max(LESSON_MATERIAL_IMAGE_MAX_MB, LESSON_MATERIAL_PDF_MAX_MB) * 1024 * 1024,
     files: 1,
     fields: 2,
+    fieldNestingDepth: 2,
+    fieldArrayIndexLimit: 100,
   },
   fileFilter: (_req, file, callback) => {
     if (!IMAGE_MIMES.has(file.mimetype) && file.mimetype !== PDF_MIME) {

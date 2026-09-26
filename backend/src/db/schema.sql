@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS users (
   auth_version    INTEGER      NOT NULL DEFAULT 0 CHECK (auth_version >= 0),
   role            user_role    NOT NULL,
   status          user_status  NOT NULL DEFAULT 'ACTIVE',
+  email_verified_at TIMESTAMPTZ NULL,
   successful_login_count INTEGER NOT NULL DEFAULT 0 CHECK (successful_login_count >= 0),
   created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -53,6 +54,18 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
 CREATE UNIQUE INDEX IF NOT EXISTS password_reset_tokens_hash_unique ON password_reset_tokens(token_hash);
 CREATE INDEX IF NOT EXISTS password_reset_tokens_user_active_idx ON password_reset_tokens(user_id,expires_at DESC) WHERE used_at IS NULL;
 CREATE INDEX IF NOT EXISTS password_reset_tokens_expiry_idx ON password_reset_tokens(expires_at) WHERE used_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS email_verification_tokens (
+  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash CHAR(64)    NOT NULL CHECK (token_hash ~ '^[0-9a-f]{64}$'),
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at    TIMESTAMPTZ NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS email_verification_tokens_hash_unique ON email_verification_tokens(token_hash);
+CREATE INDEX IF NOT EXISTS email_verification_tokens_user_active_idx ON email_verification_tokens(user_id,expires_at DESC) WHERE used_at IS NULL;
+CREATE INDEX IF NOT EXISTS email_verification_tokens_expiry_idx ON email_verification_tokens(expires_at) WHERE used_at IS NULL;
 
 -- ── subjects ────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS subjects (

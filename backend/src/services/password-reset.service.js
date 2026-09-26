@@ -63,10 +63,6 @@ async function requestPasswordReset({ email, role }) {
     );
     user = result.rows[0] || null;
     if (user) {
-      await client.query(
-        'UPDATE password_reset_tokens SET used_at=NOW() WHERE user_id=$1 AND used_at IS NULL',
-        [user.id]
-      );
       rawToken = crypto.randomBytes(32).toString('hex');
       expiresAt = new Date(Date.now() + config.PASSWORD_RESET_TTL_MINUTES * 60 * 1000);
       await client.query(

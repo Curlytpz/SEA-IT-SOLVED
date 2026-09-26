@@ -22,6 +22,18 @@ const resetPasswordLimiter = createRateLimiter({
   max: 10,
   message: 'Too many password reset attempts. Try again later.',
 });
+const verificationLimiter = createRateLimiter({
+  name: 'student-email-verification',
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: 'Too many email verification attempts. Try again later.',
+});
+const verificationResendLimiter = createRateLimiter({
+  name: 'student-email-verification-resend',
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: 'Too many verification email requests. Try again later.',
+});
 
 // Public routes — no authentication required
 router.post('/register/student',    authAttemptLimiter, authCtrl.registerStudent);
@@ -30,6 +42,8 @@ router.post('/login',               authAttemptLimiter, authCtrl.login);
 router.post('/forgot-password', forgotPasswordLimiter, authCtrl.forgotPassword);
 router.post('/reset-password/validate', resetPasswordLimiter, authCtrl.validateResetToken);
 router.post('/reset-password', resetPasswordLimiter, authCtrl.resetPassword);
+router.post('/verify-email', verificationLimiter, authCtrl.verifyEmail);
+router.post('/verify-email/resend', verificationResendLimiter, authCtrl.resendVerification);
 
 // Protected — requires a valid JWT and current server-side account access.
 router.get('/me', authenticate, authCtrl.getMe);

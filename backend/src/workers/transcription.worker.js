@@ -8,7 +8,7 @@ const aiProvider = require('../services/aiProvider.service');
 const GeminiSpeechTranscriptionProvider = require('../transcription/GeminiSpeechTranscriptionProvider');
 const { TranscriptionProviderError, mapTranscriptionError } = require('../transcription/transcriptionErrorMapper');
 const { materializeStorageFile, sha256File, cleanupTemporaryDirectory } = require('../utils/storageTempFile');
-const { prepareAudioForGemini } = require('../utils/audioTranscode');
+const { prepareAudioForGemini, probeAudioDuration } = require('../utils/audioTranscode');
 const {
   GEMINI_API_KEY,
   GEMINI_TRANSCRIPTION_MODEL,
@@ -20,6 +20,9 @@ const {
   TRANSCRIPTION_WORKER_ID,
   TRANSCRIPTION_TEMP_PATH,
   FFMPEG_PATH,
+  FFPROBE_PATH,
+  TRANSCRIPTION_FFMPEG_TIMEOUT_MS,
+  TRANSCRIPTION_MAX_OUTPUT_MB,
   GEMINI_FILE_POLL_INTERVAL_MS,
   GEMINI_FILE_READY_TIMEOUT_MS,
 } = require('../config/env');
@@ -76,9 +79,6 @@ async function processAttempt(attempt) {
   let source;
   try {
     source = await transcriptionService.getAttemptSource(attempt.id);
-    if (Number(source.duration_ms) > TRANSCRIPTION_MAX_AUDIO_MINUTES * 60 * 1000) {
-      throw new TranscriptionProviderError('UNSUPPORTED_AUDIO', `The lesson recording exceeds the ${TRANSCRIPTION_MAX_AUDIO_MINUTES}-minute transcription limit.`, false);
-    }
     const temporary = await materializeStorageFile(
       audioStorage, source.storage_key, extensionForMime(source.mime_type), TRANSCRIPTION_TEMP_PATH
     );
@@ -86,22 +86,33 @@ async function processAttempt(attempt) {
     if (Number(temporary.size) !== Number(source.file_size)) {
       throw new TranscriptionProviderError('AUDIO_NOT_FOUND', 'The protected recording file is incomplete.', false);
     }
+    const durationMs = await probeAudioDuration({
+      sourcePath: temporary.sourcePath,
+      ffprobePath: FFPROBE_PATH,
+      timeoutMs: Math.min(TRANSCRIPTION_FFMPEG_TIMEOUT_MS, 60000),
+    });
+    if (durationMs > TRANSCRIPTION_MAX_AUDIO_MINUTES * 60 * 1000) {
+      throw new TranscriptionProviderError('UNSUPPORTED_AUDIO', `The lesson recording exceeds the ${TRANSCRIPTION_MAX_AUDIO_MINUTES}-minute transcription limit.`, false);
+    }
     const sha256 = await sha256File(temporary.sourcePath);
     const prepared = await prepareAudioForGemini({
       sourcePath: temporary.sourcePath,
       sourceMime: source.mime_type,
       ffmpegPath: FFMPEG_PATH,
+      maxDurationSeconds: TRANSCRIPTION_MAX_AUDIO_MINUTES * 60,
+      timeoutMs: TRANSCRIPTION_FFMPEG_TIMEOUT_MS,
+      maxOutputBytes: TRANSCRIPTION_MAX_OUTPUT_MB * 1024 * 1024,
     });
     const result = await aiProvider.run(
       () => provider.transcribe({
         audioPath: prepared.audioPath,
         mimeType: prepared.mimeType,
-        durationMs: Number(source.duration_ms),
+        durationMs,
       }),
-      { provider: 'GEMINI', model: GEMINI_TRANSCRIPTION_MODEL, operationType: 'TRANSCRIPTION', jobId: attempt.id }
+      { provider: 'GEMINI', model: GEMINI_TRANSCRIPTION_MODEL, operationType: 'TRANSCRIPTION', jobId: attempt.id, userId: source.instructor_id }
     );
     result.sanitizedOutput = retainedProviderOutput(result.sanitizedOutput);
-    await transcriptionService.completeAttempt(attempt, result, { ...source, sha256 });
+    await transcriptionService.completeAttempt(attempt, result, { ...source, duration_ms: durationMs, sha256 });
     console.log(`[Transcription] Completed lesson ${source.lesson_id}, attempt ${attempt.attempt_number}.`);
   } catch (error) {
     const mapped = error?.code === 'OWNERSHIP_MISMATCH'

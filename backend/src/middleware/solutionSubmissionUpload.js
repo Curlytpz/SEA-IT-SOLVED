@@ -4,7 +4,7 @@ const { MAX_IMAGE_BYTES, ALLOWED_MIME_TYPES } = require('../utils/imageFile');
 
 module.exports = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_IMAGE_BYTES, files: 1, fields: 2 },
+  limits: { fileSize: MAX_IMAGE_BYTES, files: 1, fields: 2, fieldNestingDepth: 2, fieldArrayIndexLimit: 100 },
   fileFilter: (_req, file, callback) => {
     if (!ALLOWED_MIME_TYPES.has(file.mimetype)) return callback(new AppError('Solution image must be JPEG, PNG, or WebP.', 400));
     callback(null, true);

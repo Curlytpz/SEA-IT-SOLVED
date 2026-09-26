@@ -195,7 +195,7 @@ async function submitSolution(activityId, studentId, file, { recognize = recogni
   if (previousKey && previousKey !== storageKey) await solutionSubmissionStorage.delete(previousKey).catch(() => {});
 
   try {
-    const normalized = await recognize(file.buffer, mimeType);
+    const normalized = await recognize(file.buffer, mimeType, { userId: studentId });
     await pool.query(`UPDATE solution_submissions SET extracted_solution_text=$3,recognized_math=$4,recognition_result=$5,
       recognition_status='READY',recognition_failure=NULL,status='READY_FOR_REVIEW',updated_at=NOW()
       WHERE id=$1 AND submission_revision=$2`, [submission.id, submission.submission_revision, normalized.plainText || '', JSON.stringify(normalized.mathExpressions || []), JSON.stringify(normalized)]);
@@ -238,7 +238,7 @@ async function retryRecognition(submissionId, instructorId, { recognize = recogn
   const buffer = Buffer.concat(chunks);
   await pool.query(`UPDATE solution_submissions SET recognition_status='PROCESSING',recognition_failure=NULL,status='PROCESSING',updated_at=NOW() WHERE id=$1`, [submissionId]);
   try {
-    const normalized = await recognize(buffer, row.mime_type);
+    const normalized = await recognize(buffer, row.mime_type, { userId: instructorId });
     await pool.query(`UPDATE solution_submissions SET extracted_solution_text=$2,recognized_math=$3,recognition_result=$4,
       recognition_status='READY',status='READY_FOR_REVIEW',updated_at=NOW() WHERE id=$1`,
       [submissionId, normalized.plainText || '', JSON.stringify(normalized.mathExpressions || []), JSON.stringify(normalized)]);
@@ -261,7 +261,7 @@ async function analyzeSubmission(submissionId, instructorId, { review = defaultR
     activity: { problem: clean(row.problem_text, 20000), instructions: clean(row.instructions, 10000), expectedSolutionOrRubric: clean(row.rubric_text, 20000) },
     studentSolution: { extractedText: clean(row.extracted_solution_text, 50000), math: (row.recognized_math || []).slice(0, 100), recognitionWarnings: row.recognition_result?.warnings || [] },
     approvedLessonContextExcerpt: excerpt,
-  });
+  }, { userId: instructorId });
   const validation = reviewSchema.safeParse(raw);
   if (!validation.success) {
     throw new AppError('AI returned an invalid advisory review. Please try again.', 422);

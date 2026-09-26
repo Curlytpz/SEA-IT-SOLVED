@@ -41,6 +41,15 @@ async function getOwnedLesson(lessonId, instructorId) {
   return rows[0];
 }
 
+async function assertCaptureAllowed(lessonId, instructorId) {
+  const lesson = await getOwnedLesson(lessonId, instructorId);
+  const pausedCaptureAllowed = lesson.status === 'PAUSED' && lesson.capture_while_paused;
+  if (lesson.status !== 'ACTIVE' && !pausedCaptureAllowed) {
+    throw new AppError('Whiteboard captures are unavailable while this lesson is paused.', 409);
+  }
+  return lesson;
+}
+
 function parseManifest(input, planeFiles, calibration) {
   if (!planeFiles.length && !input.planeManifest) return [];
   if (!calibration) throw new AppError('A saved calibration is required for corrected plane images.', 400);
@@ -67,9 +76,7 @@ function parseManifest(input, planeFiles, calibration) {
 }
 
 async function createCapture(lessonId, instructorId, files, input) {
-  const lesson = await getOwnedLesson(lessonId, instructorId);
-  const pausedCaptureAllowed = lesson.status === 'PAUSED' && lesson.capture_while_paused;
-  if (lesson.status !== 'ACTIVE' && !pausedCaptureAllowed) throw new AppError('Whiteboard captures are unavailable while this lesson is paused.', 409);
+  const lesson = await assertCaptureAllowed(lessonId, instructorId);
 
   const original = files?.original?.[0], corrected = files?.corrected?.[0] || null;
   const originalMime = validateImageFile(original, 'Original');
@@ -192,4 +199,4 @@ async function deleteAssetsForLesson(lessonId, instructorId) {
   await Promise.all(keys.map(key => storage.delete(key)));
 }
 
-module.exports = { createCapture, getCaptures, getCaptureFile, deleteCapture, deleteAssetsForLesson };
+module.exports = { createCapture, getCaptures, getCaptureFile, deleteCapture, deleteAssetsForLesson, assertCaptureAllowed };

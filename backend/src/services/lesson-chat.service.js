@@ -306,7 +306,8 @@ async function editQuiz(lessonId,instructorId,message){
       instruction:providerInstruction,
       editPlan,
     }),
-    {unavailable:'AI is temporarily unavailable. Please try again.',rateLimited:'The AI service is temporarily rate-limited. Please try again shortly.',invalidOutput:"I couldn't safely update that quiz. Please identify the quiz or question more specifically."}
+    {unavailable:'AI is temporarily unavailable. Please try again.',rateLimited:'The AI service is temporarily rate-limited. Please try again shortly.',invalidOutput:"I couldn't safely update that quiz. Please identify the quiz or question more specifically."},
+    {label:'QuizEditAI',model:GEMINI_CHAT_MODEL,userId:instructorId}
   );
   if(result.action==='CLARIFY'){
     if(editPlan.operation!=='clarify')throw new AppError("I couldn't safely apply the targeted quiz edit. The existing quiz was kept unchanged.",422);
@@ -399,7 +400,8 @@ async function editWholeDocument({lessonId,instructorId,message,documentContext,
   const materials=rows.map(row=>({section:row.material_type,title:row.title,markdown:row.content?.markdown||''}));
   const result=await geminiInteractive.run(
     ()=>provider.editDocument({context:payload,materials,instruction:message}),
-    {unavailable:'AI is temporarily unavailable. Please try again.',rateLimited:'The AI service is temporarily rate-limited. Please try again shortly.',invalidOutput:"I couldn't safely update the complete lesson. Please try again."}
+    {unavailable:'AI is temporarily unavailable. Please try again.',rateLimited:'The AI service is temporarily rate-limited. Please try again shortly.',invalidOutput:"I couldn't safely update the complete lesson. Please try again."},
+    {label:'LessonEditAI',model:GEMINI_CHAT_MODEL,userId:instructorId}
   );
   const sections=new Map();
   for(const item of result.sections||[]){
@@ -478,7 +480,8 @@ async function edit(lessonId,instructorId,message,selectedMaterialId){
       history:history.map(item=>({role:item.role,content:item.content,action:item.metadata?.action||null,changedMaterialId:item.metadata?.changedMaterialId||null})),
       instruction:message,
     }),
-    {unavailable:'AI is temporarily unavailable. Please try again.',rateLimited:'The AI service is temporarily rate-limited. Please try again shortly.',invalidOutput:"I couldn't safely apply that edit. Try selecting a section or being more specific."}
+    {unavailable:'AI is temporarily unavailable. Please try again.',rateLimited:'The AI service is temporarily rate-limited. Please try again shortly.',invalidOutput:"I couldn't safely apply that edit. Try selecting a section or being more specific."},
+    {label:'LessonEditAI',model:GEMINI_CHAT_MODEL,userId:instructorId}
   );
   if(operation.action==='CLARIFY'||Number(operation.confidence)<0.6){
     const client=await pool.connect();
@@ -630,7 +633,11 @@ async function send(lessonId,instructorId,body){
     const{context,session}=await currentSession(lessonId,instructorId,true);
     const history=await pool.query('SELECT role,content FROM lesson_chat_messages WHERE session_id=$1 AND id<>$2 ORDER BY created_at DESC,id DESC LIMIT 20',[session.id,persistedMessage.id]);
     const payload=approvedPayload(context),allowed=new Set(payload.map(item=>item.source));
-    const result=await geminiInteractive.run(()=>provider.reply({context:payload,history:history.rows.reverse(),message}),{unavailable:'AI is temporarily unavailable. Please try again.',rateLimited:'The AI service is temporarily rate-limited. Please try again shortly.'});
+    const result=await geminiInteractive.run(
+      ()=>provider.reply({context:payload,history:history.rows.reverse(),message}),
+      {unavailable:'AI is temporarily unavailable. Please try again.',rateLimited:'The AI service is temporarily rate-limited. Please try again shortly.'},
+      {label:'LessonChatAI',model:GEMINI_CHAT_MODEL,userId:instructorId}
+    );
     const refs=[...new Set((result.sourceReferences||[]).filter(ref=>allowed.has(ref)))];
     const client=await pool.connect();
     try{

@@ -40,7 +40,8 @@ class GeminiLessonCompilationProvider {
       const client=await this.getClient();
       for (let index=0; index<images.length; index+=1) {
         const image=images[index];
-        let remote=await client.files.upload({file:new Blob([image.buffer],{type:image.mimeType}),config:{mimeType:image.mimeType,displayName:`lesson-page-${index+1}`}});
+        const buffer=image.buffer||await image.load();
+        let remote=await client.files.upload({file:new Blob([buffer],{type:image.mimeType}),config:{mimeType:image.mimeType,displayName:`lesson-page-${index+1}`}});
         remoteFiles.push(remote);
         remote=await this.waitForActive(client,remote); remoteFiles[remoteFiles.length-1]=remote;
       }

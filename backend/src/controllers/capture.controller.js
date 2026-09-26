@@ -2,8 +2,12 @@ const asyncHandler = require('../utils/asyncHandler');
 const captureService = require('../services/capture.service');
 
 const createCapture = asyncHandler(async (req, res) => {
-  const capture = await captureService.createCapture(req.params.lessonId, req.user.id, req.files, req.body);
-  res.status(201).json({ success: true, data: { capture } });
+  try {
+    const capture = await captureService.createCapture(req.params.lessonId, req.user.id, req.files, req.body);
+    res.status(201).json({ success: true, data: { capture } });
+  } finally {
+    req.releaseCaptureUpload?.();
+  }
 });
 
 const getCaptures = asyncHandler(async (req, res) => {

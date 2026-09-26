@@ -259,7 +259,7 @@ async function generateTutor(attemptId, studentId) {
       unavailable: 'AI Tutor could not generate your review right now.',
       invalidOutput: 'AI Tutor could not generate a valid review right now.',
       rateLimited: 'AI Tutor is busy right now. Please try again shortly.',
-    }, { label: 'QuizTutor', model: GEMINI_CHAT_MODEL });
+    }, { label: 'QuizTutor', model: GEMINI_CHAT_MODEL, userId: studentId });
     const saved = (await pool.query(`UPDATE quiz_tutor_reports SET status='READY',report=$3::jsonb,model_version=$4,
       generation_key=NULL,failure_code=NULL,generated_at=NOW(),updated_at=NOW()
       WHERE id=$1 AND generation_key=$2 AND status='PROCESSING' RETURNING *`,
@@ -328,7 +328,7 @@ async function generatePractice(attemptId, studentId) {
       unavailable: 'AI Tutor could not create a practice question right now.',
       invalidOutput: 'AI Tutor could not create a valid practice question right now.',
       rateLimited: 'AI Tutor is busy right now. Please try again shortly.',
-    }, { label: 'QuizTutorPractice', model: GEMINI_CHAT_MODEL });
+    }, { label: 'QuizTutorPractice', model: GEMINI_CHAT_MODEL, userId: studentId });
     const saved = (await pool.query(`UPDATE quiz_tutor_practices SET topic=$3,status='READY',content=$4::jsonb,
       model_version=$5,generation_key=NULL,failure_code=NULL,generated_at=NOW(),updated_at=NOW()
       WHERE id=$1 AND generation_key=$2 AND status='PROCESSING' RETURNING *`,

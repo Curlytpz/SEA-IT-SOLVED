@@ -97,7 +97,7 @@ async function recognize(id, instructorId, { extract = recognizeImage } = {}) {
   try {
     const opened = await storage.open(row.solution_file.key);
     const chunks = []; for await (const chunk of opened.stream) chunks.push(chunk);
-    const normalized = await extract(Buffer.concat(chunks), row.solution_file.mime);
+    const normalized = await extract(Buffer.concat(chunks), row.solution_file.mime, { userId: instructorId });
     if (!normalized || (!normalized.plainText && !normalized.mathExpressions?.length)) throw new AppError('No readable solution was recognized.', 422);
     const saved = await pool.query(`UPDATE quiz_attempt_answers SET recognition_result=$3,recognition_status='READY',recognition_failure=NULL,updated_at=NOW()
       WHERE id=$1 AND solution_revision=$2 AND graded_at IS NULL RETURNING id`, [id, row.solution_revision, JSON.stringify(normalized)]);
@@ -127,7 +127,7 @@ async function analyze(id, instructorId, { review = defaultReview } = {}) {
         math: (row.recognition_result?.mathExpressions || []).slice(0, 30),
         recognitionWarnings: (row.recognition_result?.warnings || []).slice(0, 12) },
       approvedLessonContextExcerpt: excerpt,
-    }));
+    }, { userId: instructorId }));
     if (!parsed.success) throw new AppError('AI returned an invalid advisory review. No grade was changed.', 422);
     const maxScore=Number(row.max_points);
     const suggestedScore=Math.round(Number(parsed.data.suggested_score)*100)/100;

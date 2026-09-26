@@ -297,7 +297,7 @@ async function generateMaterials(lessonId, instructorId) {
       invalidOutput: 'The generated lesson notes could not be validated. Please try again.',
       rateLimited: 'Lesson generation is temporarily rate-limited. Please try again shortly.',
     },
-    { label: 'LessonAI', model: GEMINI_REASONING_MODEL }
+    { label: 'LessonAI', model: GEMINI_REASONING_MODEL, userId: instructorId }
   );
   const byType = new Map();
   for (const item of result.materials || []) {
@@ -414,7 +414,7 @@ async function generateQuiz(lessonId, instructorId, options = {}) {
       invalidOutput: 'The generated quiz could not be validated. Please try again.',
       rateLimited: 'Quiz generation is temporarily rate-limited. Please try again shortly.',
     },
-    { label: 'QuizAI', model: GEMINI_QUIZ_MODEL }
+    { label: 'QuizAI', model: GEMINI_QUIZ_MODEL, userId: instructorId }
   );
   const client = await pool.connect();
   try {

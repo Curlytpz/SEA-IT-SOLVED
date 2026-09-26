@@ -125,7 +125,7 @@ export default function Login() {
           transition={transition}
         >
           {selectedRole === 'student' && location.state?.studentRegistrationSuccess && (
-            <Alert type="success">Account created successfully. Please sign in.</Alert>
+            <Alert type="success">Account created. Check your institutional email and verify it before signing in.</Alert>
           )}
           {selectedRole === 'instructor' && approvalCode && (
             <Alert type={INSTRUCTOR_ACCESS_NOTICES[approvalCode].type} label="Instructor account" title={INSTRUCTOR_ACCESS_NOTICES[approvalCode].title}>

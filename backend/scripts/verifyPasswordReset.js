@@ -96,10 +96,10 @@ async function main() {
     assert.equal(wrongStudentDomain.message, passwordReset.PUBLIC_REQUEST_MESSAGE);
     assert.equal(deliveries.length, 1, 'Student recovery must enforce the Student email domain and role.');
 
-    const replacedStudentToken = tokenFromDelivery(deliveries[0]);
+    const earlierStudentToken = tokenFromDelivery(deliveries[0]);
     await passwordReset.requestPasswordReset({ email: studentEmail, role: 'STUDENT' });
     const studentToken = tokenFromDelivery(deliveries.at(-1));
-    await expectInvalid(() => passwordReset.validateResetToken({ token: replacedStudentToken }));
+    await passwordReset.validateResetToken({ token: earlierStudentToken });
     assert.match(studentToken, /^[a-f0-9]{64}$/);
     const stored = await pool.query(
       'SELECT token_hash,expires_at,used_at FROM password_reset_tokens WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1',
@@ -114,6 +114,7 @@ async function main() {
     await passwordReset.validateResetToken({ token: studentToken });
     await passwordReset.resetPassword({ token: studentToken, password: newPassword });
     await expectInvalid(() => passwordReset.validateResetToken({ token: studentToken }));
+    await expectInvalid(() => passwordReset.validateResetToken({ token: earlierStudentToken }));
     await expectInvalid(() => passwordReset.resetPassword({ token: studentToken, password: newPassword }));
     await assert.rejects(() => authService.login({ email: studentEmail, password: oldPassword, expectedRole: 'STUDENT' }), /Incorrect email or password/);
     const login = await authService.login({ email: studentEmail, password: newPassword, expectedRole: 'STUDENT' });
@@ -168,7 +169,7 @@ async function main() {
     console.log('PASS student reset request and generic response');
     console.log('PASS development reset-link terminal transport');
     console.log('PASS unknown-email enumeration protection');
-    console.log('PASS previous reset token invalidation');
+    console.log('PASS new reset requests preserve previously delivered links until a reset succeeds');
     console.log('PASS SHA-256 token storage and 20–30 minute expiry');
     console.log('PASS password update, old-password rejection, and new-password login');
     console.log('PASS token single use and expired-token rejection');

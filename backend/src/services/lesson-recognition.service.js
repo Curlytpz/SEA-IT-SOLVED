@@ -1,6 +1,18 @@
 const pool = require('../db/pool');
 const AppError = require('../utils/AppError');
-const { RECOGNITION_PROVIDER, GEMINI_RECOGNITION_MODEL, RECOGNITION_MAX_ATTEMPTS, GEMINI_SHARED_RATE_LIMIT_BACKOFF_MS } = require('../config/env');
+const { RECOGNITION_PROVIDER, GEMINI_RECOGNITION_MODEL, RECOGNITION_MAX_ATTEMPTS, GEMINI_SHARED_RATE_LIMIT_BACKOFF_MS,
+  RECOGNITION_MAX_CAPTURES, RECOGNITION_MAX_AGGREGATE_MB } = require('../config/env');
+
+const RECOGNITION_MAX_AGGREGATE_BYTES = RECOGNITION_MAX_AGGREGATE_MB * 1024 * 1024;
+
+function assertRecognitionBudget(captureCount, aggregateBytes) {
+  if (captureCount > RECOGNITION_MAX_CAPTURES) {
+    throw new AppError(`A lesson may compile at most ${RECOGNITION_MAX_CAPTURES} captures at once.`, 413);
+  }
+  if (aggregateBytes > RECOGNITION_MAX_AGGREGATE_BYTES) {
+    throw new AppError(`Lesson recognition input may contain at most ${RECOGNITION_MAX_AGGREGATE_MB} MB.`, 413);
+  }
+}
 
 function safe(row) {
   if (!row) return null;
@@ -28,8 +40,10 @@ async function queueLesson(lessonId,instructorId) {
     await client.query('BEGIN');
     const lesson=await ownedLesson(lessonId,instructorId,client,true);
     if(lesson.status!=='COMPLETED') throw new AppError('Lesson compilation is available after the lesson is completed.',409);
-    const captures=await client.query('SELECT id FROM lesson_captures WHERE lesson_id=$1 AND instructor_id=$2 ORDER BY captured_at,id',[lessonId,instructorId]);
+    const captures=await client.query(`SELECT id,COALESCE(corrected_file_size,original_file_size,0)::bigint AS source_bytes
+      FROM lesson_captures WHERE lesson_id=$1 AND instructor_id=$2 ORDER BY captured_at,id`,[lessonId,instructorId]);
     if(!captures.rows.length) throw new AppError('This lesson does not have whiteboard captures to compile.',409);
+    assertRecognitionBudget(captures.rows.length,captures.rows.reduce((total,row)=>total+Number(row.source_bytes||0),0));
     const existing=await client.query('SELECT * FROM lesson_recognitions WHERE lesson_id=$1 FOR UPDATE',[lessonId]);
     let recognition=existing.rows[0];
     if(recognition&&['PENDING','PROCESSING'].includes(recognition.status)) { await client.query('COMMIT'); return {recognition:safe(recognition),queued:false}; }
@@ -95,9 +109,11 @@ async function getAttemptSource(attemptId) {
     WHERE attempt.id=$1 AND lesson.instructor_id=recognition.instructor_id AND lesson.status='COMPLETED'`,[attemptId]);
   if(!rows.length){const error=new Error('Lesson compilation ownership validation failed.');error.code='OWNERSHIP_MISMATCH';throw error;}
   const captures=await pool.query(`SELECT id,captured_at,original_storage_key,corrected_storage_key,
-    original_width,original_height,corrected_width,corrected_height FROM lesson_captures
+    original_width,original_height,corrected_width,corrected_height,
+    COALESCE(corrected_file_size,original_file_size,0)::bigint AS source_bytes FROM lesson_captures
     WHERE lesson_id=$1 AND instructor_id=$2 ORDER BY captured_at,id`,[rows[0].lesson_id,rows[0].instructor_id]);
   if(!captures.rows.length){const error=new Error('No lesson captures are available.');error.code='IMAGE_NOT_FOUND';throw error;}
+  assertRecognitionBudget(captures.rows.length,captures.rows.reduce((total,row)=>total+Number(row.source_bytes||0),0));
   const captureIds=captures.rows.map(capture=>capture.id);
   const planes=await pool.query(`SELECT id,capture_id,calibration_plane_id,label,plane_order,corners,storage_key,mime_type,width,height
     FROM lesson_capture_planes WHERE capture_id=ANY($1::uuid[]) ORDER BY capture_id,plane_order`,[captureIds]);
@@ -144,4 +160,4 @@ async function failAttempt(attempt,mapped) {
   }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
 }
 
-module.exports={queueLesson,getLesson,recoverStaleAttempts,claimNextAttempt,getAttemptSource,completeAttempt,failAttempt};
+module.exports={queueLesson,getLesson,recoverStaleAttempts,claimNextAttempt,getAttemptSource,completeAttempt,failAttempt,assertRecognitionBudget};

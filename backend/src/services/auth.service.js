@@ -4,6 +4,7 @@ const { signToken } = require('../utils/jwt');
 const AppError = require('../utils/AppError');
 const config   = require('../config/env');
 const { validatePassword } = require('./password-reset.service');
+const emailVerification = require('./email-verification.service');
 
 const SALT_ROUNDS = 12;
 const DUMMY_LOGIN_PASSWORD_HASH = '$2b$12$4lkKXrjGtjbL5Kehn5f.NOVxB41JSJk08EL/4DKCL1bdnBHOKXPy2';
@@ -51,44 +52,38 @@ async function registerStudent({ firstName, lastName, email, studentNumber, pass
 
   validatePassword(password);
 
-  // ── SECURITY TODO (Phase 2): Email ownership verification ─────────────────
-  //
-  // Currently we validate that the email *format* matches the institutional
-  // domain, but we do NOT verify that the registrant actually owns that
-  // address. Anyone who knows a valid HAU email format can register as that
-  // person.
-  //
-  // To fix this before going to production, implement one of:
-  //   (a) Send a one-time verification link to the email and require the
-  //       student to click it before their account becomes ACTIVE.
-  //   (b) Integrate with the institution's SSO/LDAP so registration is
-  //       gated behind authentic institutional credentials.
-  //
-  // Until this is implemented:
-  //   - Do NOT expose personally identifiable information of one student
-  //     to another based solely on registration.
-  //   - Students are identified only to themselves and to admins/instructors.
-  // ─────────────────────────────────────────────────────────────────────────
-
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
-
-  // Role is HARDCODED — never read from request body
-  const { rows } = await pool.query(
-    `INSERT INTO users (first_name, last_name, email, student_number, password_hash, role, status)
-     VALUES ($1, $2, $3, $4, $5, 'STUDENT', 'ACTIVE')
-     RETURNING *`,
-    [
-      firstName.trim(),
-      lastName.trim(),
-      email.trim().toLowerCase(),
-      studentNumber.trim(),
-      passwordHash,
-    ]
-  );
-
-  // Registration creates the account only. Students must authenticate explicitly
-  // through the login endpoint before a JWT is issued.
-  return { user: buildSafeUser(rows[0]) };
+  const client = await pool.connect();
+  let user;
+  let delivery;
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `INSERT INTO users (first_name, last_name, email, student_number, password_hash, role, status)
+       VALUES ($1, $2, $3, $4, $5, 'STUDENT', 'PENDING')
+       RETURNING *`,
+      [firstName.trim(), lastName.trim(), email.trim().toLowerCase(), studentNumber.trim(), passwordHash]
+    );
+    user = rows[0];
+    delivery = await emailVerification.issueForNewStudent(client, user);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+  try {
+    await emailVerification.deliverVerification(delivery);
+  } catch (error) {
+    const safeName = String(error?.name || 'Error').replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 80) || 'Error';
+    console.error(`[EmailVerification] Registration delivery failed name=${safeName}`);
+  }
+  return {
+    user: buildSafeUser(user),
+    verificationRequired: true,
+    message: 'Check your institutional email to verify your student account before signing in.',
+  };
 }
 
 // ─── Register instructor ───────────────────────────────────────────────────
@@ -160,6 +155,9 @@ async function login({ email, password, expectedRole }) {
 
   if (user.role === 'INSTRUCTOR' && user.status === 'PENDING') {
     throw new AppError('Your instructor account is awaiting admin approval.', 403, { code: 'INSTRUCTOR_PENDING' });
+  }
+  if (user.role === 'STUDENT' && user.status === 'PENDING') {
+    throw new AppError('Verify your student email before signing in.', 403, { code: 'STUDENT_EMAIL_UNVERIFIED' });
   }
   // These are hard stops at login time in addition to the per-request
   // checks in authenticate.js. authenticate.js catches token-reuse after

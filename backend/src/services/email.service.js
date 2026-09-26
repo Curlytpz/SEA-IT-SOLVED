@@ -4,6 +4,7 @@ const nodemailer = require('nodemailer');
 const config = require('../config/env');
 
 const RESET_SUBJECT = 'Reset your SEA-IT-SOLVED password';
+const VERIFICATION_SUBJECT = 'Verify your SEA-IT-SOLVED student email';
 const DEVELOPMENT_PROVIDER = 'development';
 const MICROSOFT_GRAPH_PROVIDER = 'microsoft_graph';
 const RESEND_PROVIDER = 'resend';
@@ -113,6 +114,25 @@ function resetEmail({ resetUrl, expiresInMinutes }) {
   return { text, html };
 }
 
+function verificationEmail({ verificationUrl, expiresInMinutes }) {
+  const text = [
+    'SEA-IT-SOLVED Student Email Verification', '',
+    'Verify your institutional email address to activate your student account.', '',
+    'Open the following link to continue:', verificationUrl, '',
+    `This link expires in ${expiresInMinutes} minutes.`, '',
+    'If you did not create this account, ignore this email.',
+  ].join('\n');
+  const html = `<!doctype html><html><body><p>SEA-IT-SOLVED</p><h1>Verify your student email</h1><p>Verify your institutional email address to activate your student account.</p><p><a href="${verificationUrl}">Verify Email</a></p><p>This link expires in ${expiresInMinutes} minutes.</p><p>If you did not create this account, ignore this email.</p></body></html>`;
+  return { text, html };
+}
+
+function messageContent(payload) {
+  if (payload.verificationUrl) {
+    return { subject: VERIFICATION_SUBJECT, content: verificationEmail(payload) };
+  }
+  return { subject: RESET_SUBJECT, content: resetEmail(payload) };
+}
+
 function logSafeResendError(error) {
   const safeName = String(error?.name || 'Error').replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 80) || 'Error';
   const status = Number(error?.statusCode ?? error?.status);
@@ -130,9 +150,10 @@ function createResendClient(apiKey) {
 }
 
 async function sendWithMicrosoftGraph(
-  { email, resetUrl, expiresInMinutes },
+  payload,
   { settings = microsoftGraphSettings(), confidentialClient, fetchImpl = fetch } = {}
 ) {
+  const { email } = payload;
   const validated = validateMicrosoftGraphSettings(settings);
   const client = confidentialClient || new ConfidentialClientApplication({
     auth: {
@@ -150,7 +171,7 @@ async function sendWithMicrosoftGraph(
   }
   if (!authentication?.accessToken) throw new Error('Microsoft Graph authentication did not return an access token.');
 
-  const content = resetEmail({ resetUrl, expiresInMinutes });
+  const { subject, content } = messageContent(payload);
   let response;
   try {
     response = await fetchImpl(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(validated.senderEmail)}/sendMail`, {
@@ -158,7 +179,7 @@ async function sendWithMicrosoftGraph(
       headers: { Authorization: `Bearer ${authentication.accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         message: {
-          subject: RESET_SUBJECT,
+          subject,
           body: { contentType: 'HTML', content: content.html },
           toRecipients: [{ emailAddress: { address: email } }],
         },
@@ -173,19 +194,20 @@ async function sendWithMicrosoftGraph(
 }
 
 async function sendWithResend(
-  { email, resetUrl, expiresInMinutes },
+  payload,
   { settings = resendSettings(), resendClient } = {}
 ) {
+  const { email } = payload;
   const validated = validateResendSettings(settings);
   const client = resendClient || createResendClient(validated.apiKey);
-  const content = resetEmail({ resetUrl, expiresInMinutes });
+  const { subject, content } = messageContent(payload);
   let response;
   console.info('[Mail] Calling Resend API');
   try {
     response = await client.emails.send({
       from: validated.from,
       to: email,
-      subject: RESET_SUBJECT,
+      subject,
       html: content.html,
       text: content.text,
     });
@@ -245,19 +267,20 @@ function smtpResponseCategory(value) {
 }
 
 async function sendWithGmailSmtp(
-  { email, resetUrl, expiresInMinutes },
+  payload,
   { settings = gmailSmtpSettings(), transporter } = {}
 ) {
+  const { email } = payload;
   const validated = validateGmailSmtpSettings(settings);
   const mailer = transporter || createGmailSmtpTransport(validated);
-  const content = resetEmail({ resetUrl, expiresInMinutes });
+  const { subject, content } = messageContent(payload);
   let result;
   console.info('[Mail] Gmail SMTP send started');
   try {
     result = await mailer.sendMail({
       from: gmailFromHeader(validated),
       to: email,
-      subject: RESET_SUBJECT,
+      subject,
       html: content.html,
       text: content.text,
     });
@@ -323,10 +346,23 @@ async function sendPasswordResetEmail({ email, resetUrl, expiresInMinutes }) {
   }
 }
 
+async function sendStudentVerificationEmail({ email, verificationUrl, expiresInMinutes }) {
+  const provider = validateEmailConfiguration();
+  if (provider === DEVELOPMENT_PROVIDER) {
+    // Verification links establish account ownership and must never be written to logs.
+    throw new Error('Student email verification requires a configured email provider.');
+  }
+  const payload = { email, verificationUrl, expiresInMinutes };
+  if (provider === MICROSOFT_GRAPH_PROVIDER) return sendWithMicrosoftGraph(payload);
+  if (provider === RESEND_PROVIDER) return sendWithResend(payload);
+  if (provider === GMAIL_SMTP_PROVIDER) return sendWithGmailSmtp(payload);
+}
+
 validateEmailConfiguration();
 
 module.exports = {
   sendPasswordResetEmail,
+  sendStudentVerificationEmail,
   sendWithDevelopmentTransport,
   sendWithMicrosoftGraph,
   sendWithResend,
@@ -339,4 +375,5 @@ module.exports = {
   validateResendSettings,
   validateGmailSmtpSettings,
   RESET_SUBJECT,
+  VERIFICATION_SUBJECT,
 };

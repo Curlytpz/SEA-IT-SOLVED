@@ -3,6 +3,7 @@ const NON_RETRYABLE_CODES = new Set([
   'MODEL_LOAD_ERROR', 'INVALID_INPUT', 'UNSUPPORTED_AUDIO', 'PROVIDER_REQUEST_INVALID',
   'INVALID_PROVIDER_OUTPUT', 'PROVIDER_BLOCKED', 'NO_RECOGNIZABLE_CONTENT',
   'NO_RECOGNIZABLE_SPEECH', 'IMAGE_NOT_FOUND', 'AUDIO_NOT_FOUND', 'OWNERSHIP_MISMATCH',
+  'AI_QUEUE_FULL', 'AI_USER_QUEUE_FULL', 'AI_QUEUE_TIMEOUT',
 ]);
 const RETRYABLE_CODES = new Set([
   'PROVIDER_RATE_LIMITED', 'RATE_LIMITED', 'PROVIDER_TIMEOUT', 'PROVIDER_UNAVAILABLE',
@@ -69,8 +70,20 @@ function safeText(value) {
     .slice(0, 500);
 }
 
+function queueError(code, statusCode) {
+  const error = new Error('AI processing is currently busy. Please try again shortly.');
+  error.name = 'AIQueueError';
+  error.code = code;
+  error.statusCode = statusCode;
+  error.retryable = false;
+  return error;
+}
+
 function createAIProviderExecutor({
   maxConcurrent = 2,
+  maxPending = 10,
+  maxPendingPerUser = 3,
+  queueTimeoutMs = 30000,
   maxRetries = 2,
   baseDelayMs = 1000,
   maxDelayMs = 120000,
@@ -84,9 +97,25 @@ function createAIProviderExecutor({
   const pending = [];
   let active = 0;
 
+  function removePending(item) {
+    const index = pending.indexOf(item);
+    if (index >= 0) pending.splice(index, 1);
+  }
+
+  function rejectQueued(item, error) {
+    if (item.settled) return;
+    item.settled = true;
+    removePending(item);
+    if (item.timer) clearTimeout(item.timer);
+    item.reject(error);
+  }
+
   function drain() {
     while (active < maxConcurrent && pending.length) {
       const item = pending.shift();
+      if (item.settled) continue;
+      item.settled = true;
+      if (item.timer) clearTimeout(item.timer);
       active += 1;
       Promise.resolve()
         .then(item.task)
@@ -98,9 +127,26 @@ function createAIProviderExecutor({
     }
   }
 
-  function schedule(task) {
+  function schedule(task, context) {
     return new Promise((resolve, reject) => {
-      pending.push({ task, resolve, reject });
+      const userKey = context.userKey;
+      const requiresQueue = active >= maxConcurrent || pending.length > 0;
+      if (requiresQueue && pending.length >= maxPending) {
+        reject(queueError('AI_QUEUE_FULL', 503));
+        return;
+      }
+      if (requiresQueue && userKey && pending.filter(item => !item.settled && item.userKey === userKey).length >= maxPendingPerUser) {
+        reject(queueError('AI_USER_QUEUE_FULL', 429));
+        return;
+      }
+      const item = { task, resolve, reject, userKey, settled: false, timer: null };
+      if (requiresQueue && queueTimeoutMs > 0) {
+        item.timer = setTimeout(() => {
+          rejectQueued(item, queueError('AI_QUEUE_TIMEOUT', 503));
+          drain();
+        }, queueTimeoutMs);
+      }
+      pending.push(item);
       drain();
     });
   }
@@ -146,11 +192,12 @@ function createAIProviderExecutor({
       model: String(context.model || ''),
       operationType: String(context.operationType || 'AI_REQUEST'),
       jobId: context.jobId ? String(context.jobId) : null,
+      userKey: context.userId || context.userKey ? String(context.userId || context.userKey) : '',
     };
     let lastError;
     for (let attempt = 1; attempt <= totalAttempts; attempt += 1) {
       try {
-        return await schedule(() => runAttempt(operation, safeContext, attempt, totalAttempts));
+        return await schedule(() => runAttempt(operation, safeContext, attempt, totalAttempts), safeContext);
       } catch (error) {
         lastError = error;
         const classification = classifyProviderError(error);
@@ -196,7 +243,13 @@ function createAIProviderExecutor({
 
   return {
     run,
-    stats: () => ({ active, queued: pending.length, maxConcurrent }),
+    stats: () => ({
+      active,
+      queued: pending.filter(item => !item.settled).length,
+      maxConcurrent,
+      maxPending,
+      maxPendingPerUser,
+    }),
   };
 }
 
@@ -205,4 +258,5 @@ module.exports = {
   classifyProviderError,
   providerStatus,
   retryAfterMilliseconds,
+  queueError,
 };

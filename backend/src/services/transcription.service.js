@@ -258,6 +258,10 @@ async function completeAttempt(attempt, result, source) {
        JSON.stringify(structuredResult), TRANSCRIPTION_PROVIDER, result.providerVersion, source.sha256,
        source.mime_type, Number(source.duration_ms), TIMING_MAPPING_VERSION, attempt.attempt_number]
     );
+    await client.query(
+      'UPDATE lesson_audio_recordings SET duration_ms=$2 WHERE id=$1',
+      [source.recording_id, Number(source.duration_ms)]
+    );
     await client.query('COMMIT');
   } catch (error) { await client.query('ROLLBACK'); throw error; }
   finally { client.release(); }

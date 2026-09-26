@@ -29,11 +29,11 @@ const reviewSchema = z.object({
 
 const clean = (value, max) => String(value ?? '').normalize('NFC').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').trim().slice(0, max);
 
-async function recognizeImage(imageBuffer, mimeType) {
+async function recognizeImage(imageBuffer, mimeType, options = {}) {
   const result = await geminiInteractive.run(
     () => recognitionProvider.extract({ imageBuffer, mimeType }),
     { unavailable: 'Solution recognition is temporarily unavailable.', invalidOutput: 'The uploaded solution could not be recognized safely.' },
-    { label: 'SolutionOCR', model: GEMINI_MODEL }
+    { label: 'SolutionOCR', model: GEMINI_MODEL, userId: options.userId }
   );
   return result.normalized;
 }
@@ -47,10 +47,10 @@ function approvedExcerpt(context) {
   }).filter(Boolean).join('\n\n').slice(0, SOLUTION_REVIEW_CONTEXT_MAX_CHARS);
 }
 
-async function defaultReview(input) {
+async function defaultReview(input, options = {}) {
   return geminiInteractive.run(() => reviewProvider.reviewSolution(input),
     { unavailable: 'AI is temporarily unavailable. Please try again.', invalidOutput: 'AI returned an invalid advisory review. Please try again.' },
-    { label: 'SolutionAI', model: GEMINI_REASONING_MODEL });
+    { label: 'SolutionAI', model: GEMINI_REASONING_MODEL, userId: options.userId });
 }
 
 

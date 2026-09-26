@@ -1,6 +1,7 @@
 const asyncHandler = require('../utils/asyncHandler');
 const authService  = require('../services/auth.service');
 const passwordResetService = require('../services/password-reset.service');
+const emailVerificationService = require('../services/email-verification.service');
 
 const registerStudent = asyncHandler(async (req, res) => {
   const { firstName, lastName, email, studentNumber, password } = req.body;
@@ -40,4 +41,14 @@ const resetPassword = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, data: result });
 });
 
-module.exports = { registerStudent, registerInstructor, login, getMe, forgotPassword, validateResetToken, resetPassword };
+const verifyEmail = asyncHandler(async (req, res) => {
+  const result = await emailVerificationService.verifyEmail({ token: req.body.token });
+  res.status(200).json({ success: true, data: result });
+});
+
+const resendVerification = asyncHandler(async (req, res) => {
+  const result = await emailVerificationService.resendVerification({ email: req.body.email });
+  res.status(200).json({ success: true, data: result });
+});
+
+module.exports = { registerStudent, registerInstructor, login, getMe, forgotPassword, validateResetToken, resetPassword, verifyEmail, resendVerification };

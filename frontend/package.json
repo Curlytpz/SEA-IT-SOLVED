@@ -10,6 +10,7 @@
     "test:math-rendering": "node src/components/reasoning/mathRenderingContract.test.mjs",
     "test:status-presentation": "node src/utils/statusPresentation.test.mjs",
     "test:student-class-groups": "node src/utils/studentClassGroups.test.mjs",
+    "test:auth-ux": "node src/utils/authUx.test.mjs",
     "audit:styles": "node audit-tailwind-migration.mjs --summary"
   },
   "dependencies": {

@@ -38,7 +38,7 @@ const authenticate = asyncHandler(async (req, res, next) => {
 
   // Always fetch from DB — never rely solely on JWT claims
   const { rows } = await pool.query(
-    'SELECT id, first_name, last_name, email, role, status, auth_version FROM users WHERE id = $1',
+    'SELECT id, first_name, last_name, email, role, status, email_verified_at, auth_version FROM users WHERE id = $1',
     [decoded.id]
   );
 
@@ -49,12 +49,6 @@ const authenticate = asyncHandler(async (req, res, next) => {
   const user = rows[0];
 
   // Block hard-stopped accounts at the authentication layer
-  if (user.role === 'INSTRUCTOR' && user.status === 'PENDING') {
-    throw new AppError('Your instructor account is awaiting admin approval.', 403, { code: 'INSTRUCTOR_PENDING' });
-  }
-  if (user.role === 'STUDENT' && user.status === 'PENDING') {
-    throw new AppError('Verify your student email before accessing student features.', 403, { code: 'STUDENT_EMAIL_UNVERIFIED' });
-  }
   if (user.status === 'SUSPENDED') {
     throw new AppError('Your account has been suspended. Contact the administrator.', 403, {
       code: user.role === 'INSTRUCTOR' ? 'INSTRUCTOR_SUSPENDED' : undefined,
@@ -64,6 +58,15 @@ const authenticate = asyncHandler(async (req, res, next) => {
     throw user.role === 'INSTRUCTOR'
       ? new AppError('Your instructor account was not approved.', 403, { code: 'INSTRUCTOR_REJECTED' })
       : new AppError('Your account has been rejected. Contact the administrator.', 403);
+  }
+  if (user.role === 'INSTRUCTOR' && !user.email_verified_at) {
+    throw new AppError('Verify your institutional email before continuing.', 403, { code: 'INSTRUCTOR_EMAIL_UNVERIFIED' });
+  }
+  if (user.role === 'INSTRUCTOR' && user.status === 'PENDING') {
+    throw new AppError('Your instructor account is awaiting admin approval.', 403, { code: 'INSTRUCTOR_PENDING' });
+  }
+  if (user.role === 'STUDENT' && user.status === 'PENDING') {
+    throw new AppError('Verify your student email before accessing student features.', 403, { code: 'STUDENT_EMAIL_UNVERIFIED' });
   }
   if (user.role === 'INSTRUCTOR' && user.status !== 'ACTIVE') {
     throw new AppError('Your instructor account is not available. Please contact the administrator.', 403, { code: 'INSTRUCTOR_SUSPENDED' });

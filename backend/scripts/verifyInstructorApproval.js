@@ -1,6 +1,9 @@
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const bcrypt = require('bcryptjs');
+const runSuffix = crypto.randomBytes(6).toString('hex');
+const developmentInstructorTestEmail = `approval-dev-${runSuffix}@example.com`;
+process.env.DEV_INSTRUCTOR_TEST_EMAIL = developmentInstructorTestEmail;
 const config = require('../src/config/env');
 const pool = require('../src/db/pool');
 const { signToken } = require('../src/utils/jwt');
@@ -9,6 +12,7 @@ const path = require('node:path');
 const emailService = require('../src/services/email.service');
 const verificationDeliveries = [];
 emailService.sendStudentVerificationEmail = async payload => { verificationDeliveries.push(payload); return { provider: 'test' }; };
+const emailVerification = require('../src/services/email-verification.service');
 
 async function request(base, method, path, { body, token } = {}) {
   const response = await fetch(`${base}${path}`, {
@@ -24,7 +28,7 @@ async function request(base, method, path, { body, token } = {}) {
 
 async function main() {
   await pool.query(fs.readFileSync(path.join(__dirname, '../src/db/migration_student_email_verification.sql'), 'utf8'));
-  const suffix = crypto.randomBytes(6).toString('hex');
+  const suffix = runSuffix;
   const password = 'CorrectPass123!';
   const passwordHash = await bcrypt.hash(password, 4);
   const instructorDomain = config.INSTRUCTOR_EMAIL_DOMAIN || 'hau.edu.ph';
@@ -69,7 +73,7 @@ async function main() {
     assert.equal(verification.status, 200);
 
     const register = email => request(base, 'POST', '/auth/register/instructor', {
-      body: { firstName: 'Approval', lastName: 'Test', email, password },
+      body: { firstName: 'Approval', lastName: 'Test', email, password, role: 'ADMIN' },
     });
     const pendingRegistration = await register(pendingEmail);
     const pendingId = pendingRegistration.body?.data?.user?.id;
@@ -77,13 +81,31 @@ async function main() {
     assert.equal(pendingRegistration.status, 201);
     assert.equal(pendingRegistration.body.data.user.role, 'INSTRUCTOR');
     assert.equal(pendingRegistration.body.data.user.status, 'PENDING');
+    assert.equal(pendingRegistration.body.data.verificationRequired, true);
     assert.equal(pendingRegistration.body.data.token, undefined);
+    const pendingDelivery = verificationDeliveries.find(item => item.email === pendingEmail);
+    assert.equal(pendingDelivery.role, 'INSTRUCTOR');
+    const instructorVerificationToken = new URL(pendingDelivery.verificationUrl).searchParams.get('token');
+    const pendingRow = await pool.query('SELECT status,email_verified_at FROM users WHERE id=$1', [pendingId]);
+    assert.equal(pendingRow.rows[0].status, 'PENDING');
+    assert.equal(pendingRow.rows[0].email_verified_at, null);
 
     const rejectedRegistration = await register(rejectedEmail);
     const rejectedId = rejectedRegistration.body?.data?.user?.id;
     if (rejectedId) userIds.push(rejectedId);
     assert.equal(rejectedRegistration.status, 201);
     assert.equal(rejectedRegistration.body.data.user.status, 'PENDING');
+
+    const developmentRegistration = await register(developmentInstructorTestEmail);
+    const developmentInstructorId = developmentRegistration.body?.data?.user?.id;
+    if (developmentInstructorId) userIds.push(developmentInstructorId);
+    assert.equal(developmentRegistration.status, 201);
+    assert.equal(developmentRegistration.body.data.user.email, developmentInstructorTestEmail);
+    assert.equal(developmentRegistration.body.data.user.role, 'INSTRUCTOR');
+    assert.equal(developmentRegistration.body.data.user.status, 'PENDING');
+    assert.equal(developmentRegistration.body.data.verificationRequired, true);
+    const developmentDelivery = verificationDeliveries.find(item => item.email === developmentInstructorTestEmail);
+    const developmentVerificationToken = new URL(developmentDelivery.verificationUrl).searchParams.get('token');
 
     const login = (email, candidatePassword, expectedRole) =>
       request(base, 'POST', '/auth/login', { body: { email, password: candidatePassword, expectedRole } });
@@ -103,7 +125,7 @@ async function main() {
 
     const pendingLogin = await login(pendingEmail, password, 'INSTRUCTOR');
     assert.equal(pendingLogin.status, 403);
-    assert.equal(pendingLogin.body.code, 'INSTRUCTOR_PENDING');
+    assert.equal(pendingLogin.body.code, 'INSTRUCTOR_EMAIL_UNVERIFIED');
     assert.equal(pendingLogin.body.data?.token, undefined);
     const pendingCount = await pool.query('SELECT successful_login_count FROM users WHERE id=$1', [pendingId]);
     assert.equal(Number(pendingCount.rows[0].successful_login_count), 0);
@@ -111,14 +133,63 @@ async function main() {
     const legacyPendingToken = signToken({ id: pendingId, role: 'INSTRUCTOR', authVersion: 0 });
     const pendingMe = await request(base, 'GET', '/auth/me', { token: legacyPendingToken });
     assert.equal(pendingMe.status, 403);
-    assert.equal(pendingMe.body.code, 'INSTRUCTOR_PENDING');
+    assert.equal(pendingMe.body.code, 'INSTRUCTOR_EMAIL_UNVERIFIED');
     const pendingApi = await request(base, 'GET', '/sections/instructor/sections', { token: legacyPendingToken });
     assert.equal(pendingApi.status, 403);
-    assert.equal(pendingApi.body.code, 'INSTRUCTOR_PENDING');
+    assert.equal(pendingApi.body.code, 'INSTRUCTOR_EMAIL_UNVERIFIED');
 
     const queue = await request(base, 'GET', '/admin/instructors/pending', { token: adminToken });
     assert.equal(queue.status, 200);
-    assert.ok(queue.body.data.instructors.some(instructor => instructor.id === pendingId));
+    const queuedInstructor = queue.body.data.instructors.find(instructor => instructor.id === pendingId);
+    assert.equal(queuedInstructor.emailVerifiedAt, null);
+    const blockedApproval = await request(base, 'PATCH', `/admin/instructors/${pendingId}/approve`, { token: adminToken });
+    assert.equal(blockedApproval.status, 409);
+    assert.equal(blockedApproval.body.code, 'INSTRUCTOR_EMAIL_UNVERIFIED');
+    const blockedDevelopmentApproval = await request(base, 'PATCH', `/admin/instructors/${developmentInstructorId}/approve`, { token: adminToken });
+    assert.equal(blockedDevelopmentApproval.status, 409);
+    assert.equal(blockedDevelopmentApproval.body.code, 'INSTRUCTOR_EMAIL_UNVERIFIED');
+
+    const deliveriesBeforeResend = verificationDeliveries.length;
+    const resend = await emailVerification.resendVerification({ email: pendingEmail });
+    assert.equal(resend.message, emailVerification.PUBLIC_RESEND_MESSAGE);
+    assert.equal(verificationDeliveries.length, deliveriesBeforeResend + 1);
+    assert.equal(verificationDeliveries.at(-1).role, 'INSTRUCTOR');
+
+    const instructorVerification = await request(base, 'POST', '/auth/verify-email', {
+      body: { token: instructorVerificationToken },
+    });
+    assert.equal(instructorVerification.status, 200);
+    assert.equal(instructorVerification.body.data.role, 'INSTRUCTOR');
+    const reusedInstructorToken = await request(base, 'POST', '/auth/verify-email', {
+      body: { token: instructorVerificationToken },
+    });
+    assert.equal(reusedInstructorToken.status, 400);
+    const verifiedPendingRow = await pool.query('SELECT status,email_verified_at FROM users WHERE id=$1', [pendingId]);
+    assert.equal(verifiedPendingRow.rows[0].status, 'PENDING');
+    assert.ok(verifiedPendingRow.rows[0].email_verified_at);
+    const verifiedQueue = await request(base, 'GET', '/admin/instructors/pending', { token: adminToken });
+    const verifiedQueuedInstructor = verifiedQueue.body.data.instructors.find(instructor => instructor.id === pendingId);
+    assert.ok(verifiedQueuedInstructor.emailVerifiedAt);
+    const verifiedPendingLogin = await login(pendingEmail, password, 'INSTRUCTOR');
+    assert.equal(verifiedPendingLogin.status, 403);
+    assert.equal(verifiedPendingLogin.body.code, 'INSTRUCTOR_PENDING');
+
+    const developmentVerification = await request(base, 'POST', '/auth/verify-email', {
+      body: { token: developmentVerificationToken },
+    });
+    assert.equal(developmentVerification.status, 200);
+    const verifiedDevelopmentRow = await pool.query('SELECT status,email_verified_at FROM users WHERE id=$1', [developmentInstructorId]);
+    assert.equal(verifiedDevelopmentRow.rows[0].status, 'PENDING');
+    assert.ok(verifiedDevelopmentRow.rows[0].email_verified_at);
+    const developmentPendingLogin = await login(developmentInstructorTestEmail, password, 'INSTRUCTOR');
+    assert.equal(developmentPendingLogin.status, 403);
+    assert.equal(developmentPendingLogin.body.code, 'INSTRUCTOR_PENDING');
+    const developmentApproval = await request(base, 'PATCH', `/admin/instructors/${developmentInstructorId}/approve`, { token: adminToken });
+    assert.equal(developmentApproval.status, 200);
+    assert.equal(developmentApproval.body.data.user.status, 'ACTIVE');
+    const developmentLogin = await login(developmentInstructorTestEmail, password, 'INSTRUCTOR');
+    assert.equal(developmentLogin.status, 200);
+
     const approval = await request(base, 'PATCH', `/admin/instructors/${pendingId}/approve`, { token: adminToken });
     assert.equal(approval.status, 200);
     assert.equal(approval.body.data.user.status, 'ACTIVE');
@@ -157,7 +228,11 @@ async function main() {
     assert.equal(rejectedLogin.body.code, 'INSTRUCTOR_REJECTED');
     assert.equal(rejectedLogin.body.data?.token, undefined);
 
-    console.log('PASS registration creates pending instructors without a token');
+    console.log('PASS registration creates pending, unverified instructors without accepting a public ADMIN role');
+    console.log('PASS instructor verification sets email ownership without activating the account');
+    console.log('PASS unverified instructors cannot be approved and verified instructors can be approved');
+    console.log('PASS instructor resend uses the shared enumeration-safe verification service');
+    console.log('PASS development test email still requires verification and administrator approval');
     console.log('PASS wrong credentials do not reveal approval status');
     console.log('PASS pending login, /auth/me, and instructor APIs are denied');
     console.log('PASS admin approval enables a fresh instructor login, not an old token');

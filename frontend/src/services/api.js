@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { INSTRUCTOR_ACCESS_NOTICE_KEY, isInstructorAccessCode } from '../utils/instructorAccess';
+import { INSTRUCTOR_ACCESS_NOTICE_KEY, isInstructorAccessCode, isInstructorSessionBlockCode } from '../utils/instructorAccess';
 
 const api = axios.create({
   baseURL: '/api',
@@ -20,11 +20,11 @@ api.interceptors.response.use(
     const requestUrl = String(err.config?.url || '');
     const isLoginRequest = /(?:^|\/)auth\/login(?:\?|$)/.test(requestUrl);
     const accessCode = err.response?.data?.code;
-    const instructorAccessDenied = err.response?.status === 403 && isInstructorAccessCode(accessCode);
+    const instructorAccessDenied = err.response?.status === 403 && isInstructorSessionBlockCode(accessCode);
     if (!isLoginRequest && (err.response?.status === 401 || instructorAccessDenied)) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      if (instructorAccessDenied) sessionStorage.setItem(INSTRUCTOR_ACCESS_NOTICE_KEY, accessCode);
+      if (isInstructorAccessCode(accessCode)) sessionStorage.setItem(INSTRUCTOR_ACCESS_NOTICE_KEY, accessCode);
       window.location.replace(instructorAccessDenied ? '/login?role=instructor' : '/login');
     }
     return Promise.reject(err);

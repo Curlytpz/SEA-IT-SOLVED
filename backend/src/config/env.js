@@ -18,6 +18,11 @@ function boundedInteger(value, fallback, minimum, maximum) {
   return Number.isInteger(parsed) ? Math.min(maximum, Math.max(minimum, parsed)) : fallback;
 }
 
+function resolveDevelopmentInstructorTestEmail(environment = process.env) {
+  if ((environment.NODE_ENV || 'development') === 'production') return '';
+  return String(environment.DEV_INSTRUCTOR_TEST_EMAIL || '').trim().toLowerCase();
+}
+
 const mediaResolutionMap = {
   LOW: 'MEDIA_RESOLUTION_LOW',
   MEDIUM: 'MEDIA_RESOLUTION_MEDIUM',
@@ -138,6 +143,10 @@ module.exports = {
   // Instructors must still be approved by an admin even if their domain matches.
   // Set to empty string to disable domain enforcement for instructors.
   INSTRUCTOR_EMAIL_DOMAIN: process.env.INSTRUCTOR_EMAIL_DOMAIN || 'hau.edu.ph',
+
+  // Exact, development-only instructor address allowed to exercise the full
+  // verification and approval lifecycle without relaxing the production domain.
+  DEV_INSTRUCTOR_TEST_EMAIL: resolveDevelopmentInstructorTestEmail(),
 };
 
 function validateProductionConfiguration(config, environment = process.env) {
@@ -179,3 +188,4 @@ function validateProductionConfiguration(config, environment = process.env) {
 
 validateProductionConfiguration(module.exports);
 module.exports.validateProductionConfiguration = validateProductionConfiguration;
+module.exports.resolveDevelopmentInstructorTestEmail = resolveDevelopmentInstructorTestEmail;

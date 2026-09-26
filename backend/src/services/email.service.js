@@ -5,6 +5,7 @@ const config = require('../config/env');
 
 const RESET_SUBJECT = 'Reset your SEA-IT-SOLVED password';
 const VERIFICATION_SUBJECT = 'Verify your SEA-IT-SOLVED student email';
+const INSTRUCTOR_VERIFICATION_SUBJECT = 'Verify your SEA-IT-SOLVED instructor email';
 const DEVELOPMENT_PROVIDER = 'development';
 const MICROSOFT_GRAPH_PROVIDER = 'microsoft_graph';
 const RESEND_PROVIDER = 'resend';
@@ -114,21 +115,63 @@ function resetEmail({ resetUrl, expiresInMinutes }) {
   return { text, html };
 }
 
-function verificationEmail({ verificationUrl, expiresInMinutes }) {
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function verificationEmail({ verificationUrl, expiresInMinutes, role = 'STUDENT', accountStatus }) {
+  const instructor = role === 'INSTRUCTOR';
+  const instructorPending = instructor && accountStatus !== 'ACTIVE';
+  const heading = instructor ? 'Verify your instructor email' : 'Verify your student email';
+  const description = instructorPending
+    ? 'Verify your institutional email address before an administrator can approve your instructor account.'
+    : instructor
+      ? 'Verify your institutional email address to continue using your instructor account.'
+      : 'Verify your institutional email address to activate your student account.';
+  const actionLabel = instructor ? 'Verify Instructor Email' : 'Verify Student Email';
   const text = [
-    'SEA-IT-SOLVED Student Email Verification', '',
-    'Verify your institutional email address to activate your student account.', '',
-    'Open the following link to continue:', verificationUrl, '',
+    heading, '',
+    description, '',
+    actionLabel + ':', verificationUrl, '',
+    'If the button does not work, copy and paste this link into your browser:',
+    verificationUrl, '',
     `This link expires in ${expiresInMinutes} minutes.`, '',
     'If you did not create this account, ignore this email.',
   ].join('\n');
-  const html = `<!doctype html><html><body><p>SEA-IT-SOLVED</p><h1>Verify your student email</h1><p>Verify your institutional email address to activate your student account.</p><p><a href="${verificationUrl}">Verify Email</a></p><p>This link expires in ${expiresInMinutes} minutes.</p><p>If you did not create this account, ignore this email.</p></body></html>`;
+  const safeVerificationUrl = escapeHtml(verificationUrl);
+  const safeExpiry = escapeHtml(expiresInMinutes);
+  const html = [
+    '<!doctype html><html><body style="margin:0;padding:0;background-color:#f4f7f6;color:#17231f;font-family:Arial,Helvetica,sans-serif;">',
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background-color:#f4f7f6;">',
+    '<tr><td align="center" style="padding:32px 16px;">',
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:600px;background-color:#ffffff;border:1px solid #d8e2de;">',
+    '<tr><td style="padding:32px;">',
+    '<p style="margin:0 0 16px;color:#0d9488;font-size:14px;font-weight:bold;letter-spacing:0.04em;">SEA-IT-SOLVED</p>',
+    '<h1 style="margin:0 0 16px;color:#17231f;font-size:28px;line-height:1.25;">' + heading + '</h1>',
+    '<p style="margin:0 0 24px;color:#42534d;font-size:16px;line-height:1.6;">' + description + '</p>',
+    '<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 24px;"><tr>',
+    `<td align="center" bgcolor="#0d9488" style="border-radius:6px;"><a href="${safeVerificationUrl}" target="_blank" style="display:inline-block;padding:14px 24px;color:#ffffff;font-size:16px;font-weight:bold;line-height:1;text-decoration:none;">${actionLabel}</a></td>`,
+    '</tr></table>',
+    '<p style="margin:0 0 8px;color:#42534d;font-size:14px;line-height:1.6;">If the button does not work, copy and paste this link into your browser:</p>',
+    `<p style="margin:0 0 24px;font-size:14px;line-height:1.6;word-break:break-all;"><a href="${safeVerificationUrl}" target="_blank" style="color:#0b766d;text-decoration:underline;">${safeVerificationUrl}</a></p>`,
+    `<p style="margin:0 0 12px;color:#42534d;font-size:14px;line-height:1.6;">This link expires in ${safeExpiry} minutes.</p>`,
+    '<p style="margin:0;color:#6b7974;font-size:13px;line-height:1.6;">If you did not create this account, ignore this email.</p>',
+    '</td></tr></table></td></tr></table></body></html>',
+  ].join('');
   return { text, html };
 }
 
 function messageContent(payload) {
   if (payload.verificationUrl) {
-    return { subject: VERIFICATION_SUBJECT, content: verificationEmail(payload) };
+    return {
+      subject: payload.role === 'INSTRUCTOR' ? INSTRUCTOR_VERIFICATION_SUBJECT : VERIFICATION_SUBJECT,
+      content: verificationEmail(payload),
+    };
   }
   return { subject: RESET_SUBJECT, content: resetEmail(payload) };
 }
@@ -346,13 +389,13 @@ async function sendPasswordResetEmail({ email, resetUrl, expiresInMinutes }) {
   }
 }
 
-async function sendStudentVerificationEmail({ email, verificationUrl, expiresInMinutes }) {
+async function sendStudentVerificationEmail({ email, verificationUrl, expiresInMinutes, role = 'STUDENT', accountStatus }) {
   const provider = validateEmailConfiguration();
   if (provider === DEVELOPMENT_PROVIDER) {
     // Verification links establish account ownership and must never be written to logs.
-    throw new Error('Student email verification requires a configured email provider.');
+    throw new Error('Email verification requires a configured email provider.');
   }
-  const payload = { email, verificationUrl, expiresInMinutes };
+  const payload = { email, verificationUrl, expiresInMinutes, role, accountStatus };
   if (provider === MICROSOFT_GRAPH_PROVIDER) return sendWithMicrosoftGraph(payload);
   if (provider === RESEND_PROVIDER) return sendWithResend(payload);
   if (provider === GMAIL_SMTP_PROVIDER) return sendWithGmailSmtp(payload);
@@ -376,4 +419,5 @@ module.exports = {
   validateGmailSmtpSettings,
   RESET_SUBJECT,
   VERIFICATION_SUBJECT,
+  INSTRUCTOR_VERIFICATION_SUBJECT,
 };

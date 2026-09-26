@@ -5,8 +5,16 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import { useAuth } from '../context/AuthContext';
 import { Alert, Btn, Input, FormField } from '../components/ui';
 import AuthLayout from '../components/public/AuthLayout';
+import AuthPasswordInput from '../components/public/AuthPasswordInput';
+import api from '../services/api';
 import { isStudentEmail, STUDENT_EMAIL_HINT } from '../utils/authEmail';
 import { INSTRUCTOR_ACCESS_NOTICE_KEY, INSTRUCTOR_ACCESS_NOTICES, isInstructorAccessCode } from '../utils/instructorAccess';
+import {
+  requestVerificationResend,
+  shouldShowVerificationResend,
+  verificationResendActionLabel,
+  VERIFICATION_RESEND_SUCCESS_MESSAGE,
+} from '../utils/authVerificationResend';
 import { authChoiceDividerClassName, authFormClassName, authRegistrationActionsClassName, authSecondaryActionClassName } from '../components/public/authStyles';
 
 const ROLE_OPTIONS = [
@@ -42,6 +50,11 @@ export default function Login() {
   const selectedCopy = selectedRole ? ROLE_COPY[selectedRole] : null;
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
+  const [loginErrorCode, setLoginErrorCode] = useState(null);
+  const [resendSending, setResendSending] = useState(false);
+  const [resendMessage, setResendMessage] = useState('');
+  const [resendError, setResendError] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [approvalCode, setApprovalCode] = useState(() => {
     const code = sessionStorage.getItem(INSTRUCTOR_ACCESS_NOTICE_KEY);
     return isInstructorAccessCode(code) ? code : null;
@@ -54,15 +67,26 @@ export default function Login() {
       setApprovalCode(location.state.instructorAccessCode);
     }
   }, [location.state?.instructorAccessCode]);
+  useEffect(() => {
+    if (resendCooldown <= 0) return undefined;
+    const timer = window.setTimeout(() => setResendCooldown(seconds => Math.max(0, seconds - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendCooldown]);
   const set = key => event => {
     setForm(current => ({ ...current, [key]: event.target.value }));
     if (error) setError('');
+    if (loginErrorCode) setLoginErrorCode(null);
+    if (resendMessage) setResendMessage('');
+    if (resendError) setResendError('');
   };
 
   async function handleSubmit(event) {
     event.preventDefault();
     if (!selectedRole) return;
     setError('');
+    setLoginErrorCode(null);
+    setResendMessage('');
+    setResendError('');
     setApprovalCode(null);
     if (selectedRole === 'student' && !isStudentEmail(form.email)) { setError(STUDENT_EMAIL_HINT); return; }
     try {
@@ -72,7 +96,26 @@ export default function Login() {
       else navigate('/student', { replace: true });
     } catch (err) {
       if (isInstructorAccessCode(err.code)) setApprovalCode(err.code);
-      else setError(err.message);
+      else {
+        setError(err.message);
+        setLoginErrorCode(err.code || null);
+      }
+    }
+  }
+
+  async function handleResendVerification() {
+    if (resendSending || resendCooldown > 0 || !shouldShowVerificationResend(selectedRole, loginErrorCode)) return;
+    setResendSending(true);
+    setResendMessage('');
+    setResendError('');
+    try {
+      await requestVerificationResend(api, form.email);
+      setResendMessage(VERIFICATION_RESEND_SUCCESS_MESSAGE);
+      setResendCooldown(30);
+    } catch {
+      setResendError('Unable to send the verification email right now. Please try again later.');
+    } finally {
+      setResendSending(false);
     }
   }
 
@@ -134,8 +177,25 @@ export default function Login() {
           )}
           <form onSubmit={handleSubmit} className={authFormClassName}>
             <FormField label="Email address" hint={selectedRole === 'student' ? STUDENT_EMAIL_HINT : undefined}><Input type="email" required placeholder={selectedRole === 'student' ? 'you@student.hau.edu.ph' : 'you@hau.edu.ph'} value={form.email} onChange={set('email')} autoComplete="email"/></FormField>
-            <FormField label="Password" action={selectedRole !== 'admin' ? <Link to={`/forgot-password?role=${selectedRole}`} className="text-xs font-semibold text-primary hover:text-primary-hover hover:underline">Forgot password?</Link> : null}><Input type="password" required placeholder="Enter your password" value={form.password} onChange={set('password')} autoComplete="current-password"/></FormField>
+            <FormField label="Password" action={selectedRole !== 'admin' ? <Link to={`/forgot-password?role=${selectedRole}`} className="text-xs font-semibold text-primary hover:text-primary-hover hover:underline">Forgot password?</Link> : null}><AuthPasswordInput required placeholder="Enter your password" value={form.password} onChange={set('password')} autoComplete="current-password"/></FormField>
             {error && <Alert type="error" className="-mt-1">{error}</Alert>}
+            {shouldShowVerificationResend(selectedRole, loginErrorCode) && <div className="-mt-2 rounded-lg border border-border bg-surface-subtle px-3 py-2.5 text-sm">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="text-muted-foreground">Didn't receive the email?</span>
+                <button
+                  type="button"
+                  onClick={handleResendVerification}
+                  disabled={resendSending || resendCooldown > 0}
+                  className="font-semibold text-primary hover:text-primary-hover hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline"
+                >
+                  {verificationResendActionLabel({ sending: resendSending, cooldownSeconds: resendCooldown })}
+                </button>
+              </div>
+              <div aria-live="polite" aria-atomic="true">
+                {resendMessage && <p className="mt-2 text-xs leading-5 text-success-subtle-foreground">{resendMessage}</p>}
+                {resendError && <p className="mt-2 text-xs leading-5 text-destructive">{resendError}</p>}
+              </div>
+            </div>}
             <Btn type="submit" variant="primary" disabled={loading} aria-busy={loading || undefined} className="w-full mt-1">{loading ? 'Signing in...' : 'Sign In'}</Btn>
           </form>
 

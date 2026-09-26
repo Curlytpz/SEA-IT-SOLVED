@@ -5,6 +5,7 @@ const AppError = require('../utils/AppError');
 const config   = require('../config/env');
 const { validatePassword } = require('./password-reset.service');
 const emailVerification = require('./email-verification.service');
+const { isAllowedInstructorEmail, normalizeEmail } = require('../utils/instructorEmailPolicy');
 
 const SALT_ROUNDS = 12;
 const DUMMY_LOGIN_PASSWORD_HASH = '$2b$12$4lkKXrjGtjbL5Kehn5f.NOVxB41JSJk08EL/4DKCL1bdnBHOKXPy2';
@@ -96,28 +97,55 @@ async function registerInstructor({ firstName, lastName, email, password }) {
   // Domain check — configurable via INSTRUCTOR_EMAIL_DOMAIN env var.
   // This is a first-line filter, NOT a substitute for admin approval.
   // Admin approval remains mandatory regardless of domain.
-  validateEmailDomain(email, config.INSTRUCTOR_EMAIL_DOMAIN);
+  const normalizedEmail = normalizeEmail(email);
+  if (!isAllowedInstructorEmail(normalizedEmail, config)) {
+    throw new AppError(`Registration requires an institutional email address ending in @${config.INSTRUCTOR_EMAIL_DOMAIN}.`, 400);
+  }
 
   validatePassword(password);
 
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
-  // Role is HARDCODED to INSTRUCTOR, status is HARDCODED to PENDING.
-  // These values are NEVER read from the request.
-  const { rows } = await pool.query(
-    `INSERT INTO users (first_name, last_name, email, password_hash, role, status)
-     VALUES ($1, $2, $3, $4, 'INSTRUCTOR', 'PENDING')
-     RETURNING *`,
-    [
-      firstName.trim(),
-      lastName.trim(),
-      email.trim().toLowerCase(),
-      passwordHash,
-    ]
-  );
+  const client = await pool.connect();
+  let user;
+  let delivery;
+  try {
+    await client.query('BEGIN');
+    // Role is HARDCODED to INSTRUCTOR, status is HARDCODED to PENDING.
+    // These values are NEVER read from the request.
+    const { rows } = await client.query(
+      `INSERT INTO users (first_name, last_name, email, password_hash, role, status)
+       VALUES ($1, $2, $3, $4, 'INSTRUCTOR', 'PENDING')
+       RETURNING *`,
+      [
+        firstName.trim(),
+        lastName.trim(),
+        normalizedEmail,
+        passwordHash,
+      ]
+    );
+    user = rows[0];
+    delivery = await emailVerification.issueForNewInstructor(client, user);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+  try {
+    await emailVerification.deliverVerification(delivery);
+  } catch (error) {
+    const safeName = String(error?.name || 'Error').replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 80) || 'Error';
+    console.error(`[EmailVerification] Instructor registration delivery failed name=${safeName}`);
+  }
 
-  // No token is issued until this instructor is approved and signs in.
-  return { user: buildSafeUser(rows[0]) };
+  // Verification proves mailbox ownership but does not grant instructor access.
+  return {
+    user: buildSafeUser(user),
+    verificationRequired: true,
+    message: 'Check your institutional email and verify it before an administrator can approve your account.',
+  };
 }
 
 // ─── Login ────────────────────────────────────────────────────────────────
@@ -153,12 +181,6 @@ async function login({ email, password, expectedRole }) {
     );
   }
 
-  if (user.role === 'INSTRUCTOR' && user.status === 'PENDING') {
-    throw new AppError('Your instructor account is awaiting admin approval.', 403, { code: 'INSTRUCTOR_PENDING' });
-  }
-  if (user.role === 'STUDENT' && user.status === 'PENDING') {
-    throw new AppError('Verify your student email before signing in.', 403, { code: 'STUDENT_EMAIL_UNVERIFIED' });
-  }
   // These are hard stops at login time in addition to the per-request
   // checks in authenticate.js. authenticate.js catches token-reuse after
   // suspension; these catch it at the login attempt itself.
@@ -171,6 +193,15 @@ async function login({ email, password, expectedRole }) {
     throw new AppError('Your account has been suspended. Contact the administrator.', 403, {
       code: user.role === 'INSTRUCTOR' ? 'INSTRUCTOR_SUSPENDED' : undefined,
     });
+  }
+  if (user.role === 'INSTRUCTOR' && !user.email_verified_at) {
+    throw new AppError('Verify your institutional email before continuing.', 403, { code: 'INSTRUCTOR_EMAIL_UNVERIFIED' });
+  }
+  if (user.role === 'INSTRUCTOR' && user.status === 'PENDING') {
+    throw new AppError('Your instructor account is awaiting admin approval.', 403, { code: 'INSTRUCTOR_PENDING' });
+  }
+  if (user.role === 'STUDENT' && user.status === 'PENDING') {
+    throw new AppError('Verify your student email before signing in.', 403, { code: 'STUDENT_EMAIL_UNVERIFIED' });
   }
 
   // Record only a genuinely successful login. This happens after password,

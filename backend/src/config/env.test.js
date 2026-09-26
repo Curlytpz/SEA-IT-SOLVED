@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { validateProductionConfiguration } = require('./env');
+const { validateProductionConfiguration, resolveDevelopmentInstructorTestEmail } = require('./env');
 
 const productionEnvironment = { DB_PASSWORD: 'configured', TRUST_PROXY_HOPS: '1' };
 
@@ -103,6 +103,21 @@ test('development configuration remains usable without production mail credentia
     NODE_ENV: 'development',
     MAIL_PROVIDER: 'development',
   }, {}));
+});
+
+test('development instructor test email is normalized outside production and ignored in production', () => {
+  assert.equal(resolveDevelopmentInstructorTestEmail({
+    NODE_ENV: 'development',
+    DEV_INSTRUCTOR_TEST_EMAIL: ' Test-Instructor@Example.com ',
+  }), 'test-instructor@example.com');
+  assert.equal(resolveDevelopmentInstructorTestEmail({
+    NODE_ENV: 'test',
+    DEV_INSTRUCTOR_TEST_EMAIL: 'test-instructor@example.com',
+  }), 'test-instructor@example.com');
+  assert.equal(resolveDevelopmentInstructorTestEmail({
+    NODE_ENV: 'production',
+    DEV_INSTRUCTOR_TEST_EMAIL: 'test-instructor@example.com',
+  }), '');
 });
 
 test('production rejects a stale-job timeout shorter than the complete media pipeline budget', () => {

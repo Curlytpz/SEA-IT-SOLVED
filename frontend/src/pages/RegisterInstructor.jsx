@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { Btn, Alert, Input, FormField } from '../components/ui';
 import AuthLayout from '../components/public/AuthLayout';
+import AuthPasswordInput from '../components/public/AuthPasswordInput';
 import { authFormClassName, authNameGridClassName, authSignInClassName, authSuccessClassName } from '../components/public/authStyles';
 
 export default function RegisterInstructor() {
@@ -25,8 +26,8 @@ export default function RegisterInstructor() {
     finally { setLoading(false); }
   }
 
-  if (success) return <AuthLayout backTo="/login?role=instructor" backLabel="Back to Sign In" title="Registration submitted" subtitle="Your instructor account is awaiting administrator approval." panelTitle="Keep academic judgment at the center of AI-assisted learning." panelBody="Review recognized lesson context, edit mathematical content, and approve what students receive.">
-    <div className={authSuccessClassName}><CheckCircle2 size={30}/><p>Access becomes available after an administrator approves your account. You can return to sign in and check your status.</p><Link to="/login?role=instructor"><Btn className="w-full">Back to Sign In</Btn></Link></div>
+  if (success) return <AuthLayout backTo="/login?role=instructor" backLabel="Back to Sign In" title="Verify your instructor email" subtitle="Check your institutional inbox before administrator approval." panelTitle="Keep academic judgment at the center of AI-assisted learning." panelBody="Review recognized lesson context, edit mathematical content, and approve what students receive.">
+    <div className={authSuccessClassName}><CheckCircle2 size={30}/><p>We sent a verification link to your institutional email. Verify your email first; your account will remain pending until an administrator approves it.</p><Link to="/login?role=instructor"><Btn className="w-full">Back to Sign In</Btn></Link></div>
   </AuthLayout>;
 
   return <AuthLayout backTo="/login?role=instructor" backLabel="Back to Sign In" title="Create Instructor Account" subtitle="Create your account. Access becomes available after administrator approval." panelTitle="A structured workspace for every mathematics lesson." panelBody="Capture lesson evidence, verify the academic context, and prepare approved materials and quizzes for your sections.">
@@ -35,8 +36,8 @@ export default function RegisterInstructor() {
     <form onSubmit={handleSubmit} className={authFormClassName}>
       <div className={authNameGridClassName}><FormField label="First name"><Input required value={form.firstName} onChange={set('firstName')} placeholder="Maria" autoComplete="given-name"/></FormField><FormField label="Last name"><Input required value={form.lastName} onChange={set('lastName')} placeholder="Santos" autoComplete="family-name"/></FormField></div>
       <FormField label="Faculty Email"><Input type="email" required value={form.email} onChange={set('email')} placeholder="santos@hau.edu.ph" autoComplete="email"/></FormField>
-      <FormField label="Password"><Input type="password" required value={form.password} onChange={set('password')} placeholder="Minimum 8 characters" autoComplete="new-password"/></FormField>
-      <FormField label="Confirm Password"><Input type="password" required value={form.confirm} onChange={set('confirm')} placeholder="Re-enter password" autoComplete="new-password"/></FormField>
+      <FormField label="Password"><AuthPasswordInput required value={form.password} onChange={set('password')} placeholder="Minimum 8 characters" autoComplete="new-password"/></FormField>
+      <FormField label="Confirm Password"><AuthPasswordInput required value={form.confirm} onChange={set('confirm')} placeholder="Re-enter password" autoComplete="new-password"/></FormField>
       <Btn type="submit" variant="primary" loading={loading} className="mt-1 w-full">Submit Registration</Btn>
     </form>
     <p className={authSignInClassName}>Already approved? <Link to="/login?role=instructor">Sign In</Link></p>

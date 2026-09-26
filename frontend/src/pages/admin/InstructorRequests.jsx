@@ -40,10 +40,16 @@ export default function InstructorRequests() {
             columns={[
               { key: 'name', label: 'Name', render: r => <strong>{r.firstName} {r.lastName}</strong> },
               { key: 'email', label: 'Email', render: r => <span className="text-muted-foreground">{r.email}</span> },
+              { key: 'verification', label: 'Email ownership', render: r => r.emailVerifiedAt
+                ? <span className="inline-flex items-center gap-1.5 font-semibold text-success-subtle-foreground"><Check size={14}/> Email Verified</span>
+                : <span className="font-semibold text-warning-subtle-foreground">Email Not Verified</span> },
               { key: 'date', label: 'Registered', render: r => new Date(r.createdAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) },
               { key: 'actions', label: 'Actions', render: r => (
                 <div className="flex gap-2">
-                  <Btn variant="success" size="sm" loading={actionLoading[r.id] === 'approve'} onClick={() => handle(r.id, 'approve')}><Check size={14}/> Approve</Btn>
+                  <div>
+                    <Btn variant="success" size="sm" disabled={!r.emailVerifiedAt} loading={actionLoading[r.id] === 'approve'} onClick={() => handle(r.id, 'approve')}><Check size={14}/> Approve</Btn>
+                    {!r.emailVerifiedAt && <p className="mt-1 max-w-56 text-xs leading-5 text-muted-foreground">Instructor must verify their institutional email before approval.</p>}
+                  </div>
                   <Btn variant="danger" size="sm" loading={actionLoading[r.id] === 'reject'} onClick={() => handle(r.id, 'reject')}><CircleX size={14}/> Reject</Btn>
                 </div>
               )},

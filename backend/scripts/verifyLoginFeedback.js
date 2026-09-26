@@ -29,8 +29,8 @@ async function main() {
   try {
     for (const account of accounts) {
       const { rows } = await pool.query(
-        `INSERT INTO users(first_name,last_name,email,password_hash,role,status)
-         VALUES('Login','Feedback Test',$1,$2,$3,$4) RETURNING id`,
+        `INSERT INTO users(first_name,last_name,email,password_hash,role,status,email_verified_at)
+         VALUES('Login','Feedback Test',$1,$2,$3,$4,NOW()) RETURNING id`,
         [account.email, passwordHash, account.role, account.status]
       );
       userIds.push(rows[0].id);

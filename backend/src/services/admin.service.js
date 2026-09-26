@@ -10,6 +10,7 @@ function safeUser(row) {
     studentNumber: row.student_number || undefined,
     role:          row.role,
     status:        row.status,
+    emailVerifiedAt: row.email_verified_at || null,
     createdAt:     row.created_at,
   };
 }
@@ -18,7 +19,7 @@ function safeUser(row) {
 
 async function getPendingInstructors() {
   const { rows } = await pool.query(
-    `SELECT id, first_name, last_name, email, role, status, created_at
+    `SELECT id, first_name, last_name, email, role, status, email_verified_at, created_at
      FROM users WHERE role = 'INSTRUCTOR' AND status = 'PENDING'
      ORDER BY created_at ASC`
   );
@@ -30,11 +31,26 @@ async function getPendingInstructors() {
 async function approveInstructor(instructorId) {
   const { rows } = await pool.query(
     `UPDATE users SET status = 'ACTIVE', auth_version = auth_version + 1
-     WHERE id = $1 AND role = 'INSTRUCTOR' AND status = 'PENDING'
+     WHERE id = $1
+       AND role = 'INSTRUCTOR'
+       AND status = 'PENDING'
+       AND email_verified_at IS NOT NULL
      RETURNING *`,
     [instructorId]
   );
-  if (rows.length === 0) throw new AppError('Instructor not found or already processed.', 404);
+  if (rows.length === 0) {
+    const pending = await pool.query(
+      `SELECT email_verified_at FROM users
+       WHERE id=$1 AND role='INSTRUCTOR' AND status='PENDING'`,
+      [instructorId]
+    );
+    if (pending.rows[0] && !pending.rows[0].email_verified_at) {
+      throw new AppError('Instructor must verify their institutional email before approval.', 409, {
+        code: 'INSTRUCTOR_EMAIL_UNVERIFIED',
+      });
+    }
+    throw new AppError('Instructor not found or already processed.', 404);
+  }
   return safeUser(rows[0]);
 }
 
@@ -63,7 +79,7 @@ async function getAllUsers({ role, status, page = 1, limit = 50 }) {
   params.push(limit, offset);
 
   const { rows } = await pool.query(
-    `SELECT id, first_name, last_name, email, student_number, role, status, created_at
+    `SELECT id, first_name, last_name, email, student_number, role, status, email_verified_at, created_at
      FROM users ${where}
      ORDER BY created_at DESC
      LIMIT $${params.length - 1} OFFSET $${params.length}`,

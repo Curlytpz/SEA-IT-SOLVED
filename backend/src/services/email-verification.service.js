@@ -4,9 +4,11 @@ const config = require('../config/env');
 const emailService = require('./email.service');
 const AppError = require('../utils/AppError');
 
-const PUBLIC_RESEND_MESSAGE = 'If an unverified student account exists for that email, a verification link has been sent.';
+const PUBLIC_RESEND_MESSAGE = 'If an unverified account exists for that email, a verification link has been sent.';
 const INVALID_TOKEN_MESSAGE = 'This email verification link is invalid or has expired.';
 const VERIFIED_MESSAGE = 'Your student email has been verified. You can now sign in.';
+const INSTRUCTOR_VERIFIED_MESSAGE = 'Your instructor email has been verified. Your account is now awaiting admin approval.';
+const ACTIVE_INSTRUCTOR_VERIFIED_MESSAGE = 'Your instructor email has been verified. You can now sign in.';
 
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase().slice(0, 255);
@@ -31,12 +33,14 @@ async function createToken(client, userId) {
   return { rawToken, expiresAt };
 }
 
-async function deliverVerification({ email, rawToken }) {
+async function deliverVerification({ email, rawToken, role = 'STUDENT', status }) {
   const verificationUrl = `${config.FRONTEND_URL.replace(/\/$/, '')}/verify-email?token=${encodeURIComponent(rawToken)}`;
   return emailService.sendStudentVerificationEmail({
     email,
     verificationUrl,
     expiresInMinutes: config.EMAIL_VERIFICATION_TTL_MINUTES,
+    role,
+    accountStatus: status,
   });
 }
 
@@ -48,7 +52,12 @@ function logSafeDeliveryFailure(error) {
 
 async function issueForNewStudent(client, user) {
   const token = await createToken(client, user.id);
-  return { email: user.email, rawToken: token.rawToken };
+  return { email: user.email, rawToken: token.rawToken, role: 'STUDENT', status: user.status };
+}
+
+async function issueForNewInstructor(client, user) {
+  const token = await createToken(client, user.id);
+  return { email: user.email, rawToken: token.rawToken, role: 'INSTRUCTOR', status: user.status };
 }
 
 async function resendVerification({ email }) {
@@ -59,14 +68,24 @@ async function resendVerification({ email }) {
   try {
     await client.query('BEGIN');
     const result = await client.query(
-      `SELECT id, email FROM users
-       WHERE LOWER(email)=$1 AND role='STUDENT' AND status='PENDING' AND email_verified_at IS NULL
+      `SELECT id, email, role, status FROM users
+       WHERE LOWER(email)=$1
+         AND email_verified_at IS NULL
+         AND (
+           (role='STUDENT' AND status='PENDING')
+           OR (role='INSTRUCTOR' AND status IN ('PENDING', 'ACTIVE'))
+         )
        FOR UPDATE`,
       [normalizedEmail]
     );
     if (result.rows[0]) {
       const token = await createToken(client, result.rows[0].id);
-      delivery = { email: result.rows[0].email, rawToken: token.rawToken };
+      delivery = {
+        email: result.rows[0].email,
+        rawToken: token.rawToken,
+        role: result.rows[0].role,
+        status: result.rows[0].status,
+      };
     }
     await client.query('COMMIT');
   } catch (error) {
@@ -87,32 +106,50 @@ async function verifyEmail({ token }) {
   try {
     await client.query('BEGIN');
     const result = await client.query(
-      `SELECT verification.user_id
+      `SELECT verification.user_id, account.role, account.status
        FROM email_verification_tokens verification
        JOIN users account ON account.id=verification.user_id
        WHERE verification.token_hash=$1
          AND verification.used_at IS NULL
          AND verification.expires_at>NOW()
-         AND account.role='STUDENT'
-         AND account.status='PENDING'
+         AND (
+           (account.role='STUDENT' AND account.status='PENDING')
+           OR (account.role='INSTRUCTOR' AND account.status IN ('PENDING', 'ACTIVE'))
+         )
          AND account.email_verified_at IS NULL
        FOR UPDATE OF verification, account`,
       [hashVerificationToken(token)]
     );
     if (!result.rows[0]) throw new AppError(INVALID_TOKEN_MESSAGE, 400);
     const userId = result.rows[0].user_id;
-    await client.query(
-      `UPDATE users
-       SET status='ACTIVE', email_verified_at=NOW(), auth_version=auth_version+1
-       WHERE id=$1 AND role='STUDENT' AND status='PENDING'`,
-      [userId]
-    );
+    const role = result.rows[0].role;
+    const accountStatus = result.rows[0].status;
+    if (role === 'STUDENT') {
+      await client.query(
+        `UPDATE users
+         SET status='ACTIVE', email_verified_at=NOW(), auth_version=auth_version+1
+         WHERE id=$1 AND role='STUDENT' AND status='PENDING'`,
+        [userId]
+      );
+    } else {
+      await client.query(
+        `UPDATE users
+         SET email_verified_at=NOW(), auth_version=auth_version+1
+         WHERE id=$1 AND role='INSTRUCTOR' AND status IN ('PENDING', 'ACTIVE')`,
+        [userId]
+      );
+    }
     await client.query(
       'UPDATE email_verification_tokens SET used_at=NOW() WHERE user_id=$1 AND used_at IS NULL',
       [userId]
     );
     await client.query('COMMIT');
-    return { message: VERIFIED_MESSAGE };
+    return {
+      message: role === 'INSTRUCTOR'
+        ? (accountStatus === 'ACTIVE' ? ACTIVE_INSTRUCTOR_VERIFIED_MESSAGE : INSTRUCTOR_VERIFIED_MESSAGE)
+        : VERIFIED_MESSAGE,
+      role,
+    };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -123,6 +160,7 @@ async function verifyEmail({ token }) {
 
 module.exports = {
   issueForNewStudent,
+  issueForNewInstructor,
   deliverVerification,
   resendVerification,
   verifyEmail,
@@ -130,4 +168,6 @@ module.exports = {
   PUBLIC_RESEND_MESSAGE,
   INVALID_TOKEN_MESSAGE,
   VERIFIED_MESSAGE,
+  INSTRUCTOR_VERIFIED_MESSAGE,
+  ACTIVE_INSTRUCTOR_VERIFIED_MESSAGE,
 };

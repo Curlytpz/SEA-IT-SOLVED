@@ -1,18 +1,11 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, Eye, EyeOff } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import AuthLayout from '../components/public/AuthLayout';
-import { Alert, Btn, FormField, Input, LoadingState } from '../components/ui';
+import AuthPasswordInput from '../components/public/AuthPasswordInput';
+import { Alert, Btn, FormField, LoadingState } from '../components/ui';
 import { resetPassword, validatePasswordResetToken } from '../services/passwordResetApi';
 import { authFormClassName, authSuccessClassName } from '../components/public/authStyles';
-
-function PasswordInput({ id, value, onChange, placeholder, autoComplete, 'aria-describedby': describedBy }) {
-  const [visible, setVisible] = useState(false);
-  return <div className="relative">
-    <Input id={id} type={visible ? 'text' : 'password'} required minLength={8} maxLength={128} value={value} onChange={onChange} placeholder={placeholder} autoComplete={autoComplete} aria-describedby={describedBy} className="pr-11"/>
-    <button type="button" onClick={() => setVisible(current => !current)} className="absolute inset-y-0 right-0 grid w-11 place-items-center rounded-r-lg text-muted-foreground hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring" aria-label={visible ? 'Hide password' : 'Show password'}>{visible ? <EyeOff size={17}/> : <Eye size={17}/>}</button>
-  </div>;
-}
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams();
@@ -62,8 +55,8 @@ export default function ResetPassword() {
         : <>
           {error && <Alert type="error" onClose={() => setError('')}>{error}</Alert>}
           <form onSubmit={submit} className={authFormClassName}>
-            <FormField label="New password" hint="Use at least 8 characters."><PasswordInput value={form.password} onChange={event => setForm(current => ({ ...current, password: event.target.value }))} placeholder="Enter a new password" autoComplete="new-password"/></FormField>
-            <FormField label="Confirm new password"><PasswordInput value={form.confirm} onChange={event => setForm(current => ({ ...current, confirm: event.target.value }))} placeholder="Re-enter your new password" autoComplete="new-password"/></FormField>
+            <FormField label="New password" hint="Use at least 8 characters."><AuthPasswordInput required minLength={8} maxLength={128} value={form.password} onChange={event => setForm(current => ({ ...current, password: event.target.value }))} placeholder="Enter a new password" autoComplete="new-password"/></FormField>
+            <FormField label="Confirm new password"><AuthPasswordInput required minLength={8} maxLength={128} value={form.confirm} onChange={event => setForm(current => ({ ...current, confirm: event.target.value }))} placeholder="Re-enter your new password" autoComplete="new-password"/></FormField>
             <Btn type="submit" variant="primary" loading={loading} disabled={loading} className="mt-1 w-full">Update password</Btn>
           </form>
         </>;

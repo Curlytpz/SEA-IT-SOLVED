@@ -4,6 +4,7 @@ const pool = require('../db/pool');
 const config = require('../config/env');
 const emailService = require('./email.service');
 const AppError = require('../utils/AppError');
+const { isAllowedInstructorEmail } = require('../utils/instructorEmailPolicy');
 
 const SALT_ROUNDS = 12;
 const PUBLIC_REQUEST_MESSAGE = 'If an account exists for that email, password reset instructions have been sent.';
@@ -42,7 +43,7 @@ async function requestPasswordReset({ email, role }) {
     console.info('[PasswordReset] Calling email service: NO');
     return { message: PUBLIC_REQUEST_MESSAGE };
   }
-  if (normalizedRole === 'INSTRUCTOR' && config.INSTRUCTOR_EMAIL_DOMAIN && !normalizedEmail.endsWith(`@${config.INSTRUCTOR_EMAIL_DOMAIN}`)) {
+  if (normalizedRole === 'INSTRUCTOR' && !isAllowedInstructorEmail(normalizedEmail, config)) {
     console.info('[PasswordReset] Registered account found: NO');
     console.info('[PasswordReset] Calling email service: NO');
     return { message: PUBLIC_REQUEST_MESSAGE };

@@ -28,3 +28,7 @@ export function instructorAccessCodeForStatus(status) {
 export function isInstructorAccessCode(code) {
   return Object.hasOwn(INSTRUCTOR_ACCESS_NOTICES, code);
 }
+
+export function isInstructorSessionBlockCode(code) {
+  return code === 'INSTRUCTOR_EMAIL_UNVERIFIED' || isInstructorAccessCode(code);
+}

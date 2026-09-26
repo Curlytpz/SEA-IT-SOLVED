@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "start:production": "node scripts/startProduction.js",
     "dev": "nodemon server.js",
     "verify-lesson-exports": "node scripts/verifyLessonExports.js",
     "verify-section-uniqueness": "node scripts/verifySectionUniqueness.js",

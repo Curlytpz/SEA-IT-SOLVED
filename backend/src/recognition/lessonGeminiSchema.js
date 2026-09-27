@@ -1,4 +1,5 @@
 const { z } = require('zod');
+const { assertGeminiJsonSchema } = require('./geminiSchemaSupport');
 
 const boundsSchema = z.object({
   x: z.number().min(0).max(1), y: z.number().min(0).max(1),
@@ -24,20 +25,24 @@ const lessonCompilationSchema = z.object({
   warnings: z.array(z.string().max(1000)).max(100),
 }).strict();
 
-const nullableString = { type: ['string', 'null'], maxLength:10000 };
+// Keep this provider-facing schema deliberately small. Gemini accepts only a
+// JSON Schema subset and can reject otherwise valid, deeply constrained
+// schemas before inference. Strict bounds remain enforced by Zod above.
+const nullableString = { type: ['string', 'null'] };
 const nullableBounds = { type: ['object', 'null'], required: ['x','y','width','height'], properties: {
-  x:{type:'number',minimum:0,maximum:1}, y:{type:'number',minimum:0,maximum:1},
-  width:{type:'number',exclusiveMinimum:0,maximum:1}, height:{type:'number',exclusiveMinimum:0,maximum:1},
+  x:{type:'number'}, y:{type:'number'}, width:{type:'number'}, height:{type:'number'},
 }, additionalProperties:false };
 const blockJsonSchema = { type:'object', required:['type','order','text','latex','uncertain','uncertaintyReason','bounds'], properties:{
-  type:{type:'string',enum:['text','math']}, order:{type:'integer',minimum:0,maximum:10000}, text:nullableString, latex:nullableString,
-  uncertain:{type:'boolean'}, uncertaintyReason:{type:['string','null'],maxLength:1000}, bounds:nullableBounds,
+  type:{type:'string',enum:['text','math']}, order:{type:'integer'}, text:nullableString, latex:nullableString,
+  uncertain:{type:'boolean'}, uncertaintyReason:{type:['string','null']}, bounds:nullableBounds,
 }, additionalProperties:false };
 const geminiLessonJsonSchema = { type:'object', required:['pages','warnings'], properties:{
-  pages:{type:'array',minItems:1,maxItems:1000,items:{type:'object',required:['pageNumber','plainText','blocks','warnings'],properties:{
-    pageNumber:{type:'integer',minimum:1,maximum:1000}, plainText:{type:'string',maxLength:50000}, blocks:{type:'array',maxItems:500,items:blockJsonSchema},
-    warnings:{type:'array',maxItems:50,items:{type:'string',maxLength:1000}},
-  },additionalProperties:false}}, warnings:{type:'array',maxItems:100,items:{type:'string',maxLength:1000}},
+  pages:{type:'array',items:{type:'object',required:['pageNumber','plainText','blocks','warnings'],properties:{
+    pageNumber:{type:'integer'}, plainText:{type:'string'}, blocks:{type:'array',items:blockJsonSchema},
+    warnings:{type:'array',items:{type:'string'}},
+  },additionalProperties:false}}, warnings:{type:'array',items:{type:'string'}},
 }, additionalProperties:false };
+
+assertGeminiJsonSchema(geminiLessonJsonSchema);
 
 module.exports = { lessonCompilationSchema, geminiLessonJsonSchema };

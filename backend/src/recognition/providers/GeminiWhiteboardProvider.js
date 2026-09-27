@@ -2,6 +2,7 @@ const WhiteboardExtractionProvider = require('./WhiteboardExtractionProvider');
 const { geminiResponseJsonSchema } = require('../geminiSchema');
 const { normalizeExtraction } = require('../RecognitionNormalizer');
 const { RecognitionProviderError, mapProviderError } = require('../ProviderErrorMapper');
+const { validateGeminiImage } = require('../GeminiImageInput');
 
 const SYSTEM_INSTRUCTION = `You are a whiteboard transcription and extraction engine.
 Transcribe only content that is visibly present in the supplied whiteboard image.
@@ -18,12 +19,13 @@ Use text blocks for ordinary writing and math blocks for mathematical expression
 Do not use outside knowledge or infer content beyond the image.`;
 
 class GeminiWhiteboardProvider extends WhiteboardExtractionProvider {
-  constructor({ apiKey, model, mediaResolution, timeoutMs }) {
+  constructor({ apiKey, model, mediaResolution, timeoutMs, maxImageBytes = 8 * 1024 * 1024 }) {
     super();
     this.apiKey = apiKey;
     this.model = model;
     this.mediaResolution = mediaResolution;
     this.timeoutMs = timeoutMs;
+    this.maxImageBytes = maxImageBytes;
     this.client = null;
   }
 
@@ -39,14 +41,25 @@ class GeminiWhiteboardProvider extends WhiteboardExtractionProvider {
   async extract({ imageBuffer, mimeType }) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    const requestMetadata = {
+      requestStage: 'image_validation',
+      model: this.model,
+      imageMimeType: String(mimeType || '').toLowerCase(),
+      imageByteSize: Buffer.isBuffer(imageBuffer) ? imageBuffer.length : 0,
+      imagePartCount: 1,
+      responseSchemaSupplied: true,
+      responseMimeTypeSupplied: true,
+    };
     try {
+      const image = validateGeminiImage({ buffer:imageBuffer, mimeType, maxBytes:this.maxImageBytes });
       const client = await this.getClient();
+      requestMetadata.requestStage = 'generate_content';
       const response = await client.models.generateContent({
         model: this.model,
         contents: [{
           role: 'user',
           parts: [
-            { inlineData: { mimeType, data: imageBuffer.toString('base64') } },
+            { inlineData: { mimeType:image.mimeType, data:image.buffer.toString('base64') } },
             { text: USER_INSTRUCTION },
           ],
         }],
@@ -70,7 +83,9 @@ class GeminiWhiteboardProvider extends WhiteboardExtractionProvider {
       }
       return { normalized: normalizeExtraction(parsed), sanitizedOutput: parsed, providerVersion: this.model };
     } catch (error) {
-      throw mapProviderError(error);
+      const mapped = mapProviderError(error);
+      mapped.recognitionRequest = requestMetadata;
+      throw mapped;
     } finally {
       clearTimeout(timeout);
     }

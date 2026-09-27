@@ -34,13 +34,26 @@ function errorMessages(error) {
   return messages.join(' ');
 }
 
+function providerGoogleStatus(error) {
+  let current = error;
+  const messages = [];
+  for (let depth = 0; current && depth < 6; depth += 1) {
+    const direct = current.error?.status || current.response?.data?.error?.status || current.details?.error?.status;
+    if (direct) return String(direct).toUpperCase();
+    if (current.message) messages.push(String(current.message));
+    current = current.cause;
+  }
+  const match = messages.join(' ').match(/(?:"status"\s*:\s*"|\bstatus\s*[:=]\s*)([A-Z][A-Z_]+)/i);
+  return match ? match[1].toUpperCase() : null;
+}
+
 function mapProviderError(error) {
   if (error instanceof RecognitionProviderError) return error;
   if (error?.code === 'NO_RECOGNIZABLE_CONTENT') {
     return new RecognitionProviderError('NO_RECOGNIZABLE_CONTENT', 'No recognizable whiteboard content was found.', false, error);
   }
   if (error instanceof ZodError || error instanceof SyntaxError || error?.code === 'INVALID_PROVIDER_OUTPUT') {
-    return new RecognitionProviderError('INVALID_PROVIDER_OUTPUT', 'The recognition service returned an invalid response.', false, error);
+    return new RecognitionProviderError('PROVIDER_RESPONSE_INVALID', 'The recognition service returned an invalid response.', false, error);
   }
   const status = providerHttpStatus(error);
   const message = errorMessages(error);
@@ -82,4 +95,4 @@ function mapProviderError(error) {
   return new RecognitionProviderError('RECOGNITION_FAILED', 'The whiteboard could not be processed.', false, error);
 }
 
-module.exports = { RecognitionProviderError, mapProviderError, providerHttpStatus };
+module.exports = { RecognitionProviderError, mapProviderError, providerHttpStatus, providerGoogleStatus };

@@ -12,7 +12,8 @@ const GeminiWhiteboardProvider = require('../recognition/providers/GeminiWhitebo
 const GeminiLessonCompilationProvider = require('../recognition/providers/GeminiLessonCompilationProvider');
 const GeminiLessonMaterialProvider = require('../recognition/providers/GeminiLessonMaterialProvider');
 const { assertRecognizableMaterialContent } = require('../recognition/LessonMaterialResult');
-const { RecognitionProviderError, mapProviderError, providerHttpStatus } = require('../recognition/ProviderErrorMapper');
+const { RecognitionProviderError, mapProviderError, providerHttpStatus, providerGoogleStatus } = require('../recognition/ProviderErrorMapper');
+const { sanitizeRecognitionLogText, recognitionRequestMetadata } = require('../recognition/RecognitionDiagnostics');
 const { reconcileRecognitionBlocks, plainTextFromBlocks } = require('../recognition/RecognitionReconciler');
 const {
   GEMINI_API_KEY,
@@ -35,14 +36,17 @@ const provider = new GeminiWhiteboardProvider({
   model: GEMINI_RECOGNITION_MODEL,
   mediaResolution: GEMINI_MEDIA_RESOLUTION,
   timeoutMs: RECOGNITION_PROVIDER_TIMEOUT_MS,
+  maxImageBytes: RECOGNITION_MAX_IMAGE_MB * 1024 * 1024,
 });
 const lessonProvider = new GeminiLessonCompilationProvider({
   apiKey: GEMINI_API_KEY, model: GEMINI_RECOGNITION_MODEL, mediaResolution: GEMINI_MEDIA_RESOLUTION,
   timeoutMs: RECOGNITION_PROVIDER_TIMEOUT_MS,
+  maxImageBytes: RECOGNITION_MAX_IMAGE_MB * 1024 * 1024,
 });
 const materialProvider = new GeminiLessonMaterialProvider({
   apiKey: GEMINI_API_KEY, model: GEMINI_RECOGNITION_MODEL, mediaResolution: GEMINI_MEDIA_RESOLUTION,
   timeoutMs: RECOGNITION_PROVIDER_TIMEOUT_MS,
+  maxImageBytes: RECOGNITION_MAX_IMAGE_MB * 1024 * 1024,
 });
 let stopping = false;
 
@@ -78,21 +82,14 @@ function retainedProviderOutput(value) {
   return { omitted: true, reason: 'Structured provider output exceeded the retention limit.' };
 }
 
-function safeLogText(value) {
-  return String(value || '')
-    .replace(/AIza[A-Za-z0-9_-]{20,}/g, '[REDACTED_API_KEY]')
-    .replace(/([?&](?:key|api_key)=)[^&\s]+/gi, '$1[REDACTED]')
-    .replace(/(authorization\s*[:=]\s*bearer\s+)[^\s,}]+/gi, '$1[REDACTED]');
-}
-
 function safeCause(cause) {
   if (!cause) return null;
-  if (typeof cause === 'string') return safeLogText(cause);
+  if (typeof cause === 'string') return sanitizeRecognitionLogText(cause);
   return {
     name: cause.name || null,
     code: cause.code || null,
     status: providerHttpStatus(cause) || null,
-    message: safeLogText(cause.message || cause),
+    message: sanitizeRecognitionLogText(cause.message || cause),
   };
 }
 
@@ -127,6 +124,7 @@ function logRequestSucceeded(kind, attempt, source, startedAt) {
 
 function logRawProviderFailure(kind, attempt, source, error, mapped, startedAt, requestStarted) {
   const raw = error?.cause || error;
+  const request = recognitionRequestMetadata(error);
   console.error('[Recognition] Raw provider failure', {
     ...attemptContext(kind, attempt, source),
     requestStarted,
@@ -134,8 +132,15 @@ function logRawProviderFailure(kind, attempt, source, error, mapped, startedAt, 
     httpStatus: providerHttpStatus(error) || null,
     name: raw?.name || error?.name || null,
     code: raw?.code || error?.code || null,
-    message: safeLogText(raw?.message || error?.message),
+    message: sanitizeRecognitionLogText(raw?.message || error?.message),
     status: providerHttpStatus(raw) || null,
+    googleStatus: providerGoogleStatus(error),
+    requestStage: request.requestStage || null,
+    imageMimeType: request.imageMimeType || null,
+    imageByteSize: request.imageByteSize ?? null,
+    imagePartCount: request.imagePartCount ?? null,
+    responseSchemaSupplied: request.responseSchemaSupplied ?? null,
+    responseMimeTypeSupplied: request.responseMimeTypeSupplied ?? null,
     cause: safeCause(raw?.cause),
     mappedCode: mapped.code,
     retryable: mapped.retryable,

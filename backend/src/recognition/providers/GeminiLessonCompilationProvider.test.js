@@ -2,6 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const GeminiLessonCompilationProvider = require('./GeminiLessonCompilationProvider');
 const { normalizeLessonCompilation } = require('../LessonRecognitionNormalizer');
+const { geminiLessonJsonSchema } = require('../lessonGeminiSchema');
+const { assertGeminiJsonSchema } = require('../geminiSchemaSupport');
+
+const png = Buffer.from('89504e470d0a1a0a00000000', 'hex');
 
 const validLesson = {
   pages: [{
@@ -59,12 +63,19 @@ test('provider keeps Gemini structured JSON configuration and normalizes fenced 
     },
   };
   const result = await provider.compile({
-    images: [{ mimeType: 'image/png', buffer: Buffer.from('image') }],
+    images: [{ mimeType: 'image/png', buffer: png }],
     captures: [{ id: 'capture-1', captured_at: '2026-01-01T00:00:00.000Z' }],
   });
   assert.equal(receivedConfig.responseMimeType, 'application/json');
   assert.equal(receivedConfig.responseJsonSchema.type, 'object');
   assert.equal(result.normalized.pages[0].blocks[0].latex, '\\frac{1}{x}');
+});
+
+test('provider response schema uses only the documented Gemini JSON Schema subset', () => {
+  assert.doesNotThrow(() => assertGeminiJsonSchema(geminiLessonJsonSchema));
+  assert.equal(JSON.stringify(geminiLessonJsonSchema).includes('maxLength'), false);
+  assert.equal(JSON.stringify(geminiLessonJsonSchema).includes('exclusiveMinimum'), false);
+  assert.throws(() => assertGeminiJsonSchema({ type:'string', maxLength:10 }), /Unsupported Gemini response schema keyword/);
 });
 
 test('uploaded Gemini lesson files are cleaned if a later upload fails', async () => {
@@ -83,8 +94,8 @@ test('uploaded Gemini lesson files are cleaned if a later upload fails', async (
   };
   await assert.rejects(() => provider.compile({
     images: [
-      { mimeType: 'image/png', load: async () => Buffer.from('first') },
-      { mimeType: 'image/png', load: async () => Buffer.from('second') },
+      { mimeType: 'image/png', load: async () => png },
+      { mimeType: 'image/png', load: async () => png },
     ], captures: [{}, {}],
   }));
   assert.deepEqual(deleted, ['first-file']);

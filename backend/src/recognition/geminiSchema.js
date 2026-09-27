@@ -1,4 +1,5 @@
 const { z } = require('zod');
+const { assertGeminiJsonSchema } = require('./geminiSchemaSupport');
 
 const boundsSchema = z.object({
   x: z.number().min(0).max(1),
@@ -71,5 +72,7 @@ const geminiResponseJsonSchema = {
     warnings: { type: 'array', items: { type: 'string' } },
   },
 };
+
+assertGeminiJsonSchema(geminiResponseJsonSchema);
 
 module.exports = { extractionSchema, geminiResponseJsonSchema };

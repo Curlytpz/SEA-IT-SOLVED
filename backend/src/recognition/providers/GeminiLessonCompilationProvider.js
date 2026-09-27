@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { geminiLessonJsonSchema } = require('../lessonGeminiSchema');
 const { normalizeLessonCompilation } = require('../LessonRecognitionNormalizer');
 const { RecognitionProviderError, mapProviderError } = require('../ProviderErrorMapper');
+const { validateGeminiImage } = require('../GeminiImageInput');
 
 const SYSTEM_INSTRUCTION = `You are a whiteboard transcription engine processing an ordered lesson album.
 Read every supplied page as one chronological lesson sequence while returning one extraction for each page.
@@ -77,9 +78,10 @@ function logInvalidStructuredOutput(error,value) {
 }
 
 class GeminiLessonCompilationProvider {
-  constructor({ apiKey, model, mediaResolution, timeoutMs, filePollIntervalMs = 2000, fileReadyTimeoutMs = 120000 }) {
+  constructor({ apiKey, model, mediaResolution, timeoutMs, maxImageBytes = 8 * 1024 * 1024, filePollIntervalMs = 2000, fileReadyTimeoutMs = 120000 }) {
     this.apiKey=apiKey; this.model=model; this.mediaResolution=mediaResolution; this.timeoutMs=timeoutMs;
     this.filePollIntervalMs=filePollIntervalMs; this.fileReadyTimeoutMs=fileReadyTimeoutMs; this.client=null;
+    this.maxImageBytes=maxImageBytes;
   }
   async getClient() {
     if (!this.apiKey) throw new RecognitionProviderError('AUTHENTICATION_ERROR','Gemini API key is not configured.',false);
@@ -97,12 +99,21 @@ class GeminiLessonCompilationProvider {
   }
   async compile({ images, captures }) {
     const remoteFiles=[]; const controller=new AbortController(); const timeout=setTimeout(()=>controller.abort(),this.timeoutMs);
+    const requestMetadata = {
+      requestStage:'image_validation', model:this.model,
+      imageMimeType:images.map(image=>String(image.mimeType||'').toLowerCase()).join(','),
+      imageByteSize:0, imagePartCount:images.length,
+      responseSchemaSupplied:true, responseMimeTypeSupplied:true,
+    };
     try {
       const client=await this.getClient();
       for (let index=0; index<images.length; index+=1) {
         const image=images[index];
         const buffer=image.buffer||await image.load();
-        let remote=await client.files.upload({file:new Blob([buffer],{type:image.mimeType}),config:{mimeType:image.mimeType,displayName:`lesson-page-${index+1}`}});
+        const validated=validateGeminiImage({buffer,mimeType:image.mimeType,maxBytes:this.maxImageBytes});
+        requestMetadata.imageByteSize+=validated.buffer.length;
+        requestMetadata.requestStage='file_upload';
+        let remote=await client.files.upload({file:new Blob([validated.buffer],{type:validated.mimeType}),config:{mimeType:validated.mimeType,displayName:`lesson-page-${index+1}`}});
         remoteFiles.push(remote);
         remote=await this.waitForActive(client,remote); remoteFiles[remoteFiles.length-1]=remote;
       }
@@ -112,6 +123,7 @@ class GeminiLessonCompilationProvider {
         parts.push({fileData:{fileUri:file.uri,mimeType:file.mimeType||images[index].mimeType}});
       });
       parts.push({text:USER_INSTRUCTION});
+      requestMetadata.requestStage='generate_content';
       const response=await client.models.generateContent({model:this.model,contents:[{role:'user',parts}],config:{
         systemInstruction:SYSTEM_INSTRUCTION,responseMimeType:'application/json',responseJsonSchema:geminiLessonJsonSchema,
         mediaResolution:this.mediaResolution,abortSignal:controller.signal,
@@ -124,7 +136,11 @@ class GeminiLessonCompilationProvider {
       try{normalized=normalizeLessonCompilation(parsed,captures);}
       catch(error){error.recognitionStage=Array.isArray(error?.issues)?'schema_validation':'normalization';logInvalidStructuredOutput(error,response.text);throw error;}
       return {normalized,sanitizedOutput:parsed,providerVersion:this.model};
-    } catch(error) { throw mapProviderError(error); }
+    } catch(error) {
+      const mapped=mapProviderError(error);
+      mapped.recognitionRequest=requestMetadata;
+      throw mapped;
+    }
     finally {
       clearTimeout(timeout);
       const client=this.client;

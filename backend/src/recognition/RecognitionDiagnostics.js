@@ -25,4 +25,20 @@ function recognitionRequestMetadata(error) {
   return {};
 }
 
-module.exports = { sanitizeRecognitionLogText, recognitionRequestMetadata };
+function recognitionResponseMetadata(error) {
+  let current=error;
+  for(let depth=0;current&&depth<6;depth+=1){
+    if(current.recognitionResponse)return {
+      responseStage:current.recognitionResponse.stage||null,
+      finishReason:current.recognitionResponse.finishReason||null,
+      outputTokenCount:current.recognitionResponse.outputTokenCount??null,
+      responseBytes:current.recognitionResponse.responseBytes??null,
+      responseSha256:current.recognitionResponse.responseSha256||null,
+      fenced:current.recognitionResponse.fenced??null,
+    };
+    current=current.cause;
+  }
+  return {};
+}
+
+module.exports = { sanitizeRecognitionLogText, recognitionRequestMetadata, recognitionResponseMetadata };

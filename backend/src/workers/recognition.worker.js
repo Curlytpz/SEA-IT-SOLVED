@@ -13,7 +13,7 @@ const GeminiLessonCompilationProvider = require('../recognition/providers/Gemini
 const GeminiLessonMaterialProvider = require('../recognition/providers/GeminiLessonMaterialProvider');
 const { assertRecognizableMaterialContent } = require('../recognition/LessonMaterialResult');
 const { RecognitionProviderError, mapProviderError, providerHttpStatus, providerGoogleStatus } = require('../recognition/ProviderErrorMapper');
-const { sanitizeRecognitionLogText, recognitionRequestMetadata } = require('../recognition/RecognitionDiagnostics');
+const { sanitizeRecognitionLogText, recognitionRequestMetadata, recognitionResponseMetadata } = require('../recognition/RecognitionDiagnostics');
 const { reconcileRecognitionBlocks, plainTextFromBlocks } = require('../recognition/RecognitionReconciler');
 const {
   GEMINI_API_KEY,
@@ -125,6 +125,7 @@ function logRequestSucceeded(kind, attempt, source, startedAt) {
 function logRawProviderFailure(kind, attempt, source, error, mapped, startedAt, requestStarted) {
   const raw = error?.cause || error;
   const request = recognitionRequestMetadata(error);
+  const response = recognitionResponseMetadata(error);
   console.error('[Recognition] Raw provider failure', {
     ...attemptContext(kind, attempt, source),
     requestStarted,
@@ -132,7 +133,7 @@ function logRawProviderFailure(kind, attempt, source, error, mapped, startedAt, 
     httpStatus: providerHttpStatus(error) || null,
     name: raw?.name || error?.name || null,
     code: raw?.code || error?.code || null,
-    message: sanitizeRecognitionLogText(raw?.message || error?.message),
+    message: response.responseStage ? mapped.message : sanitizeRecognitionLogText(raw?.message || error?.message),
     status: providerHttpStatus(raw) || null,
     googleStatus: providerGoogleStatus(error),
     requestStage: request.requestStage || null,
@@ -141,7 +142,13 @@ function logRawProviderFailure(kind, attempt, source, error, mapped, startedAt, 
     imagePartCount: request.imagePartCount ?? null,
     responseSchemaSupplied: request.responseSchemaSupplied ?? null,
     responseMimeTypeSupplied: request.responseMimeTypeSupplied ?? null,
-    cause: safeCause(raw?.cause),
+    responseStage: response.responseStage || null,
+    finishReason: response.finishReason || null,
+    outputTokenCount: response.outputTokenCount ?? null,
+    responseBytes: response.responseBytes ?? null,
+    responseSha256: response.responseSha256 || null,
+    fenced: response.fenced ?? null,
+    cause: response.responseStage ? null : safeCause(raw?.cause),
     mappedCode: mapped.code,
     retryable: mapped.retryable,
     durationMs: Date.now() - startedAt,

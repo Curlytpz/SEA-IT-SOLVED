@@ -13,8 +13,38 @@ function normalizedRecognitionText(value, maxLength, { mathContext = false } = {
   return cleaned === null ? null : normalizeRecognitionNumericArtifacts(cleaned, { mathContext });
 }
 
+function normalizedBounds(value) {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) return value;
+  const numbers=['x','y','width','height'].map(key=>Number(value[key]));
+  if (!numbers.every(Number.isFinite)) return value;
+  const x=Math.min(1,Math.max(0,numbers[0]));
+  const y=Math.min(1,Math.max(0,numbers[1]));
+  const width=Math.min(1-x,Math.max(0,numbers[2]));
+  const height=Math.min(1-y,Math.max(0,numbers[3]));
+  return width>0&&height>0?{x,y,width,height}:null;
+}
+
+function normalizeLessonProviderShape(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return input;
+  return {
+    ...input,
+    warnings:Array.isArray(input.warnings)?input.warnings:[],
+    pages:Array.isArray(input.pages)?input.pages.map(page=>({
+      ...page,
+      warnings:Array.isArray(page?.warnings)?page.warnings:[],
+      blocks:Array.isArray(page?.blocks)?page.blocks.map(block=>({
+        ...block,
+        ...(block?.type==='math'&&block.text===undefined?{text:null}:{}),
+        ...(block?.type==='text'&&block.latex===undefined?{latex:null}:{}),
+        ...(!block?.uncertain&&block?.uncertaintyReason===undefined?{uncertaintyReason:null}:{}),
+        ...(block?.bounds===undefined?{bounds:null}:{bounds:normalizedBounds(block.bounds)}),
+      })):page?.blocks,
+    })):input.pages,
+  };
+}
+
 function normalizeLessonCompilation(input, captures) {
-  const parsed = lessonCompilationSchema.parse(input);
+  const parsed = lessonCompilationSchema.parse(normalizeLessonProviderShape(input));
   if (parsed.pages.length !== captures.length) {
     const error = new Error('The provider did not return one result for every lesson page.');
     error.code = 'INVALID_PROVIDER_OUTPUT';
@@ -56,4 +86,4 @@ function normalizeLessonCompilation(input, captures) {
   return { pages, compiledText, warnings:parsed.warnings.map(value=>clean(value,1000)).filter(Boolean) };
 }
 
-module.exports = { normalizeLessonCompilation };
+module.exports = { normalizeLessonCompilation, normalizeLessonProviderShape };

@@ -32,12 +32,12 @@ const nullableString = { type: ['string', 'null'] };
 const nullableBounds = { type: ['object', 'null'], required: ['x','y','width','height'], properties: {
   x:{type:'number'}, y:{type:'number'}, width:{type:'number'}, height:{type:'number'},
 }, additionalProperties:false };
-const blockJsonSchema = { type:'object', required:['type','order','text','latex','uncertain','uncertaintyReason','bounds'], properties:{
+const blockJsonSchema = { type:'object', required:['type','order','text','latex','uncertain'], properties:{
   type:{type:'string',enum:['text','math']}, order:{type:'integer'}, text:nullableString, latex:nullableString,
   uncertain:{type:'boolean'}, uncertaintyReason:{type:['string','null']}, bounds:nullableBounds,
 }, additionalProperties:false };
-const geminiLessonJsonSchema = { type:'object', required:['pages','warnings'], properties:{
-  pages:{type:'array',items:{type:'object',required:['pageNumber','plainText','blocks','warnings'],properties:{
+const geminiLessonJsonSchema = { type:'object', required:['pages'], properties:{
+  pages:{type:'array',items:{type:'object',required:['pageNumber','plainText','blocks'],properties:{
     pageNumber:{type:'integer'}, plainText:{type:'string'}, blocks:{type:'array',items:blockJsonSchema},
     warnings:{type:'array',items:{type:'string'}},
   },additionalProperties:false}}, warnings:{type:'array',items:{type:'string'}},

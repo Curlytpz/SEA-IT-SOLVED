@@ -54,7 +54,8 @@ test('Gemini INVALID_ARGUMENT remains a request failure with safe request metada
 test('malformed provider JSON is classified separately from request rejection', async () => {
   const provider=providerWithResponse(()=>{});
   provider.client.models.generateContent=async()=>({text:'not-json'});
-  await assert.rejects(()=>provider.extract({imageBuffer:png,mimeType:'image/png'}),error=>error.code==='PROVIDER_RESPONSE_INVALID');
+  await assert.rejects(()=>provider.extract({imageBuffer:png,mimeType:'image/png'}),error=>
+    error.code==='PROVIDER_RESPONSE_INVALID'&&error.recognitionResponse?.stage==='JSON_PARSE_FAILED');
 });
 
 test('Gemini schemas stay within the supported keyword subset', () => {

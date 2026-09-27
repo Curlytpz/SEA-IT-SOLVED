@@ -3,6 +3,9 @@ const { geminiLessonJsonSchema } = require('../lessonGeminiSchema');
 const { normalizeLessonCompilation } = require('../LessonRecognitionNormalizer');
 const { RecognitionProviderError, mapProviderError } = require('../ProviderErrorMapper');
 const { validateGeminiImage } = require('../GeminiImageInput');
+const { extractGeminiResponseText } = require('../GeminiResponse');
+
+const MAX_STRUCTURED_RESPONSE_BYTES=1024*1024;
 
 const SYSTEM_INSTRUCTION = `You are a whiteboard transcription engine processing an ordered lesson album.
 Read every supplied page as one chronological lesson sequence while returning one extraction for each page.
@@ -18,28 +21,23 @@ Return exactly one page entry for every image, with sequential pageNumber values
 function wait(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
 function balancedJsonObjects(text) {
-  const candidates=[];
-  for(let start=0;start<text.length;start+=1){
-    if(text[start]!=='{')continue;
-    let depth=0,inString=false,escaped=false;
-    for(let index=start;index<text.length;index+=1){
-      const character=text[index];
-      if(inString){
-        if(escaped)escaped=false;
-        else if(character==='\\')escaped=true;
-        else if(character==='"')inString=false;
-        continue;
-      }
-      if(character==='"'){inString=true;continue;}
-      if(character==='{')depth+=1;
-      else if(character==='}'&&--depth===0){candidates.push(text.slice(start,index+1));break;}
-    }
+  const candidates=[];let start=-1,depth=0,inString=false,escaped=false;
+  for(let index=0;index<text.length;index+=1){
+    const character=text[index];
+    if(inString){if(escaped)escaped=false;else if(character==='\\')escaped=true;else if(character==='"')inString=false;continue;}
+    if(character==='"'){inString=true;continue;}
+    if(character==='{'){if(depth===0)start=index;depth+=1;}
+    else if(character==='}'&&depth>0&&--depth===0&&start>=0){candidates.push(text.slice(start,index+1));start=-1;}
   }
   return candidates.sort((left,right)=>right.length-left.length);
 }
 
 function structuredJsonCandidates(value) {
   const text=String(value||'').trim();
+  if(Buffer.byteLength(text,'utf8')>MAX_STRUCTURED_RESPONSE_BYTES){
+    const error=new SyntaxError('The provider response exceeded the structured-output limit.');
+    error.code='JSON_EXTRACTION_FAILED';error.recognitionStage='JSON_EXTRACTION_FAILED';throw error;
+  }
   const candidates=[text];
   const fenced=text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
   if(fenced)candidates.push(fenced[1].trim());
@@ -48,15 +46,18 @@ function structuredJsonCandidates(value) {
 }
 
 function parseStructuredJson(value) {
+  const text=String(value||'').trim();
   let lastError;
-  for(const candidate of structuredJsonCandidates(value)){
+  const candidates=structuredJsonCandidates(text);
+  for(const candidate of candidates){
     try{
       const parsed=JSON.parse(candidate);
       if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))return parsed;
     }catch(error){lastError=error;}
   }
   const error=new SyntaxError(lastError?.message||'The provider response did not contain a JSON object.');
-  error.code='INVALID_PROVIDER_OUTPUT';error.recognitionStage='json_parse';
+  const hasJsonShape=/^\s*[`]*\s*\{/.test(text)||balancedJsonObjects(text).length>0;
+  error.code=hasJsonShape?'JSON_PARSE_FAILED':'JSON_EXTRACTION_FAILED';error.recognitionStage=error.code;
   throw error;
 }
 
@@ -66,8 +67,8 @@ function structuredOutputDiagnostic(error,value) {
     path:issue.path?.join('.')||'(root)',code:issue.code,expected:issue.expected,
   })):[];
   return {
-    stage:error?.recognitionStage||(issues.length?'schema_validation':'normalization'),
-    errorName:error?.name||'Error',errorCode:error?.code||'INVALID_PROVIDER_OUTPUT',
+    stage:error?.recognitionStage||(issues.length?'ZOD_VALIDATION_FAILED':'RESULT_NORMALIZATION_FAILED'),
+    errorName:error?.name||'Error',errorCode:error?.code||'PROVIDER_RESPONSE_INVALID',
     responseBytes:Buffer.byteLength(text,'utf8'),responseSha256:crypto.createHash('sha256').update(text).digest('hex').slice(0,16),
     fenced:/^```/i.test(text.trim()),issueCount:Array.isArray(error?.issues)?error.issues.length:0,issues,
   };
@@ -78,10 +79,11 @@ function logInvalidStructuredOutput(error,value) {
 }
 
 class GeminiLessonCompilationProvider {
-  constructor({ apiKey, model, mediaResolution, timeoutMs, maxImageBytes = 8 * 1024 * 1024, filePollIntervalMs = 2000, fileReadyTimeoutMs = 120000 }) {
+  constructor({ apiKey, model, mediaResolution, timeoutMs, maxImageBytes = 8 * 1024 * 1024, maxOutputTokens = 32768, filePollIntervalMs = 2000, fileReadyTimeoutMs = 120000 }) {
     this.apiKey=apiKey; this.model=model; this.mediaResolution=mediaResolution; this.timeoutMs=timeoutMs;
     this.filePollIntervalMs=filePollIntervalMs; this.fileReadyTimeoutMs=fileReadyTimeoutMs; this.client=null;
     this.maxImageBytes=maxImageBytes;
+    this.maxOutputTokens=maxOutputTokens;
   }
   async getClient() {
     if (!this.apiKey) throw new RecognitionProviderError('AUTHENTICATION_ERROR','Gemini API key is not configured.',false);
@@ -126,19 +128,26 @@ class GeminiLessonCompilationProvider {
       requestMetadata.requestStage='generate_content';
       const response=await client.models.generateContent({model:this.model,contents:[{role:'user',parts}],config:{
         systemInstruction:SYSTEM_INSTRUCTION,responseMimeType:'application/json',responseJsonSchema:geminiLessonJsonSchema,
-        mediaResolution:this.mediaResolution,abortSignal:controller.signal,
+        mediaResolution:this.mediaResolution,maxOutputTokens:this.maxOutputTokens,abortSignal:controller.signal,
       }});
-      if(!response.text) throw new RecognitionProviderError('PROVIDER_BLOCKED','The recognition provider returned no content.',false);
+      const extracted=extractGeminiResponseText(response);
+      const responseText=extracted.text;
       let parsed;
-      try{parsed=parseStructuredJson(response.text);}
-      catch(error){logInvalidStructuredOutput(error,response.text);throw error;}
+      try{parsed=parseStructuredJson(responseText);}
+      catch(error){error.recognitionResponse={...extracted.metadata,stage:error.code};logInvalidStructuredOutput(error,responseText);throw error;}
       let normalized;
       try{normalized=normalizeLessonCompilation(parsed,captures);}
-      catch(error){error.recognitionStage=Array.isArray(error?.issues)?'schema_validation':'normalization';logInvalidStructuredOutput(error,response.text);throw error;}
+      catch(error){
+        error.code=Array.isArray(error?.issues)?'ZOD_VALIDATION_FAILED':(error.code==='NO_RECOGNIZABLE_CONTENT'?error.code:'RESULT_NORMALIZATION_FAILED');
+        error.recognitionStage=error.code;
+        error.recognitionResponse={...extracted.metadata,stage:error.code};
+        logInvalidStructuredOutput(error,responseText);throw error;
+      }
       return {normalized,sanitizedOutput:parsed,providerVersion:this.model};
     } catch(error) {
       const mapped=mapProviderError(error);
       mapped.recognitionRequest=requestMetadata;
+      if(error.recognitionResponse)mapped.recognitionResponse=error.recognitionResponse;
       throw mapped;
     }
     finally {
@@ -152,3 +161,4 @@ class GeminiLessonCompilationProvider {
 module.exports = GeminiLessonCompilationProvider;
 module.exports.parseStructuredJson = parseStructuredJson;
 module.exports.structuredOutputDiagnostic = structuredOutputDiagnostic;
+module.exports.balancedJsonObjects = balancedJsonObjects;

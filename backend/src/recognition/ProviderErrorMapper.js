@@ -52,8 +52,9 @@ function mapProviderError(error) {
   if (error?.code === 'NO_RECOGNIZABLE_CONTENT') {
     return new RecognitionProviderError('NO_RECOGNIZABLE_CONTENT', 'No recognizable whiteboard content was found.', false, error);
   }
-  if (error instanceof ZodError || error instanceof SyntaxError || error?.code === 'INVALID_PROVIDER_OUTPUT') {
-    return new RecognitionProviderError('PROVIDER_RESPONSE_INVALID', 'The recognition service returned an invalid response.', false, error);
+  const responseCodes=new Set(['JSON_EXTRACTION_FAILED','JSON_PARSE_FAILED','ZOD_VALIDATION_FAILED','RESULT_NORMALIZATION_FAILED']);
+  if (error instanceof ZodError || error instanceof SyntaxError || error?.code === 'INVALID_PROVIDER_OUTPUT' || responseCodes.has(error?.code)) {
+    return new RecognitionProviderError('PROVIDER_RESPONSE_INVALID','The recognition service returned an invalid response.',false,error);
   }
   const status = providerHttpStatus(error);
   const message = errorMessages(error);

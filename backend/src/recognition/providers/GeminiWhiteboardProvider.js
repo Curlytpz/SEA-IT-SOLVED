@@ -3,6 +3,7 @@ const { geminiResponseJsonSchema } = require('../geminiSchema');
 const { normalizeExtraction } = require('../RecognitionNormalizer');
 const { RecognitionProviderError, mapProviderError } = require('../ProviderErrorMapper');
 const { validateGeminiImage } = require('../GeminiImageInput');
+const { extractGeminiResponseText } = require('../GeminiResponse');
 
 const SYSTEM_INSTRUCTION = `You are a whiteboard transcription and extraction engine.
 Transcribe only content that is visibly present in the supplied whiteboard image.
@@ -71,20 +72,21 @@ class GeminiWhiteboardProvider extends WhiteboardExtractionProvider {
           abortSignal: controller.signal,
         },
       });
-      const text = response.text;
-      if (!text) {
-        throw new RecognitionProviderError('PROVIDER_BLOCKED', 'The recognition provider returned no content.', false);
-      }
+      const extracted=extractGeminiResponseText(response);
+      const text=extracted.text;
       let parsed;
       try { parsed = JSON.parse(text); }
       catch (error) {
-        error.code = 'INVALID_PROVIDER_OUTPUT';
+        error.code = 'JSON_PARSE_FAILED';
+        error.recognitionStage = 'JSON_PARSE_FAILED';
+        error.recognitionResponse = { ...extracted.metadata, stage:'JSON_PARSE_FAILED' };
         throw error;
       }
       return { normalized: normalizeExtraction(parsed), sanitizedOutput: parsed, providerVersion: this.model };
     } catch (error) {
       const mapped = mapProviderError(error);
       mapped.recognitionRequest = requestMetadata;
+      if(error.recognitionResponse)mapped.recognitionResponse=error.recognitionResponse;
       throw mapped;
     } finally {
       clearTimeout(timeout);

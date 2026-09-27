@@ -53,6 +53,10 @@ module.exports = {
   MAIL_FROM: process.env.MAIL_FROM || '',
   GMAIL_SMTP_USER: process.env.GMAIL_SMTP_USER || '',
   GMAIL_SMTP_APP_PASSWORD: process.env.GMAIL_SMTP_APP_PASSWORD || '',
+  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',
+  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || '',
+  GOOGLE_REFRESH_TOKEN: process.env.GOOGLE_REFRESH_TOKEN || '',
+  GMAIL_API_USER: process.env.GMAIL_API_USER || '',
   MICROSOFT_TENANT_ID: process.env.MICROSOFT_TENANT_ID || '',
   MICROSOFT_CLIENT_ID: process.env.MICROSOFT_CLIENT_ID || '',
   MICROSOFT_CLIENT_SECRET: process.env.MICROSOFT_CLIENT_SECRET || '',
@@ -166,11 +170,12 @@ function validateProductionConfiguration(config, environment = process.env) {
   const productionMailRequirements = {
     resend: ['RESEND_API_KEY', 'MAIL_FROM'],
     gmail_smtp: ['GMAIL_SMTP_USER', 'GMAIL_SMTP_APP_PASSWORD', 'MAIL_FROM'],
+    gmail_api: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REFRESH_TOKEN', 'GMAIL_API_USER', 'MAIL_FROM'],
     microsoft_graph: ['MICROSOFT_TENANT_ID', 'MICROSOFT_CLIENT_ID', 'MICROSOFT_CLIENT_SECRET', 'MICROSOFT_SENDER_EMAIL'],
   };
   const requiredMailVariables = productionMailRequirements[mailProvider];
   if (!requiredMailVariables) {
-    problems.push('MAIL_PROVIDER must be resend, gmail_smtp, or microsoft_graph in production');
+    problems.push('MAIL_PROVIDER must be resend, gmail_smtp, gmail_api, or microsoft_graph in production');
   } else {
     const missingMailVariables = requiredMailVariables.filter(name => !String(config[name] || '').trim());
     if (missingMailVariables.length) {

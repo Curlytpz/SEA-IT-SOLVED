@@ -21,3 +21,9 @@ build/
 
 # Logs
 *.log
+
+# Google OAuth credentials
+credentials.json
+token.json
+client_secret*.json
+scripts/getGmailRefreshToken.js

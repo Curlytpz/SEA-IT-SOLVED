@@ -62,7 +62,7 @@ test('production resend configuration requires its API key and sender', () => {
 test('production rejects unsupported mail providers', () => {
   assert.throws(
     () => validateProductionConfiguration(productionConfig({ MAIL_PROVIDER: 'custom_mailer' }), productionEnvironment),
-    /MAIL_PROVIDER must be resend, gmail_smtp, or microsoft_graph/
+    /MAIL_PROVIDER must be resend, gmail_smtp, gmail_api, or microsoft_graph/
   );
 });
 
@@ -74,6 +74,23 @@ test('production gmail SMTP configuration requires its existing credentials and 
   });
   assert.doesNotThrow(() => validateProductionConfiguration(valid, productionEnvironment));
   for (const name of ['GMAIL_SMTP_USER', 'GMAIL_SMTP_APP_PASSWORD', 'MAIL_FROM']) {
+    assert.throws(
+      () => validateProductionConfiguration({ ...valid, [name]: '' }, productionEnvironment),
+      new RegExp(name)
+    );
+  }
+});
+
+test('production Gmail API configuration requires OAuth credentials, user, and sender', () => {
+  const valid = productionConfig({
+    MAIL_PROVIDER: 'gmail_api',
+    GOOGLE_CLIENT_ID: 'configured-client',
+    GOOGLE_CLIENT_SECRET: 'configured-secret',
+    GOOGLE_REFRESH_TOKEN: 'configured-refresh-token',
+    GMAIL_API_USER: 'seaitsolved.project@gmail.com',
+  });
+  assert.doesNotThrow(() => validateProductionConfiguration(valid, productionEnvironment));
+  for (const name of ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REFRESH_TOKEN', 'GMAIL_API_USER', 'MAIL_FROM']) {
     assert.throws(
       () => validateProductionConfiguration({ ...valid, [name]: '' }, productionEnvironment),
       new RegExp(name)

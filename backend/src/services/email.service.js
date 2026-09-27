@@ -1,4 +1,6 @@
 const { ConfidentialClientApplication } = require('@azure/msal-node');
+const crypto = require('crypto');
+const { google } = require('googleapis');
 const { Resend } = require('resend');
 const nodemailer = require('nodemailer');
 const config = require('../config/env');
@@ -10,6 +12,7 @@ const DEVELOPMENT_PROVIDER = 'development';
 const MICROSOFT_GRAPH_PROVIDER = 'microsoft_graph';
 const RESEND_PROVIDER = 'resend';
 const GMAIL_SMTP_PROVIDER = 'gmail_smtp';
+const GMAIL_API_PROVIDER = 'gmail_api';
 const GRAPH_SCOPE = 'https://graph.microsoft.com/.default';
 
 function resolveMailProvider() {
@@ -37,6 +40,16 @@ function gmailSmtpSettings() {
   return {
     user: config.GMAIL_SMTP_USER,
     appPassword: config.GMAIL_SMTP_APP_PASSWORD,
+    from: config.MAIL_FROM,
+  };
+}
+
+function gmailApiSettings() {
+  return {
+    clientId: config.GOOGLE_CLIENT_ID,
+    clientSecret: config.GOOGLE_CLIENT_SECRET,
+    refreshToken: config.GOOGLE_REFRESH_TOKEN,
+    user: config.GMAIL_API_USER,
     from: config.MAIL_FROM,
   };
 }
@@ -86,14 +99,28 @@ function validateGmailSmtpSettings(settings = gmailSmtpSettings()) {
   return settings;
 }
 
+function validateGmailApiSettings(settings = gmailApiSettings()) {
+  const required = [
+    ['GOOGLE_CLIENT_ID', settings.clientId],
+    ['GOOGLE_CLIENT_SECRET', settings.clientSecret],
+    ['GOOGLE_REFRESH_TOKEN', settings.refreshToken],
+    ['GMAIL_API_USER', settings.user],
+    ['MAIL_FROM', settings.from],
+  ];
+  const missing = required.filter(([, value]) => !String(value || '').trim()).map(([name]) => name);
+  if (missing.length) throw new Error(`MAIL_PROVIDER=gmail_api requires: ${missing.join(', ')}.`);
+  return settings;
+}
+
 function validateEmailConfiguration(provider = resolveMailProvider()) {
   if (provider === MICROSOFT_GRAPH_PROVIDER) validateMicrosoftGraphSettings();
   else if (provider === RESEND_PROVIDER) validateResendSettings();
   else if (provider === GMAIL_SMTP_PROVIDER) validateGmailSmtpSettings();
+  else if (provider === GMAIL_API_PROVIDER) validateGmailApiSettings();
   else if (provider === DEVELOPMENT_PROVIDER && config.NODE_ENV !== 'development') {
     throw new Error('MAIL_PROVIDER=development is only allowed when NODE_ENV=development.');
-  } else if (![DEVELOPMENT_PROVIDER, MICROSOFT_GRAPH_PROVIDER, RESEND_PROVIDER, GMAIL_SMTP_PROVIDER].includes(provider)) {
-    throw new Error('MAIL_PROVIDER must be development, resend, gmail_smtp, or microsoft_graph.');
+  } else if (![DEVELOPMENT_PROVIDER, MICROSOFT_GRAPH_PROVIDER, RESEND_PROVIDER, GMAIL_SMTP_PROVIDER, GMAIL_API_PROVIDER].includes(provider)) {
+    throw new Error('MAIL_PROVIDER must be development, resend, gmail_smtp, gmail_api, or microsoft_graph.');
   }
   return provider;
 }
@@ -355,6 +382,111 @@ async function sendWithGmailSmtp(
   return { provider: GMAIL_SMTP_PROVIDER, accepted: true, messageIdPresent: Boolean(result?.messageId) };
 }
 
+function sanitizeMailHeader(value) {
+  return String(value || '').replace(/[\r\n]+/g, ' ').trim();
+}
+
+function encodeMailHeader(value) {
+  const safe = sanitizeMailHeader(value);
+  return /^[\x20-\x7e]*$/.test(safe)
+    ? safe
+    : `=?UTF-8?B?${Buffer.from(safe, 'utf8').toString('base64')}?=`;
+}
+
+function encodeMimeBody(value) {
+  return Buffer.from(String(value || ''), 'utf8')
+    .toString('base64')
+    .match(/.{1,76}/g)
+    ?.join('\r\n') || '';
+}
+
+function encodeBase64Url(value) {
+  return Buffer.from(value, 'utf8')
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function buildGmailApiRawMessage({ from, to, subject, text, html }) {
+  const boundary = `sea-it-solved-${crypto.randomBytes(16).toString('hex')}`;
+  const message = [
+    `From: ${sanitizeMailHeader(from)}`,
+    `To: ${sanitizeMailHeader(to)}`,
+    `Subject: ${encodeMailHeader(subject)}`,
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    '',
+    `--${boundary}`,
+    'Content-Type: text/plain; charset="UTF-8"',
+    'Content-Transfer-Encoding: base64',
+    '',
+    encodeMimeBody(text),
+    `--${boundary}`,
+    'Content-Type: text/html; charset="UTF-8"',
+    'Content-Transfer-Encoding: base64',
+    '',
+    encodeMimeBody(html),
+    `--${boundary}--`,
+    '',
+  ].join('\r\n');
+  return encodeBase64Url(message);
+}
+
+function createGmailApiClient(settings = gmailApiSettings(), googleApi = google) {
+  const validated = validateGmailApiSettings(settings);
+  const auth = new googleApi.auth.OAuth2(validated.clientId, validated.clientSecret);
+  auth.setCredentials({ refresh_token: validated.refreshToken });
+  return googleApi.gmail({ version: 'v1', auth });
+}
+
+async function sendWithGmailApi(
+  payload,
+  { settings = gmailApiSettings(), gmailClient, googleApi = google } = {}
+) {
+  const validated = validateGmailApiSettings(settings);
+  const client = gmailClient || createGmailApiClient(validated, googleApi);
+  const { subject, content } = messageContent(payload);
+  const raw = buildGmailApiRawMessage({
+    from: validated.from,
+    to: payload.email,
+    subject,
+    text: content.text,
+    html: content.html,
+  });
+
+  let response;
+  console.info('[Mail] Gmail API send started');
+  try {
+    response = await client.users.messages.send({
+      userId: 'me',
+      requestBody: { raw },
+    });
+  } catch (error) {
+    const rawCode = String(error?.code || '').toUpperCase();
+    const safeCode = /^\d{3}$/.test(rawCode)
+      ? rawCode
+      : ['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND'].includes(rawCode) ? rawCode : 'UNKNOWN';
+    const safeName = ['Error', 'GaxiosError'].includes(String(error?.name)) ? String(error.name) : 'Error';
+    const status = Number(error?.response?.status ?? error?.statusCode ?? error?.status);
+    console.info('[Mail] Gmail API accepted: NO');
+    console.info('[Mail] Gmail API message ID present: NO');
+    console.error(`[Mail] Gmail API error code: ${safeCode}`);
+    console.error(`[Mail] Gmail API error name: ${safeName}`);
+    console.error(`[Mail] Gmail API error status: ${Number.isInteger(status) ? status : 'UNKNOWN'}`);
+    const safeError = new Error('Gmail API email request failed.');
+    safeError.name = 'GmailApiError';
+    safeError.statusCode = Number.isInteger(status) ? status : undefined;
+    throw safeError;
+  }
+
+  const accepted = Boolean(response?.data?.id);
+  console.info(`[Mail] Gmail API accepted: ${accepted ? 'YES' : 'NO'}`);
+  console.info(`[Mail] Gmail API message ID present: ${accepted ? 'YES' : 'NO'}`);
+  if (!accepted) throw new Error('Gmail API did not accept the email.');
+  return { provider: GMAIL_API_PROVIDER, accepted: true, messageIdPresent: true };
+}
+
 function sendWithDevelopmentTransport({ email, resetUrl, expiresInMinutes }) {
   if (config.NODE_ENV !== 'development') {
     throw new Error('The development email transport is disabled outside development.');
@@ -371,7 +503,7 @@ function sendWithDevelopmentTransport({ email, resetUrl, expiresInMinutes }) {
   ].join('\n'));
 }
 
-async function sendPasswordResetEmail({ email, resetUrl, expiresInMinutes }) {
+async function sendPasswordResetEmail({ email, resetUrl, expiresInMinutes }, options = {}) {
   const provider = validateEmailConfiguration();
   console.info(`[Mail] Provider selected: ${provider}`);
   if (provider === MICROSOFT_GRAPH_PROVIDER) {
@@ -383,13 +515,16 @@ async function sendPasswordResetEmail({ email, resetUrl, expiresInMinutes }) {
   if (provider === GMAIL_SMTP_PROVIDER) {
     return sendWithGmailSmtp({ email, resetUrl, expiresInMinutes });
   }
+  if (provider === GMAIL_API_PROVIDER) {
+    return sendWithGmailApi({ email, resetUrl, expiresInMinutes }, options);
+  }
   if (provider === DEVELOPMENT_PROVIDER) {
     sendWithDevelopmentTransport({ email, resetUrl, expiresInMinutes });
     return { provider: DEVELOPMENT_PROVIDER };
   }
 }
 
-async function sendStudentVerificationEmail({ email, verificationUrl, expiresInMinutes, role = 'STUDENT', accountStatus }) {
+async function sendStudentVerificationEmail({ email, verificationUrl, expiresInMinutes, role = 'STUDENT', accountStatus }, options = {}) {
   const provider = validateEmailConfiguration();
   if (provider === DEVELOPMENT_PROVIDER) {
     // Verification links establish account ownership and must never be written to logs.
@@ -399,6 +534,7 @@ async function sendStudentVerificationEmail({ email, verificationUrl, expiresInM
   if (provider === MICROSOFT_GRAPH_PROVIDER) return sendWithMicrosoftGraph(payload);
   if (provider === RESEND_PROVIDER) return sendWithResend(payload);
   if (provider === GMAIL_SMTP_PROVIDER) return sendWithGmailSmtp(payload);
+  if (provider === GMAIL_API_PROVIDER) return sendWithGmailApi(payload, options);
 }
 
 validateEmailConfiguration();
@@ -410,13 +546,17 @@ module.exports = {
   sendWithMicrosoftGraph,
   sendWithResend,
   sendWithGmailSmtp,
+  sendWithGmailApi,
   createGmailSmtpTransport,
+  createGmailApiClient,
+  buildGmailApiRawMessage,
   gmailFromHeader,
   smtpResponseCategory,
   validateEmailConfiguration,
   validateMicrosoftGraphSettings,
   validateResendSettings,
   validateGmailSmtpSettings,
+  validateGmailApiSettings,
   RESET_SUBJECT,
   VERIFICATION_SUBJECT,
   INSTRUCTOR_VERIFICATION_SUBJECT,

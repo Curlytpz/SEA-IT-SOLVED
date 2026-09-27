@@ -5,6 +5,7 @@ import {
   QUIZ_REQUEST_TIMEOUT_MS,
   isCurrentWorkspaceRequest,
   isPersistedQuizResult,
+  normalizeApiError,
   normalizeGenerationTask,
   normalizeLessonChatResult,
   normalizePendingQuizRequest,
@@ -72,8 +73,21 @@ test('quiz success requires a matching persisted quiz identifier', () => {
 
 test('timeout and backend failures produce visible terminal messages', () => {
   assert.equal(QUIZ_REQUEST_TIMEOUT_MS, 180000);
-  assert.match(quizGenerationFailure({ code: 'ECONNABORTED' }), /took too long/i);
-  assert.equal(quizGenerationFailure({ response: { data: { error: 'Persistence failed safely.' } } }), 'Persistence failed safely.');
+  assert.match(quizGenerationFailure({ code: 'ECONNABORTED' }).message, /took too long/i);
+  assert.equal(quizGenerationFailure({ response: { data: { error: 'Persistence failed safely.' } } }).message, 'Persistence failed safely.');
+});
+
+test('HTTP 502 and malformed failures always become render-safe error objects', () => {
+  assert.deepEqual(quizGenerationFailure({ response: { status: 502, data: { error: {
+    code: 'QUIZ_GENERATION_FAILED', message: 'The quiz could not be generated.',
+  } } } }), {
+    code: 'QUIZ_GENERATION_FAILED', message: 'The quiz could not be generated.', status: 502,
+  });
+  assert.equal(normalizeApiError({ response: { status: 502, data: { code: 'ROUTER_EXTERNAL_TARGET_ERROR', message: 'Bad Gateway' } } }).message, 'Bad Gateway');
+  assert.equal(normalizeApiError({ isAxiosError: true, code: 'ERR_NETWORK', message: 'Network Error' }, 'Unable to reach the quiz service.').message, 'Unable to reach the quiz service.');
+  assert.equal(normalizeApiError({ response: { status: 500, data: { error: { message: { unsafe: true } } } } }, 'Safe fallback.').message, 'Safe fallback.');
+  assert.equal(normalizeApiError(null, 'Safe fallback.').message, 'Safe fallback.');
+  assert.equal(normalizeGenerationTask({ status: 'failed', error: { code: 'QUIZ_GENERATION_FAILED', message: 'Unable to generate quiz.' } }).error.message, 'Unable to generate quiz.');
 });
 
 test('stale or unmounted requests cannot update a new workspace', () => {
@@ -91,6 +105,7 @@ test('workspace page includes explicit load failure and scoped error-boundary fa
   assert.match(page, /normalizeWorkspaceIntelligence\(\{ quizzes: \[nextQuiz\] \}\)/);
   assert.match(assistant, /normalizeLessonChatResult\(result\)/);
   assert.match(assistant, /normalizePendingQuizRequest\(quizOptions\)/);
+  assert.match(assistant, /visibleDocumentTask\.error\.message/);
   assert.match(boundary, /Something went wrong loading this workspace/);
   assert.match(boundary, />Retry</);
   assert.match(boundary, /Back to Lessons/);

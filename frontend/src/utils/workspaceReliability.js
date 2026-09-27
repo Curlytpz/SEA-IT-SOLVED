@@ -92,7 +92,7 @@ export function normalizeGenerationTask(value) {
     status,
     title: text(value.title, 'Quiz generation'),
     detail: text(value.detail, status === 'failed' ? 'Update stopped' : 'Starting...'),
-    error: text(value.error),
+    error: normalizeApiError(value.error, 'The requested update could not be completed.'),
     progress: normalizeProgress(value.progress),
     stages: Array.isArray(value.stages) ? value.stages.filter(stage => stage && typeof stage === 'object') : [],
   };
@@ -126,9 +126,35 @@ export function createQuizGenerationId() {
   return globalThis.crypto?.randomUUID?.() || `quiz_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 }
 
+export function normalizeApiError(error, fallback = 'The request could not be completed. Please try again.', timedOut = false) {
+  if (timedOut || error?.code === 'ECONNABORTED') {
+    return { code: 'REQUEST_TIMEOUT', message: 'Quiz generation took too long. Please try again.', status: null };
+  }
+  const payload = error?.response?.data;
+  const nested = payload?.error;
+  const candidate = nested ?? payload?.message ?? error?.error ?? error?.message ?? error;
+  const transportFailure = !error?.response && (error?.isAxiosError === true || ['ERR_NETWORK', 'ECONNRESET'].includes(error?.code));
+  const candidateMessage = transportFailure ? '' : typeof candidate === 'string'
+    ? candidate
+    : candidate && typeof candidate === 'object' && typeof candidate.message === 'string'
+      ? candidate.message
+      : '';
+  const rawCode = (nested && typeof nested === 'object' ? nested.code : null) ?? payload?.code ?? error?.code;
+  const rawStatus = error?.response?.status ?? error?.status ?? error?.statusCode;
+  const status = Number(rawStatus);
+  return {
+    code: typeof rawCode === 'string' && rawCode.trim() ? rawCode.trim().slice(0, 80) : null,
+    message: candidateMessage.trim().slice(0, 300) || fallback,
+    status: Number.isInteger(status) && status >= 100 && status <= 599 ? status : null,
+  };
+}
+
+export function apiErrorMessage(error, fallback) {
+  return normalizeApiError(error, fallback).message;
+}
+
 export function quizGenerationFailure(error, timedOut = false) {
-  if (timedOut || error?.code === 'ECONNABORTED') return 'Quiz generation took too long. Please try again.';
-  return error?.response?.data?.error || 'Quiz generation could not be completed. Please try again.';
+  return normalizeApiError(error, 'Quiz generation could not be completed. Please try again.', timedOut);
 }
 
 export function isPersistedQuizResult(result) {

@@ -9,6 +9,7 @@ import QuizDraftPreview from './QuizDraftPreview';
 import { quizDraftPresentation } from '../../utils/quizDraftResponse';
 import {
   QUIZ_REQUEST_TIMEOUT_MS,
+  apiErrorMessage,
   createQuizGenerationId,
   isCurrentWorkspaceRequest,
   isPersistedQuizResult,
@@ -97,9 +98,9 @@ function isQuizOptionReply(message, draft) {
 function friendly(error, editing = false) {
   if (error.response?.status === 503) return 'AI is temporarily unavailable. Please try again.';
   if (error.response?.status === 429) return 'The AI service is temporarily rate-limited. Please try again shortly.';
-  if (error.response?.status === 409) return error.response?.data?.error || 'Approve the lesson context before using the lesson assistant.';
+  if (error.response?.status === 409) return apiErrorMessage(error, 'Approve the lesson context before using the lesson assistant.');
   if (error.response?.status === 422 && editing) return "I couldn't safely apply that edit. Name the section or describe the content more specifically.";
-  return error.response?.data?.error || 'AI is temporarily unavailable. Please try again.';
+  return apiErrorMessage(error, 'AI is temporarily unavailable. Please try again.');
 }
 
 function isEditRequest(message, explicitIntent) {
@@ -307,7 +308,7 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
       applyConversationResult(result);
       setMobileHistoryOpen(false);
     }catch(nextError){
-      setHistoryError(nextError.response?.data?.error||'Conversation could not be loaded.');
+      setHistoryError(apiErrorMessage(nextError, 'Conversation could not be loaded.'));
     }finally{
       setLoading(false);
     }
@@ -341,7 +342,7 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
       }
       showActivity('Conversation deleted');
     }catch(nextError){
-      setHistoryError(nextError.response?.data?.error||'Conversation could not be deleted.');
+      setHistoryError(apiErrorMessage(nextError, 'Conversation could not be deleted.'));
       setDeleteTarget(null);
     }finally{
       setDeletingConversation(false);
@@ -755,7 +756,7 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
                 </AnimatePresence>
                 <span>{visibleDocumentTask.progress}%</span>
               </div>
-              {visibleDocumentTask.status === 'failed' && <div className="lesson-chat-task-error"><p>{visibleDocumentTask.error || 'The requested update could not be completed.'}</p><button type="button" onClick={() => visibleDocumentTask.action === 'GENERATE_QUIZ' && visibleDocumentTask.options ? generateQuiz(visibleDocumentTask.options) : submit(visibleDocumentTask.prompt, visibleDocumentTask.action, visibleDocumentTask.messageId)}><RotateCcw size={14}/>Retry</button></div>}
+              {visibleDocumentTask.status === 'failed' && <div className="lesson-chat-task-error"><p>{visibleDocumentTask.error.message}</p><button type="button" onClick={() => visibleDocumentTask.action === 'GENERATE_QUIZ' && visibleDocumentTask.options ? generateQuiz(visibleDocumentTask.options) : submit(visibleDocumentTask.prompt, visibleDocumentTask.action, visibleDocumentTask.messageId)}><RotateCcw size={14}/>Retry</button></div>}
             </motion.section>}
             {sending && !documentTask && <div className="lesson-chat-thinking" role="status"><AiAssistantAvatar state={avatarState} size="sm"/><div><strong>{waitingText}</strong></div></div>}
             <div ref={endRef}/>

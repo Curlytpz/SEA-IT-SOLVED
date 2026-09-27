@@ -130,6 +130,7 @@ module.exports = {
   // high-demand reasoning model used by background lesson generation.
   GEMINI_QUIZ_MODEL: process.env.GEMINI_QUIZ_MODEL || process.env.GEMINI_CHAT_MODEL || 'gemini-2.5-flash',
   GEMINI_QUIZ_TIMEOUT_MS: boundedInteger(process.env.GEMINI_QUIZ_TIMEOUT_MS, 120000, 15000, 300000),
+  QUIZ_HTTP_DEADLINE_MS: boundedInteger(process.env.QUIZ_HTTP_DEADLINE_MS, 105000, 30000, 110000),
   GEMINI_INTERACTIVE_TIMEOUT_MS: boundedInteger(process.env.GEMINI_INTERACTIVE_TIMEOUT_MS, 120000, 15000, 300000),
   GEMINI_INTERACTIVE_MAX_ATTEMPTS: boundedInteger(process.env.GEMINI_INTERACTIVE_MAX_ATTEMPTS, 2, 1, 3),
   QUIZ_TUTOR_MAX_PRACTICE_PER_ATTEMPT: boundedInteger(process.env.QUIZ_TUTOR_MAX_PRACTICE_PER_ATTEMPT, 3, 1, 10),

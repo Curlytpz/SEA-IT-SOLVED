@@ -2,6 +2,7 @@ const pool = require('../db/pool');
 const AppError = require('../utils/AppError');
 const { questionSettings } = require('../utils/quizProblemSettings');
 const { quizGenerationSpec } = require('../utils/quizGenerationSpec');
+const { runQuizGenerationWithinDeadline } = require('../utils/quizGenerationDeadline');
 const contextService = require('./lesson-context.service');
 const geminiInteractive = require('./geminiInteractive.service');
 const GeminiReasoningProvider = require('../reasoning/GeminiReasoningProvider');
@@ -12,7 +13,7 @@ const { buildLessonDocument } = require('./lesson-document.service');
 const { randomizeMultipleChoiceQuestions } = require('../utils/quizOptions');
 const {
   GEMINI_API_KEY, GEMINI_REASONING_MODEL, GEMINI_QUIZ_MODEL, GEMINI_QUIZ_TIMEOUT_MS,
-  GEMINI_INTERACTIVE_TIMEOUT_MS,
+  GEMINI_INTERACTIVE_TIMEOUT_MS, QUIZ_HTTP_DEADLINE_MS,
 } = require('../config/env');
 
 const provider = new GeminiReasoningProvider({
@@ -402,9 +403,9 @@ async function prepareQuizGeneration(lessonId, instructorId, options = {}) {
   const specification = quizGenerationSpec(options.prompt || '', questionCount, options.questionType);
   const allowedSources = new Set(payload.map(item => item.source));
   options.onStage?.('QUIZ_AI_REQUEST_STARTED');
-  const result = await geminiInteractive.run(
+  const result = await runQuizGenerationWithinDeadline(signal => geminiInteractive.run(
     async ({ attempt }) => {
-      const response = await quizProvider.generateQuiz(payload, { questionCount, difficulty, specification, repair: attempt > 1 });
+      const response = await quizProvider.generateQuiz(payload, { questionCount, difficulty, specification, repair: attempt > 1, signal });
       options.onStage?.('QUIZ_AI_RESPONSE_RECEIVED');
       const normalized = normalizeQuiz(response, allowedSources, questionCount, difficulty, specification);
       options.onStage?.('QUIZ_VALIDATION_PASSED');
@@ -413,10 +414,14 @@ async function prepareQuizGeneration(lessonId, instructorId, options = {}) {
     {
       unavailable: 'Quiz generation could not be completed. Try again.',
       invalidOutput: 'The generated quiz could not be validated. Please try again.',
+      invalidOutputCode: 'QUIZ_AI_RESPONSE_INVALID',
       rateLimited: 'Quiz generation is temporarily rate-limited. Please try again shortly.',
+      timeout: 'Quiz generation took too long. Please try again.',
+      timeoutCode: 'QUIZ_TIMEOUT',
+      unavailableCode: 'QUIZ_AI_REQUEST_FAILED',
     },
-    { label: 'QuizAI', model: GEMINI_QUIZ_MODEL, userId: instructorId }
-  );
+    { label: 'QuizAI', model: GEMINI_QUIZ_MODEL, userId: instructorId, maxRetries: 1 }
+  ), QUIZ_HTTP_DEADLINE_MS);
   return { context, difficulty, result };
 }
 

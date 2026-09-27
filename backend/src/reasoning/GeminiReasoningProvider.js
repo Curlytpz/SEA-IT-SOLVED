@@ -128,9 +128,19 @@ class GeminiReasoningProvider extends ReasoningProvider {
     }
     return this.client;
   }
-  async request(context, instruction, schema, { systemInstruction = SYSTEM, contextLabel = 'APPROVED LESSON CONTEXT' } = {}) {
+  async request(context, instruction, schema, { systemInstruction = SYSTEM, contextLabel = 'APPROVED LESSON CONTEXT', signal } = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    const abortSignal = signal && typeof AbortSignal.any === 'function'
+      ? AbortSignal.any([controller.signal, signal])
+      : controller.signal;
+    const forwardAbort = signal && abortSignal === controller.signal
+      ? () => controller.abort()
+      : null;
+    if (forwardAbort) {
+      if (signal.aborted) controller.abort();
+      else signal.addEventListener('abort', forwardAbort, { once: true });
+    }
     try {
       const client = await this.getClient();
       const response = await client.models.generateContent({
@@ -140,19 +150,22 @@ class GeminiReasoningProvider extends ReasoningProvider {
           systemInstruction,
           responseMimeType: 'application/json',
           responseJsonSchema: schema,
-          abortSignal: controller.signal,
+          abortSignal,
         },
       });
       return JSON.parse(response.text || '{}');
     } catch (error) { throw mapProviderError(error); }
-    finally { clearTimeout(timer); }
+    finally {
+      clearTimeout(timer);
+      if (forwardAbort) signal.removeEventListener('abort', forwardAbort);
+    }
   }
   generateMaterials(context) {
     return this.request(context,
       'Create professional university lesson notes grounded only in the approved context. Return only sections supported by that context, using the available material types: Lesson Summary, Detailed Lecture Notes, Concept Explanations, Key Formulas, Worked Example, and Common Mistakes and Reminders. The summary must be 2–4 sentences. Return every material title as plain text without numbering, Markdown # markers, or emphasis. Inside material markdown, use predictable unnumbered headings such as ## Lesson Summary, ## Detailed Lecture Notes, and ## Concept Explanations where those sections apply. Never combine a list number with a Markdown heading. In the notes, organize major concepts with unnumbered semantic Markdown headings and use the labels Concept, Formula or Definition, Example, Solution or Explanation, and Key Point only where the approved context supports them. End with concise key takeaways; add formulas, common mistakes, or review points only when supported. Use semantic Markdown, proper lists, separate paragraphs, and correctly delimited LaTeX. Do not emit escaped newline/tab text, code fences, JSON fragments, filenames, capture labels, OCR labels, transcript chunk labels, internal IDs, or source attribution in academic prose. Preserve provenance only in sourceReferences. Do not fabricate examples or filler. Integrate any useful mathematical clarification naturally without governance-style labels or disclaimers.',
       materialsSchema);
   }
-  generateQuiz(context, { questionCount = 10, difficulty, specification = {}, repair = false } = {}) {
+  generateQuiz(context, { questionCount = 10, difficulty, specification = {}, repair = false, signal } = {}) {
     const guidance = {
       EASY: 'Use direct recall, one-step computations, and straightforward applications.',
       MEDIUM: 'Use normal classroom assessment, moderate multi-step work, and plausible distractors.',
@@ -166,7 +179,7 @@ class GeminiReasoningProvider extends ReasoningProvider {
       : 'Use only MULTIPLE_CHOICE and TRUE_FALSE.';
     return this.request(context,
       `Create exactly ${questionCount} instructor-reviewable questions at the instructor-selected ${difficulty} difficulty. ${guidance}${repairInstruction} Create a concise, academically natural quiz title based on the actual lesson topics, preferably 3–8 words. Use a normal title such as "Quiz: Indefinite Integration" or "Review Quiz: Calculus and Algebra". Never include Easy, Medium, Hard, AI-generated, assessment level, filenames, source labels, or exaggerated wording in the title. Difficulty must affect question complexity only. Keep instructions brief and natural, preferably "Answer all ${questionCount} questions." ${typeInstruction} For every MULTIPLE_CHOICE question return exactly four distinct choices and exactly one answer that matches a choice. Set topic to one concise concept label supported by the cited approved source; use an empty topic only when no reliable concept label exists. Every question must cite at least one approved sourceReference. Keep sourceReferences separate from prompt wording and never mention whiteboard pages, filenames, uploads, OCR, or transcript chunks in questions or explanations. Keep explanations accurate and concise (1–3 sentences). Keep normal prose as plain text. Put only mathematical expressions inside inline $...$ delimiters, for example $x \\to 1$ or $\\lim_{x \\to 1} f(x)$. A prose currency amount such as $0.49 is money, not a math delimiter; leave it as ordinary currency text and never pair its dollar sign with a later expression. After JSON decoding, every supported LaTeX command must have exactly one backslash and valid braces. Never emit a raw escaped newline, an orphan backslash, an unsupported control sequence such as \\xapproaches1, an unmatched $, \\(, or \\[, or a Markdown code fence. Do not alternate between raw LaTeX, \\( ... \\), or Unicode-only equations.`,
-      quizSchema);
+      quizSchema, { signal });
   }
   reviewSolution(input) {
     return this.request(input,

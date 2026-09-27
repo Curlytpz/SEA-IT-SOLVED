@@ -53,6 +53,49 @@ const INLINE_MATH = /(^|[^$])\$([^$\n]+)\$(?!\$)/g;
 const TALL_MATH = /\\(?:d?frac|tfrac|int|sum|prod|lim|sqrt|begin|left|right)(?![A-Za-z])/;
 const MATH_WORDS = new Set(['dx', 'dy', 'dt', 'du', 'dv', 'dw', 'sin', 'cos', 'tan', 'sec', 'csc', 'cot', 'log', 'ln', 'mod']);
 
+function escapeHighConfidenceCurrency(value) {
+  // A decimal price followed by prose/punctuation is not a Markdown math
+  // delimiter. Escaping only this high-confidence shape avoids guessing about
+  // ambiguous expressions such as $1 x$ while protecting normal prices.
+  return String(value || '').replace(
+    /(^|[^\\$])\$(\d{1,3}(?:,\d{3})*\.\d{2})(?=(?:\s|[.,;:!?)]|$))/g,
+    (_match, prefix, amount) => `${prefix}\\$${amount}`,
+  );
+}
+
+function mathSyntaxDiagnostics(value) {
+  const diagnostics = [];
+  let singleDollarCount = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] === '\\') {
+      index += 1;
+      continue;
+    }
+    if (value[index] !== '$') continue;
+    if (value[index + 1] === '$') {
+      index += 1;
+      continue;
+    }
+    singleDollarCount += 1;
+  }
+  if (singleDollarCount % 2 === 1) diagnostics.push({ original: '$', reason: 'UNMATCHED_MATH_DELIMITER' });
+
+  for (const [open, close] of [['\\(', '\\)'], ['\\[', '\\]']]) {
+    const opens = value.split(open).length - 1;
+    const closes = value.split(close).length - 1;
+    if (opens !== closes) diagnostics.push({ original: open, reason: 'UNMATCHED_MATH_DELIMITER' });
+  }
+
+  const proseOnly = value
+    .replace(/\$\$[\s\S]*?\$\$/g, '')
+    .replace(/(^|[^\\])\$[^$\n]*\$/g, '$1');
+  const unsupported = [...proseOnly.matchAll(/\\([A-Za-z]+)/g)]
+    .map(match => match[1])
+    .find(command => !MATH_COMMAND_NAMES.includes(command));
+  if (unsupported) diagnostics.push({ original: `\\${unsupported}`, reason: 'UNSUPPORTED_LATEX_COMMAND' });
+  return diagnostics;
+}
+
 function protectLiteralSegments(value) {
   const originals = [];
   const protect = match => {
@@ -61,6 +104,7 @@ function protectLiteralSegments(value) {
     return token;
   };
   const content = String(value || '')
+    .replace(/\\\$\d{1,3}(?:,\d{3})*\.\d{2}(?=(?:\s|[.,;:!?)]|$))/g, protect)
     .replace(/```[\s\S]*?```|~~~[\s\S]*?~~~/g, protect)
     .replace(/`[^`\n]*`/g, protect)
     .replace(/https?:\/\/[^\s<>]+/gi, protect)
@@ -343,16 +387,16 @@ function normalizeInlineLine(line, state) {
  * returned needsReview metadata and is never injected into rendered Markdown.
  */
 function normalizeLessonMathContent(value) {
-  const protectedSource = protectLiteralSegments(value);
+  const protectedSource = protectLiteralSegments(escapeHighConfidenceCurrency(value));
   const prepared = normalizeOcrNotation(removeMathReviewDiagnostics(protectedSource.content)
     .replace(DOUBLE_ESCAPED_MATH_COMMAND, '\\')
     .replace(DOUBLE_ESCAPED_MATH_SPACING, '\\')
     .replace(DOUBLE_ESCAPED_MATH_DELIMITER, ''));
-  const source = repairEscapedMathDollars(prepared)
+  const source = repairEscapedMathDollars(normalizeRecognitionNumericArtifacts(prepared))
     .replace(/\\\[([\s\S]*?)\\\]/g, (_, expression) => `\n$$\n${expression.trim()}\n$$\n`)
     .replace(/\\\(([\s\S]*?)\\\)/g, (_, expression) => `$${expression.trim()}$`);
 
-  const state = { needsReview: [] };
+  const state = { needsReview: mathSyntaxDiagnostics(source) };
   const lines = source.split('\n');
   const output = [];
   let fenced = false;

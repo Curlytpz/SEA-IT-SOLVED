@@ -81,6 +81,18 @@ assert.equal(malformed.needsReview.length, 1);
 assert.match(malformed.content, /frac/);
 assert.match(malformed.content, /\`/);
 
+const currencyProse = normalizeMath('It costs $0.49 to mail a letter.');
+assert.equal(currencyProse.needsReview.length, 0, 'Decimal currency in prose must not open a math fragment.');
+assert.equal(currencyProse.content, 'It costs \\$0.49 to mail a letter.');
+const mixedCurrencyMath = normalizeMath(String.raw`It costs $0.49 as $x \to 1$.`);
+assert.equal(mixedCurrencyMath.needsReview.length, 0, 'Currency before inline math must not consume its delimiter.');
+assert.equal(mixedCurrencyMath.content, String.raw`It costs \$0.49 as $x \to 1$.`);
+assert.equal(normalizeMath(String.raw`$x \to 1$`).needsReview.length, 0);
+assert.equal(normalizeMath(String.raw`$\lim_{x \to 1}f(x)$`).needsReview.length, 0);
+assert.ok(normalizeMath(String.raw`\xapproaches1`).needsReview.some(issue => issue.reason === 'UNSUPPORTED_LATEX_COMMAND'));
+assert.ok(normalizeMath(String.raw`Value is $x`).needsReview.some(issue => issue.reason === 'UNMATCHED_MATH_DELIMITER'));
+assert.equal(normalizeMath(String.raw`$\\lim_{x \\to 1}f(x)$`).needsReview.length, 0, 'Clear duplicate serialization slashes must be repaired.');
+
 assert.equal(withSafeInlineMathStyle(String.raw`x^2+1`), String.raw`x^2+1`);
 assert.equal(
   withSafeInlineMathStyle(String.raw`\lim_{x\to-3}\frac{x^2-9}{x^2+2x-3}`),
@@ -217,6 +229,9 @@ try {
   assert.doesNotThrow(() => render(String.raw`Malformed $\frac{x}{$ stays readable.`));
   const currency = render('The kit costs $5 and the book costs $10.');
   assert.match(visibleText(currency), /\$5 and the book costs \$10/, 'Ordinary prices must stay ordinary text.');
+  const mixedPriceAndMath = render(String.raw`It costs $0.49 as $x \to 1$.`);
+  assert.match(visibleText(mixedPriceAndMath), /\$0\.49 as/, 'Decimal currency must remain visible prose beside math.');
+  assert.match(mixedPriceAndMath, /class="katex"/, 'The later inline expression must still render as math.');
   const escapedCurrency = render(String.raw`The kit costs \$5 and the book costs \$10.`);
   assert.match(visibleText(escapedCurrency), /\$5 and the book costs \$10/, 'Escaped prices must stay ordinary text.');
   assert.match(render(String.raw`Study \$f(c)\$ next.`), /class="katex"/, 'Escaped AI math delimiters must render.');

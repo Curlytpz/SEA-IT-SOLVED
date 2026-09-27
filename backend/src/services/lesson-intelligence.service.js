@@ -7,6 +7,7 @@ const geminiInteractive = require('./geminiInteractive.service');
 const GeminiReasoningProvider = require('../reasoning/GeminiReasoningProvider');
 const { comparableAnswer, normalizeGeneratedLessonTitle, normalizeGeneratedText } = require('../utils/generatedContent');
 const { normalizeLessonMathContent } = require('../utils/mathContent');
+const { normalizeQuizMathContent } = require('../utils/quizMathContent');
 const { buildLessonDocument } = require('./lesson-document.service');
 const { randomizeMultipleChoiceQuestions } = require('../utils/quizOptions');
 const {
@@ -132,11 +133,10 @@ function invalidQuizOutput(message) {
 }
 
 function normalizeMathField(value, { maxLength, label, errorFactory = message => new AppError(message, 400) } = {}) {
-  const original = normalizeGeneratedText(value, { markdown: true, maxLength });
-  if (!original) return '';
+  const normalized = normalizeQuizMathContent(value, { maxLength });
+  if (!normalized.content && !normalized.needsReview.length) return '';
   const message = `${label || 'This field'} contains a math expression that needs review.`;
-  if (/math(?:ematical)? expression needs review/i.test(original)) throw errorFactory(message);
-  const normalized = normalizeLessonMathContent(original);
+  if (/math(?:ematical)? expression needs review/i.test(String(value || ''))) throw errorFactory(message);
   if (normalized.needsReview.length) throw errorFactory(message);
   return normalized.content;
 }

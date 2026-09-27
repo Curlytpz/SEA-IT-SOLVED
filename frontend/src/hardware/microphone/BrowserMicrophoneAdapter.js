@@ -1,4 +1,4 @@
-import { validateRecordingBlob } from '../../utils/audioRecording.js';
+import { repairRecordingDuration,validateRecordingBlob } from '../../utils/audioRecording.js';
 import { BROWSER_DEFAULT_MICROPHONE_SOURCE_KEY } from './microphoneSources.js';
 
 const MIME_CANDIDATES = [
@@ -19,11 +19,12 @@ function friendlyMicrophoneError(error) {
 }
 
 export default class BrowserMicrophoneAdapter {
-  constructor() {
+  constructor({ durationFixer } = {}) {
     this.stream=null;this.audioContext=null;this.analyser=null;this.samples=null;this.recorder=null;this.chunks=[];
     this.status='STOPPED';this.manualStop=false;this.startedAt=null;this.activeStartedAt=0;this.activeDurationMs=0;
     this.pauses=[];this.openPause=null;this.lastError='';this.noisePreference=true;
     this.sourceKey=BROWSER_DEFAULT_MICROPHONE_SOURCE_KEY;
+    this.durationFixer=durationFixer;
     this.noiseState={supported:false,applied:false,simulated:false};
   }
 
@@ -130,12 +131,17 @@ export default class BrowserMicrophoneAdapter {
       if(recorder.state==='recording')this.activeDurationMs+=performance.now()-this.activeStartedAt;
       if(this.openPause){this.openPause.resumedAt=completedAt.toISOString();this.pauses.push(this.openPause);this.openPause=null;}
       recorder.onerror=()=>{this.stop();reject(new Error('The recording could not be finalized.'));};
-      recorder.onstop=()=>{
-        const blob=new Blob(this.chunks,{type:recorder.mimeType||this.supportedMimeType()||'audio/webm'});
+      recorder.onstop=async()=>{
+        const rawBlob=new Blob(this.chunks,{type:recorder.mimeType||this.supportedMimeType()||'audio/webm'});
+        const durationMs=Math.max(0,Math.round(this.activeDurationMs));
         this.recorder=null;this.chunks=[];this.status='READY';
-        try{validateRecordingBlob(blob);}
+        try{
+          validateRecordingBlob(rawBlob);
+          const blob=await repairRecordingDuration(rawBlob,durationMs,this.durationFixer);
+          validateRecordingBlob(blob);
+          resolve({blob,mimeType:blob.type,durationMs,startedAt:this.startedAt.toISOString(),completedAt:completedAt.toISOString(),pauses:[...this.pauses]});
+        }
         catch(error){this.stop();reject(error);return;}
-        resolve({blob,mimeType:blob.type,durationMs:Math.max(0,Math.round(this.activeDurationMs)),startedAt:this.startedAt.toISOString(),completedAt:completedAt.toISOString(),pauses:[...this.pauses]});
       };
       try{recorder.requestData?.();recorder.stop();}
       catch{this.stop();reject(new Error('The recording could not be finalized.'));}

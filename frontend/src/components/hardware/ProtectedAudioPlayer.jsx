@@ -1,6 +1,7 @@
 import { useEffect,useRef,useState } from 'react';
 import { fetchAudioRecording } from '../../services/audioRecordingApi';
 import { Alert,LoadingState } from '../ui';
+import { initializeAudioTimeline } from '../../utils/audioPlayback.js';
 
 export default function ProtectedAudioPlayer({url,className='',onPlayerReady}){
   const audioRef=useRef(null);
@@ -14,5 +15,5 @@ export default function ProtectedAudioPlayer({url,className='',onPlayerReady}){
   useEffect(()=>{if(source&&audioRef.current)onPlayerReady?.(audioRef.current);return()=>onPlayerReady?.(null);},[source,onPlayerReady]);
   if(error)return <Alert type="error">{error}</Alert>;
   if(!source)return <LoadingState text="Loading protected audio…"/>;
-  return <audio ref={audioRef} controls preload="metadata" src={source} className={`w-full ${className}`}>Your browser does not support audio playback.</audio>;
+  return <audio ref={audioRef} controls preload="metadata" src={source} onLoadedMetadata={event=>initializeAudioTimeline(event.currentTarget)} className={`w-full ${className}`}>Your browser does not support audio playback.</audio>;
 }

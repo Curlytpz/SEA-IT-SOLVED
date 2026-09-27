@@ -19,6 +19,7 @@
     "verify-gmail-smtp-email": "node scripts/verifyGmailSmtpEmail.js",
     "verify-gmail-smtp-delivery": "node scripts/verifyGmailSmtpDelivery.js",
     "verify-gmail-api-email": "node --test src/services/gmailApiMail.test.js",
+    "verify-audio-playback": "node --test src/utils/httpByteRange.test.js",
     "verify-login-feedback": "node scripts/verifyLoginFeedback.js",
     "verify-instructor-approval": "node scripts/verifyInstructorApproval.js",
     "verify-student-first-login": "node scripts/verifyStudentFirstLoginGreeting.js",

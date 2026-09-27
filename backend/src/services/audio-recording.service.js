@@ -3,6 +3,7 @@ const pool = require('../db/pool');
 const { audioStorage } = require('../storage');
 const AppError = require('../utils/AppError');
 const { validateAudioFile } = require('../utils/audioFile');
+const { parseHttpByteRange } = require('../utils/httpByteRange');
 
 function safeRecording(row, pauses = []) {
   return {
@@ -143,14 +144,25 @@ async function getSectionRecordings(sectionId, instructorId) {
   return Promise.all(rows.map(async row => safeRecording(row, await getPauseRows(row.id))));
 }
 
-async function getRecordingFile(recordingId, instructorId) {
+async function getRecordingFile(recordingId, instructorId, rangeHeader) {
   const { rows } = await pool.query(
     'SELECT * FROM lesson_audio_recordings WHERE id = $1 AND instructor_id = $2',
     [recordingId, instructorId]
   );
   if (!rows.length) throw new AppError('Audio recording not found.', 404);
-  try { return { ...(await audioStorage.open(rows[0].storage_key)), mime:rows[0].mime_type }; }
+  try {
+    const { size } = await audioStorage.stat(rows[0].storage_key);
+    const range = parseHttpByteRange(rangeHeader, size);
+    return {
+      ...(await audioStorage.open(rows[0].storage_key, range || {})),
+      mime: rows[0].mime_type,
+      durationMs: Number(rows[0].duration_ms),
+      range,
+      size,
+    };
+  }
   catch (error) {
+    if (error.code === 'RANGE_NOT_SATISFIABLE') throw error;
     if (error.code === 'ENOENT') throw new AppError('Audio recording file is unavailable.', 404);
     throw new AppError('Unable to load the audio recording. Please try again.', 500);
   }

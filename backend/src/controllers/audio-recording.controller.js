@@ -22,9 +22,25 @@ const getSectionRecordings = asyncHandler(async (req, res) => {
 });
 
 const getRecordingAudio = asyncHandler(async (req, res) => {
-  const file = await audioService.getRecordingFile(req.params.recordingId, req.user.id);
+  let file;
+  try {
+    file = await audioService.getRecordingFile(req.params.recordingId, req.user.id, req.headers.range);
+  } catch (error) {
+    if (error?.code === 'RANGE_NOT_SATISFIABLE') {
+      res.setHeader('Accept-Ranges', 'bytes');
+      res.setHeader('Content-Range', `bytes */${error.size}`);
+      return res.status(416).end();
+    }
+    throw error;
+  }
   res.setHeader('Content-Type', file.mime);
-  res.setHeader('Content-Length', file.size);
+  res.setHeader('X-Audio-Duration-Ms', file.durationMs);
+  res.setHeader('Accept-Ranges', 'bytes');
+  res.setHeader('Content-Length', file.range?.length ?? file.size);
+  if (file.range) {
+    res.status(206);
+    res.setHeader('Content-Range', `bytes ${file.range.start}-${file.range.end}/${file.size}`);
+  }
   res.setHeader('Cache-Control', 'private, max-age=300');
   res.setHeader('Content-Disposition', 'inline');
   file.stream.on('error', error => res.destroy(error));

@@ -38,10 +38,19 @@ class LocalStorageAdapter extends StorageProvider {
     }
   }
 
-  async open(key) {
+  async stat(key) {
     const target = this.resolveKey(key);
     const stat = await fsp.stat(target);
-    return { stream: fs.createReadStream(target), size: stat.size };
+    return { size: stat.size };
+  }
+
+  async open(key, options = {}) {
+    const target = this.resolveKey(key);
+    const stat = await fsp.stat(target);
+    const streamOptions = {};
+    if (Number.isInteger(options.start)) streamOptions.start = options.start;
+    if (Number.isInteger(options.end)) streamOptions.end = options.end;
+    return { stream: fs.createReadStream(target, streamOptions), size: stat.size };
   }
 
   async delete(key) {

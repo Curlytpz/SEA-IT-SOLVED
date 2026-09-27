@@ -1,3 +1,5 @@
+import fixWebmDuration from 'fix-webm-duration';
+
 export const SUPPORTED_RECORDING_MIME_TYPES = new Set([
   'audio/webm',
   'audio/ogg',
@@ -22,6 +24,19 @@ export function validateRecordingBlob(blob) {
   if (!SUPPORTED_RECORDING_MIME_TYPES.has(mimeType)) throw recordingError();
   if (!Number.isFinite(blob?.size) || blob.size < MIN_RECORDING_BYTES) throw recordingError();
   return blob;
+}
+
+export async function repairRecordingDuration(blob, durationMs, durationFixer = fixWebmDuration) {
+  if (recordingMimeType(blob) !== 'audio/webm') return blob;
+  if (!Number.isFinite(durationMs) || durationMs <= 0) throw recordingError();
+  try {
+    const repaired = await durationFixer(blob, durationMs, undefined, { logger: false });
+    if (!(repaired instanceof Blob) || repaired.size < MIN_RECORDING_BYTES) throw recordingError();
+    return repaired.type === blob.type ? repaired : new Blob([repaired], { type: blob.type });
+  } catch (error) {
+    if (error?.code === 'INVALID_AUDIO_RECORDING') throw error;
+    throw recordingError();
+  }
 }
 
 function extensionFor(blob) {

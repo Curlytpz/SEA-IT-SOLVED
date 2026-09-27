@@ -1,11 +1,14 @@
 import { useCallback,useEffect,useRef,useState } from 'react';
-import { defaultMicrophoneSourceKey } from '../hardware/microphone/microphoneSources';
+import {
+  microphoneRecordingMetadata,
+  resolveMicrophoneSettings,
+} from '../hardware/microphone/microphoneSources';
 import lessonAudioSession from '../hardware/microphone/lessonAudioSession';
 import { getHardwareSettings,saveHardwareSettings } from '../services/hardwareApi';
 import { createAudioRecording,getLessonAudioRecording } from '../services/audioRecordingApi';
 
 export default function useLessonAudioRecording(lesson){
-  const [settings,setSettings]=useState({microphoneMode:'SIMULATED',microphoneSourceKey:defaultMicrophoneSourceKey('SIMULATED'),microphoneNoiseSuppression:true});
+  const [settings,setSettings]=useState(()=>resolveMicrophoneSettings({microphoneMode:'BROWSER',microphoneNoiseSuppression:true}));
   const [sessionState,setSessionState]=useState(()=>lessonAudioSession.snapshot());
   const [savedRecording,setSavedRecording]=useState(null);
   const [pendingResult,setPendingResult]=useState(null);
@@ -25,8 +28,7 @@ export default function useLessonAudioRecording(lesson){
     let active=true;
     Promise.all([getHardwareSettings(),getLessonAudioRecording(lesson.id)]).then(([current,recording])=>{
       if(!active)return;
-      const mode=current.microphoneMode||'SIMULATED';
-      setSettings({...current,microphoneMode:mode,microphoneSourceKey:current.microphoneSourceKey||defaultMicrophoneSourceKey(mode),microphoneNoiseSuppression:current.microphoneNoiseSuppression!==false});
+      setSettings(resolveMicrophoneSettings(current));
       setSavedRecording(recording);setSettingsReady(true);
     }).catch(err=>{if(active)setMessage({text:err.response?.data?.error||'Unable to initialize lesson audio.',type:'error'});});
     return()=>{active=false;};
@@ -88,7 +90,8 @@ export default function useLessonAudioRecording(lesson){
     setUploading(true);
     try{
       const current=lessonAudioSession.snapshot();
-      const saved=await createAudioRecording(lesson.id,{blob:result.blob,metadata:{hardwareMode:current.mode||settings.microphoneMode,sourceKey:current.sourceKey||settings.microphoneSourceKey,durationMs:result.durationMs,startedAt:result.startedAt,completedAt:result.completedAt,pauses:result.pauses}});
+      const source=microphoneRecordingMetadata(current,settings);
+      const saved=await createAudioRecording(lesson.id,{blob:result.blob,metadata:{...source,durationMs:result.durationMs,startedAt:result.startedAt,completedAt:result.completedAt,pauses:result.pauses}});
       setSavedRecording(saved);setPendingResult(null);pendingRef.current=null;await lessonAudioSession.discard();
       setMessage({text:'Lesson audio recording saved.',type:'success'});return saved;
     }catch(err){const friendly=new Error(err.code==='INVALID_AUDIO_RECORDING'?err.message:(err.response?.data?.error||'Your lesson recording could not be saved.'));friendly.audioSaveFailure=true;setMessage({text:friendly.message,type:'error'});throw friendly;}

@@ -1,6 +1,10 @@
 import { useCallback,useEffect,useRef,useState } from 'react';
 import useMicrophone from '../../hooks/useMicrophone';
-import { defaultMicrophoneSourceKey } from '../../hardware/microphone/microphoneSources';
+import {
+  defaultMicrophoneSourceKey,
+  microphoneSimulationEnabled,
+  resolveMicrophoneSettings,
+} from '../../hardware/microphone/microphoneSources';
 import { getHardwareSettings,saveHardwareSettings } from '../../services/hardwareApi';
 import { Alert,Btn,Card,FormField,Select } from '../ui';
 import { Mic } from '../icons';
@@ -9,19 +13,20 @@ import HardwareStatus from './HardwareStatus';
 import { ConfiguredSummary,SettingsPanelHeader } from './HardwareSettingsState';
 
 export default function MicrophoneSettingsPanel(){
-  const [mode,setMode]=useState('SIMULATED');
-  const [sourceKey,setSourceKey]=useState(defaultMicrophoneSourceKey('SIMULATED'));
+  const [mode,setMode]=useState('BROWSER');
+  const [sourceKey,setSourceKey]=useState(defaultMicrophoneSourceKey('BROWSER'));
   const [noisePreferred,setNoisePreferred]=useState(true);
-  const [savedSettings,setSavedSettings]=useState({mode:'SIMULATED',sourceKey:defaultMicrophoneSourceKey('SIMULATED'),noisePreferred:true});
+  const [savedSettings,setSavedSettings]=useState({mode:'BROWSER',sourceKey:defaultMicrophoneSourceKey('BROWSER'),noisePreferred:true});
   const [editing,setEditing]=useState(false);
   const [loading,setLoading]=useState(true);
   const [saving,setSaving]=useState(false);const [testing,setTesting]=useState(false);const [testUrl,setTestUrl]=useState('');
   const [message,setMessage]=useState({text:'',type:'success'});const testUrlRef=useRef('');
   const microphone=useMicrophone(mode);const getLevel=useCallback(()=>microphone.service.getAudioLevel(),[microphone.service]);
+  const simulationEnabled=microphoneSimulationEnabled();
   const active=['READY','RECORDING','PAUSED'].includes(microphone.status);
   const selectedDevice=microphone.devices.find(device=>device.id===sourceKey)?.label||(mode==='SIMULATED'?'Simulated Lapel Microphone':'Selected microphone');
 
-  useEffect(()=>{getHardwareSettings().then(settings=>{const nextMode=settings.microphoneMode||'SIMULATED';const nextSource=settings.microphoneSourceKey||defaultMicrophoneSourceKey(nextMode);const nextNoise=settings.microphoneNoiseSuppression!==false;setMode(nextMode);setSourceKey(nextSource);setNoisePreferred(nextNoise);setSavedSettings({mode:nextMode,sourceKey:nextSource,noisePreferred:nextNoise});setEditing(false);}).catch(err=>setMessage({text:err.response?.data?.error||'Unable to load microphone settings.',type:'error'})).finally(()=>setLoading(false));},[]);
+  useEffect(()=>{getHardwareSettings().then(settings=>{const resolved=resolveMicrophoneSettings(settings);const nextMode=resolved.microphoneMode;const nextSource=resolved.microphoneSourceKey||defaultMicrophoneSourceKey(nextMode);const nextNoise=resolved.microphoneNoiseSuppression;setMode(nextMode);setSourceKey(nextSource);setNoisePreferred(nextNoise);setSavedSettings({mode:nextMode,sourceKey:nextSource,noisePreferred:nextNoise});setEditing(false);}).catch(err=>setMessage({text:err.response?.data?.error||'Unable to load microphone settings.',type:'error'})).finally(()=>setLoading(false));},[]);
   useEffect(()=>{if(!sourceKey&&microphone.devices.length)setSourceKey(microphone.devices[0].id);},[sourceKey,microphone.devices]);
   useEffect(()=>()=>{if(testUrlRef.current)URL.revokeObjectURL(testUrlRef.current);},[]);
 
@@ -41,7 +46,7 @@ export default function MicrophoneSettingsPanel(){
     <Card className="p-5">
       <SettingsPanelHeader icon={<Mic size={17}/>} title="Microphone" description="Configure the microphone used automatically when a lesson starts." editing={editing}/>
       {!editing?<ConfiguredSummary items={[{label:'Mode',value:mode==='SIMULATED'?'Simulated / Development':'Browser / PC Microphone'},{label:'Device',value:selectedDevice},{label:'Noise Cancellation',value:noisePreferred?'ON':'OFF'}]}><Btn onClick={()=>setEditing(true)} disabled={testing}>Change Settings</Btn>{!testing?<Btn variant="secondary" onClick={startTest}><Mic size={15}/> Test Microphone</Btn>:<Btn variant="warning" onClick={stopTest}>Stop Test</Btn>}</ConfiguredSummary>:<>
-        <div className="grid gap-4 sm:grid-cols-2"><FormField label="Microphone Mode"><Select value={mode} disabled={active||loading} onChange={event=>{const next=event.target.value;setMode(next);setSourceKey(defaultMicrophoneSourceKey(next));setTestUrl('')}}><option value="SIMULATED">Simulated / Development</option><option value="BROWSER">Browser / PC Microphone</option></Select></FormField><FormField label="Microphone Device"><Select value={sourceKey} disabled={active||loading} onChange={event=>setSourceKey(event.target.value)}>{!microphone.devices.length&&<option value="">No microphone detected</option>}{microphone.devices.map(device=><option key={device.id} value={device.id}>{device.label}</option>)}</Select></FormField></div>
+        <div className="grid gap-4 sm:grid-cols-2"><FormField label="Microphone Mode"><Select value={mode} disabled={active||loading} onChange={event=>{const next=event.target.value;setMode(next);setSourceKey(defaultMicrophoneSourceKey(next));setTestUrl('')}}>{simulationEnabled&&<option value="SIMULATED">Simulated / Development</option>}<option value="BROWSER">Browser / PC Microphone</option></Select></FormField><FormField label="Microphone Device"><Select value={sourceKey} disabled={active||loading} onChange={event=>setSourceKey(event.target.value)}>{!microphone.devices.length&&<option value="">No microphone detected</option>}{microphone.devices.map(device=><option key={device.id} value={device.id}>{device.label}</option>)}</Select></FormField></div>
         <div className="mb-4"><HardwareStatus label="Microphone" status={microphone.status} simulated={mode==='SIMULATED'} detail={selectedDevice}/></div>
         <div className="mb-4 flex flex-col justify-between gap-3 rounded-xl bg-surface-subtle p-3 sm:flex-row sm:items-center"><div><p className="text-sm font-semibold text-foreground">Noise Cancellation</p><p className="text-xs text-muted-foreground">{noiseDescription}</p></div><button type="button" aria-pressed={noiseApplied} onClick={toggleNoise} disabled={active&&!microphone.noiseSuppression.supported} className={`min-h-11 rounded-lg px-3 text-xs font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${noiseApplied?'bg-primary text-primary-foreground':'bg-secondary text-muted-foreground'}`}>{active&&!microphone.noiseSuppression.supported?'UNSUPPORTED':noiseApplied?'ON':'OFF'}</button></div>
         <div className="mb-4"><div className="mb-2 flex items-center justify-between text-xs font-semibold text-muted-foreground dark:text-muted-foreground"><span>Audio Level</span><span>{microphone.status==='READY'||testing?'LIVE':'IDLE'}</span></div><AudioLevelMeter getLevel={getLevel} active={active}/></div>

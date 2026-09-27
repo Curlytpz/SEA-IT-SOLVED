@@ -1,12 +1,17 @@
-import MicrophoneService from './MicrophoneService';
-import { defaultMicrophoneSourceKey } from './microphoneSources';
+import MicrophoneService from './MicrophoneService.js';
+import {
+  BROWSER_DEFAULT_MICROPHONE_SOURCE_KEY,
+  defaultMicrophoneSourceKey,
+  resolveMicrophoneSettings,
+} from './microphoneSources.js';
 
-class LessonAudioSession {
-  constructor(){
-    this.service=new MicrophoneService('SIMULATED');
+export class LessonAudioSession {
+  constructor({ environment = import.meta.env || {} } = {}){
+    this.environment=environment;
+    this.service=new MicrophoneService('BROWSER',{environment:this.environment});
     this.listeners=new Set();
     this.poller=null;
-    this.state={lessonId:null,mode:'SIMULATED',sourceKey:defaultMicrophoneSourceKey('SIMULATED'),sourceLabel:'Simulated Lapel Microphone',status:'STOPPED',error:'',skipped:false,noiseSuppressionPreferred:true,noiseSuppression:{supported:true,applied:true,simulated:true}};
+    this.state={lessonId:null,mode:'BROWSER',sourceKey:'',sourceLabel:'Default browser microphone',status:'STOPPED',error:'',skipped:false,noiseSuppressionPreferred:true,noiseSuppression:{supported:false,applied:false,simulated:false}};
   }
 
   subscribe(listener){this.listeners.add(listener);return()=>this.listeners.delete(listener);}
@@ -18,16 +23,18 @@ class LessonAudioSession {
   async prepare(lessonId,settings={}){
     if(this.state.lessonId===lessonId&&['READY','RECORDING','PAUSED'].includes(this.service.getStatus()))return this.snapshot();
     await this.abort();
-    const mode=settings.microphoneMode||'SIMULATED';
-    const sourceKey=settings.microphoneSourceKey||defaultMicrophoneSourceKey(mode);
-    const preferred=settings.microphoneNoiseSuppression!==false;
-    this.service=new MicrophoneService(mode);
+    const resolved=resolveMicrophoneSettings(settings,this.environment);
+    const mode=resolved.microphoneMode;
+    const sourceKey=resolved.microphoneSourceKey||defaultMicrophoneSourceKey(mode);
+    const preferred=resolved.microphoneNoiseSuppression;
+    this.service=new MicrophoneService(mode,{environment:this.environment});
     this.state={lessonId,mode,sourceKey,sourceLabel:sourceKey,status:'STARTING',error:'',skipped:false,noiseSuppressionPreferred:preferred,noiseSuppression:{supported:false,applied:false,simulated:mode==='SIMULATED'}};
     this.emit();
     try{
       await this.service.start({deviceId:sourceKey||undefined,noiseSuppression:preferred});
       const devices=await this.service.listDevices().catch(()=>[]);
-      this.state={...this.state,sourceLabel:devices.find(device=>device.id===sourceKey)?.label||sourceKey||'Default microphone'};
+      const activeSourceKey=this.service.getSourceKey()||sourceKey||BROWSER_DEFAULT_MICROPHONE_SOURCE_KEY;
+      this.state={...this.state,sourceKey:activeSourceKey,sourceLabel:devices.find(device=>device.id===activeSourceKey)?.label||'Browser microphone'};
       this.startPolling();this.emit();return this.snapshot();
     }catch(error){
       this.service.stop();
@@ -52,9 +59,10 @@ class LessonAudioSession {
 
   async continueWithoutAudio(lessonId,settings={}){
     await this.abort();
-    const mode=settings.microphoneMode||'SIMULATED';
-    this.service=new MicrophoneService(mode);
-    this.state={lessonId,mode,sourceKey:settings.microphoneSourceKey||defaultMicrophoneSourceKey(mode),sourceLabel:settings.microphoneSourceKey||'Configured microphone',status:'SKIPPED',error:'',skipped:true,noiseSuppressionPreferred:settings.microphoneNoiseSuppression!==false,noiseSuppression:{supported:false,applied:false,simulated:mode==='SIMULATED'}};
+    const resolved=resolveMicrophoneSettings(settings,this.environment);
+    const mode=resolved.microphoneMode;
+    this.service=new MicrophoneService(mode,{environment:this.environment});
+    this.state={lessonId,mode,sourceKey:resolved.microphoneSourceKey||defaultMicrophoneSourceKey(mode),sourceLabel:resolved.microphoneSourceKey||'Configured microphone',status:'SKIPPED',error:'',skipped:true,noiseSuppressionPreferred:resolved.microphoneNoiseSuppression,noiseSuppression:{supported:false,applied:false,simulated:mode==='SIMULATED'}};
     this.emit();return this.snapshot();
   }
 

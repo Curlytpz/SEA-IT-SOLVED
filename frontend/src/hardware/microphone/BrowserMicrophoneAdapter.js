@@ -1,4 +1,5 @@
 import { validateRecordingBlob } from '../../utils/audioRecording.js';
+import { BROWSER_DEFAULT_MICROPHONE_SOURCE_KEY } from './microphoneSources.js';
 
 const MIME_CANDIDATES = [
   'audio/webm;codecs=opus',
@@ -14,7 +15,7 @@ function friendlyMicrophoneError(error) {
   if (name === 'NotReadableError' || name === 'TrackStartError') return 'The microphone is unavailable or already being used by another application.';
   if (name === 'OverconstrainedError') return 'The selected microphone is no longer available.';
   if (name === 'AbortError') return 'Microphone startup was interrupted. Please try again.';
-  return error?.message || 'Unable to access the microphone.';
+  return 'Microphone access is unavailable. Check browser permission and microphone settings.';
 }
 
 export default class BrowserMicrophoneAdapter {
@@ -22,6 +23,7 @@ export default class BrowserMicrophoneAdapter {
     this.stream=null;this.audioContext=null;this.analyser=null;this.samples=null;this.recorder=null;this.chunks=[];
     this.status='STOPPED';this.manualStop=false;this.startedAt=null;this.activeStartedAt=0;this.activeDurationMs=0;
     this.pauses=[];this.openPause=null;this.lastError='';this.noisePreference=true;
+    this.sourceKey=BROWSER_DEFAULT_MICROPHONE_SOURCE_KEY;
     this.noiseState={supported:false,applied:false,simulated:false};
   }
 
@@ -34,7 +36,7 @@ export default class BrowserMicrophoneAdapter {
   async requestPermission() {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('Microphone access requires localhost or HTTPS.');
     let permissionStream;
-    try { permissionStream=await navigator.mediaDevices.getUserMedia({audio:true}); }
+    try { permissionStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false}); }
     catch (error) { throw new Error(friendlyMicrophoneError(error)); }
     permissionStream.getTracks().forEach(track=>track.stop());
     return this.listDevices();
@@ -53,8 +55,11 @@ export default class BrowserMicrophoneAdapter {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('Microphone access requires localhost or HTTPS.');
     this.stop();this.status='STARTING';this.noisePreference=!!noiseSuppression;
     try {
-      const stream=await navigator.mediaDevices.getUserMedia({audio:{...(deviceId?{deviceId:{exact:deviceId}}:{}),...this.processingConstraints(noiseSuppression)}});
-      await this.attachStream(stream);this.updateNoiseState();return stream;
+      const stream=await navigator.mediaDevices.getUserMedia({audio:{...(deviceId?{deviceId:{exact:deviceId}}:{}),...this.processingConstraints(noiseSuppression)},video:false});
+      await this.attachStream(stream);
+      const activeDeviceId=stream.getAudioTracks?.()[0]?.getSettings?.().deviceId;
+      this.sourceKey=activeDeviceId||deviceId||BROWSER_DEFAULT_MICROPHONE_SOURCE_KEY;
+      this.updateNoiseState();return stream;
     } catch (error) { this.status='ERROR';throw new Error(friendlyMicrophoneError(error)); }
   }
 
@@ -92,6 +97,7 @@ export default class BrowserMicrophoneAdapter {
 
   getStatus(){return this.status;}
   getError(){return this.lastError;}
+  getSourceKey(){return this.sourceKey||BROWSER_DEFAULT_MICROPHONE_SOURCE_KEY;}
   getRecordingDuration(){return Math.max(0,Math.round(this.activeDurationMs+(this.status==='RECORDING'?performance.now()-this.activeStartedAt:0)));}
 
   getAudioLevel(){
@@ -139,7 +145,7 @@ export default class BrowserMicrophoneAdapter {
   stop(){
     this.manualStop=true;if(this.recorder&&this.recorder.state!=='inactive'){try{this.recorder.stop();}catch{/* best-effort cleanup */}}
     this.recorder=null;this.chunks=[];this.stream?.getTracks().forEach(track=>track.stop());this.stream=null;this.analyser=null;this.samples=null;
-    this.audioContext?.close().catch(()=>{});this.audioContext=null;this.lastError='';this.status='STOPPED';this.noiseState={supported:false,applied:false,simulated:false};
+    this.audioContext?.close().catch(()=>{});this.audioContext=null;this.lastError='';this.status='STOPPED';this.sourceKey=BROWSER_DEFAULT_MICROPHONE_SOURCE_KEY;this.noiseState={supported:false,applied:false,simulated:false};
   }
 }
 

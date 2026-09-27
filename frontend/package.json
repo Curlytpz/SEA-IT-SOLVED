@@ -11,6 +11,7 @@
     "test:status-presentation": "node src/utils/statusPresentation.test.mjs",
     "test:student-class-groups": "node src/utils/studentClassGroups.test.mjs",
     "test:auth-ux": "node src/utils/authUx.test.mjs",
+    "test:audio-recording": "node --test src/hardware/microphone/audioRecordingPipeline.test.mjs src/hardware/microphone/microphoneSelection.test.mjs",
     "audit:styles": "node audit-tailwind-migration.mjs --summary"
   },
   "dependencies": {

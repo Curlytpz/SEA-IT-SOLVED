@@ -1,5 +1,5 @@
-import BrowserMicrophoneAdapter from './BrowserMicrophoneAdapter';
-import { SIMULATED_MICROPHONE_SOURCE_KEY } from './microphoneSources';
+import BrowserMicrophoneAdapter from './BrowserMicrophoneAdapter.js';
+import { SIMULATED_MICROPHONE_SOURCE_KEY } from './microphoneSources.js';
 
 export default class MockMicrophoneAdapter extends BrowserMicrophoneAdapter {
   constructor() { super(); this.generatorContext=null; this.oscillator=null; this.noisePreference=true; }
@@ -23,6 +23,7 @@ export default class MockMicrophoneAdapter extends BrowserMicrophoneAdapter {
     this.oscillator.connect(gain).connect(destination);
     this.oscillator.start();
     await this.attachStream(destination.stream);
+    this.sourceKey = SIMULATED_MICROPHONE_SOURCE_KEY;
     return destination.stream;
   }
 

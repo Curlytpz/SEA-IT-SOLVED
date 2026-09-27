@@ -1,10 +1,11 @@
-import BrowserMicrophoneAdapter from './BrowserMicrophoneAdapter';
-import MockMicrophoneAdapter from './MockMicrophoneAdapter';
+import BrowserMicrophoneAdapter from './BrowserMicrophoneAdapter.js';
+import MockMicrophoneAdapter from './MockMicrophoneAdapter.js';
+import { resolveMicrophoneMode } from './microphoneSources.js';
 
 export default class MicrophoneService {
-  constructor(mode='SIMULATED') {
-    this.mode=mode;
-    this.adapter=mode==='BROWSER'?new BrowserMicrophoneAdapter():new MockMicrophoneAdapter();
+  constructor(mode='BROWSER', { environment } = {}) {
+    this.mode=resolveMicrophoneMode(mode, environment);
+    this.adapter=this.mode==='SIMULATED'?new MockMicrophoneAdapter():new BrowserMicrophoneAdapter();
   }
   listDevices(){return this.adapter.listDevices();}
   requestPermission(){return this.adapter.requestPermission();}
@@ -20,4 +21,5 @@ export default class MicrophoneService {
   getAudioLevel(){return this.adapter.getAudioLevel();}
   getNoiseSuppressionState(){return this.adapter.getNoiseSuppressionState();}
   setNoiseSuppression(enabled){return this.adapter.setNoiseSuppression(enabled);}
+  getSourceKey(){return this.adapter.getSourceKey();}
 }

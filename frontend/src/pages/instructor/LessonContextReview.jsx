@@ -11,6 +11,7 @@ import GeneratedLessonDocument from '../../components/reasoning/GeneratedLessonD
 import LessonChatAssistant from '../../components/reasoning/LessonChatAssistant';
 import GeneratedContent from '../../components/reasoning/GeneratedContent';
 import WorkspaceToast from '../../components/reasoning/WorkspaceToast';
+import WorkspaceErrorBoundary from '../../components/reasoning/WorkspaceErrorBoundary';
 import QuizQuestionEditor from '../../components/reasoning/QuizQuestionEditor';
 import MathAwareEditor from '../../components/reasoning/MathAwareEditor';
 import PdfViewer from '../../components/recognition/PdfViewer';
@@ -26,6 +27,7 @@ import { createLessonContextDraftGate, isExpectedSourcesProcessingError, lessonC
 import { sectionBackLabel, sectionOriginFromState, sectionOriginState, sectionReturnPath } from '../../utils/instructorLessonNavigation';
 import { getQuizEditingState } from '../../utils/quizEditingState';
 import { getQuizMathIssues } from '../../utils/quizMathReview';
+import { normalizeWorkspaceIntelligence } from '../../utils/workspaceReliability';
 
 const PUBLISH_STATE = Object.freeze({ IDLE: 'idle', PUBLISHING: 'publishing', SUCCESS: 'success', ERROR: 'error' });
 
@@ -77,7 +79,7 @@ function sourceImageUrl(chunk, materials) {
   return '';
 }
 
-export default function LessonContextReview() {
+function LessonContextReview() {
   const { lessonId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -86,8 +88,11 @@ export default function LessonContextReview() {
   const [chunks, setChunks] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [materials, setMaterials] = useState([]);
-  const [intelligence, setIntelligence] = useState({ materials: [], quizzes: [] });
+  const [intelligence, setIntelligence] = useState(() => normalizeWorkspaceIntelligence(null));
   const [loading, setLoading] = useState(true);
+  const [workspaceLoadError, setWorkspaceLoadError] = useState('');
+  const loadSequence = useRef(0);
+  const loadController = useRef(null);
   const [busy, setBusy] = useState('');
   const [publishState, setPublishState] = useState(PUBLISH_STATE.IDLE);
   const [regenerating, setRegenerating] = useState(false);
@@ -120,20 +125,47 @@ export default function LessonContextReview() {
   const lesson = workflow.lesson;
 
   const load = useCallback(async () => {
+    const sequence = ++loadSequence.current;
+    loadController.current?.abort();
+    const controller = new AbortController();
+    loadController.current = controller;
     setLoading(true);
+    setWorkspaceLoadError('');
     try {
       const [nextContext, nextMaterials] = await Promise.all([
-        getLessonContext(lessonId),
-        listLessonMaterials(lessonId),
+        getLessonContext(lessonId, { signal: controller.signal }),
+        listLessonMaterials(lessonId, { signal: controller.signal }),
       ]);
+      if (sequence !== loadSequence.current) return;
       setContext(nextContext);
       setChunks(nextContext?.chunks || []);
       setMaterials(nextMaterials);
       setSelectedId(current => nextContext?.chunks?.some(item => item.id === current) ? current : nextContext?.chunks?.[0]?.id || '');
-      if (nextContext?.status === 'APPROVED' && wantsWorkspace) setIntelligence(await getLessonIntelligence(lessonId));
-    } catch (error) { setMessage({ type: 'error', text: error.response?.data?.error || 'Unable to load the lesson review.' }); }
-    finally { setLoading(false); }
+      if (nextContext?.status === 'APPROVED' && wantsWorkspace) {
+        try {
+          const nextIntelligence = await getLessonIntelligence(lessonId, { signal: controller.signal });
+          if (sequence === loadSequence.current) setIntelligence(normalizeWorkspaceIntelligence(nextIntelligence));
+        } catch (error) {
+          if (sequence !== loadSequence.current || controller.signal.aborted) return;
+          setWorkspaceLoadError(error.response?.status === 404
+            ? 'This lesson workspace could not be found.'
+            : error.response?.status === 403
+              ? 'You are not authorized to open this lesson workspace.'
+              : error.response?.data?.error || 'The lesson workspace could not be loaded. Please retry.');
+        }
+      }
+    } catch (error) {
+      if (sequence !== loadSequence.current || controller.signal.aborted) return;
+      setWorkspaceLoadError(error.response?.status === 404
+        ? 'This lesson could not be found.'
+        : error.response?.status === 403
+          ? 'You are not authorized to open this lesson.'
+          : error.response?.data?.error || 'Unable to load the lesson review.');
+    } finally {
+      if (sequence === loadSequence.current) setLoading(false);
+    }
   }, [lessonId, wantsWorkspace]);
+  useEffect(() => () => { loadSequence.current += 1; loadController.current?.abort(); }, []);
   useEffect(() => {
     reviewMounted.current = true;
     return () => { reviewMounted.current = false; };
@@ -205,7 +237,7 @@ export default function LessonContextReview() {
     try {
       await generateLessonMaterials(lessonId);
       const next = await getLessonIntelligence(lessonId);
-      setIntelligence(next);
+      setIntelligence(normalizeWorkspaceIntelligence(next));
       setDocumentResetRevision(current => current + 1);
       setMessage({ type: 'success', text: 'Lesson materials regenerated', description: 'Review the updated notes before publishing.' });
     } catch (error) {
@@ -338,7 +370,7 @@ export default function LessonContextReview() {
     try {
       const next = await getLessonIntelligence(lessonId);
       const newestQuizId = next.quizzes?.[0]?.id || '';
-      setIntelligence(next);
+      setIntelligence(normalizeWorkspaceIntelligence(next));
       if (review) reviewQuizDraft(newestQuizId);
       else {
         setWorkspaceView('document');
@@ -397,7 +429,7 @@ export default function LessonContextReview() {
     try {
       for (const question of changedQuestions) await updateQuizQuestion(quizId, question.id, question);
       for (const questionId of removedQuestionIds) await deleteQuizQuestion(quizId, questionId);
-      setIntelligence(await getLessonIntelligence(lessonId));
+      setIntelligence(normalizeWorkspaceIntelligence(await getLessonIntelligence(lessonId)));
       setQuizToast({ text: 'Changes saved', description: 'The published quiz is locked again with your latest changes.' });
       return true;
     } catch (error) {
@@ -409,7 +441,7 @@ export default function LessonContextReview() {
   }, [lessonId, setQuizToast]);
   const removeQuestion = useCallback(async (quizId, question) => {
     setBusy(question.id);
-    try { await deleteQuizQuestion(quizId, question.id); setIntelligence(await getLessonIntelligence(lessonId)); }
+    try { await deleteQuizQuestion(quizId, question.id); setIntelligence(normalizeWorkspaceIntelligence(await getLessonIntelligence(lessonId))); }
     catch (error) { setMessage({ type: 'error', text: error.response?.data?.error || 'Unable to delete this question.' }); }
     finally { setBusy(''); }
   }, [lessonId]);
@@ -483,6 +515,18 @@ export default function LessonContextReview() {
         <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">{[0,1].map(key=><Card key={key} className="min-h-80 space-y-5 p-5">{[0,1,2,3].map(line=><div key={line} className="h-5 rounded bg-surface-elevated dark:bg-surface-elevated"/>)}</Card>)}</div>
       </div>
     </section>
+  </DashboardLayout>;
+  if (workspaceLoadError && (!context || wantsWorkspace)) return <DashboardLayout>
+    <BackButton onClick={navigateBack}>{backLabel}</BackButton>
+    <PageHeader title={wantsWorkspace ? 'Lesson Workspace' : 'Lesson Context Review'} subtitle={lesson?.title || 'Lesson workspace'}/>
+    <EmptyState
+      icon={<TriangleAlert/>}
+      title={workspaceLoadError.includes('not authorized') ? 'Workspace unavailable' : workspaceLoadError.includes('not be found') ? 'Lesson not found' : 'Workspace could not load'}
+      body={workspaceLoadError}
+    >
+      <Btn onClick={load}>Retry</Btn>
+      <Btn variant="secondary" onClick={() => navigate('/instructor/sections')}>Back to Lessons</Btn>
+    </EmptyState>
   </DashboardLayout>;
   if (!context) {
     const waitingFor = workflow.readiness.processingSources.join(', ');
@@ -634,6 +678,13 @@ export default function LessonContextReview() {
     />}
     {confirmApprove && <ConfirmModal title="Approve lesson context?" body="This freezes the reviewed version as the only source Gemini may use. Later changes require reopening review and approving a new version." confirmLabel="Approve Context" confirmVariant="success" loading={busy === 'approve'} onCancel={() => setConfirmApprove(false)} onConfirm={approve}/>}
   </DashboardLayout>;
+}
+
+export default function LessonContextReviewPage() {
+  const { lessonId } = useParams();
+  return <WorkspaceErrorBoundary backTo="/instructor/sections">
+    <LessonContextReview key={lessonId}/>
+  </WorkspaceErrorBoundary>;
 }
 
 function SourceCard({ chunk, materials, selected, draft, editing, onSelect, onToggleEdit, onPatch, onOpenImage, onOpenPdf, onReturnToProcessing }) {

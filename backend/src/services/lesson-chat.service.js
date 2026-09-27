@@ -1,5 +1,6 @@
 const pool = require('../db/pool');
 const AppError = require('../utils/AppError');
+const crypto = require('node:crypto');
 const { AsyncLocalStorage } = require('node:async_hooks');
 const contextService = require('./lesson-context.service');
 const intelligenceService = require('./lesson-intelligence.service');
@@ -8,6 +9,7 @@ const GeminiLessonChatProvider = require('../reasoning/GeminiLessonChatProvider'
 const { normalizeGeneratedLessonTitle, normalizeGeneratedText } = require('../utils/generatedContent');
 const { normalizeLessonMathContent } = require('../utils/mathContent');
 const { conversationTitle } = require('../utils/lessonChatHistory');
+const { runQuizGenerationTransaction } = require('../utils/quizGenerationTransaction');
 const { explicitQuizGeneration, quizIntent, quizEditIntent, generateNotesIntent, editIntent, wholeLessonEditIntent, prepareQuizDraft, quizClarificationMessage, isQuizDraftContinuation } = require('../utils/lessonChatIntent');
 const { GEMINI_API_KEY, GEMINI_CHAT_MODEL, GEMINI_INTERACTIVE_TIMEOUT_MS } = require('../config/env');
 
@@ -17,6 +19,30 @@ const EDIT_ACTIONS = ['UPDATE_SECTION','ADD_SECTION','REMOVE_SECTION','RENAME_TI
 const EDIT_OPERATIONS = ['replace','append','prepend','insert_after','insert_before','rewrite','delete'];
 const chatSessionScope = new AsyncLocalStorage();
 const CHAT_HISTORY_LIMIT = 30;
+
+function quizGenerationId(value) {
+  const candidate = String(value || '').trim();
+  return /^[A-Za-z0-9_-]{8,100}$/.test(candidate) ? candidate : crypto.randomUUID();
+}
+
+function quizStage(stage, generationId, details = {}) {
+  console.info('[LessonQuiz]', { stage, generationId, ...details });
+}
+
+async function existingQuizGeneration(client, lessonId, instructorId, generationId) {
+  const result = await client.query(
+    `SELECT m.* FROM lesson_chat_messages m
+     WHERE m.lesson_id=$1 AND m.instructor_id=$2
+       AND m.metadata->>'action'='QUIZ_CREATED'
+       AND m.metadata->>'generationId'=$3
+     ORDER BY m.created_at DESC,m.id DESC LIMIT 1`,
+    [lessonId, instructorId, generationId]
+  );
+  if (!result.rows.length) return null;
+  const quizId = result.rows[0].metadata?.quizId;
+  const quiz = quizId ? await intelligenceService.getPersistedQuiz(quizId, instructorId, client) : null;
+  return quiz ? { message: safeMessage(result.rows[0]), quizCreated: true, quiz, idempotentReplay: true } : null;
+}
 
 function sourceLabel(chunk) {
   const source = chunk.source || {};
@@ -175,17 +201,38 @@ async function createQuiz(lessonId,instructorId,options={}) {
     }
     const{difficulty,questionCount:count,questionType}=prepared.draft;
     const generationPrompt=String(options.quizDraft?.prompt||prompt).trim();
+    const generationId=quizGenerationId(options.generationId);
     await currentSession(lessonId,instructorId,false);
-    const quiz=await intelligenceService.generateQuiz(lessonId,instructorId,{difficulty,questionCount:count,questionType,prompt:generationPrompt});
+    const replay=await existingQuizGeneration(pool,lessonId,instructorId,generationId);
+    if(replay){quizStage('QUIZ_GENERATION_COMPLETED',generationId,{quizId:replay.quiz.id,idempotentReplay:true});return replay;}
+    let generated;
+    let lastStage='QUIZ_AI_REQUEST_STARTED';
+    const onStage=(stage,details={})=>{lastStage=stage;quizStage(stage,generationId,details);};
+    try{
+      generated=await intelligenceService.prepareQuizGeneration(lessonId,instructorId,{difficulty,questionCount:count,questionType,prompt:generationPrompt,onStage});
+    }catch(error){
+      const timeout=/timeout|timed out|ETIMEDOUT/i.test(`${error?.code||''} ${error?.message||''}`);
+      quizStage(timeout?'QUIZ_TIMEOUT':lastStage==='QUIZ_AI_RESPONSE_RECEIVED'?'QUIZ_VALIDATION_FAILED':'QUIZ_AI_FAILED',generationId,{name:error?.name,code:error?.code||null,status:error?.status||error?.statusCode||null});
+      throw error;
+    }
     const{session}=await currentSession(lessonId,instructorId,true);
     const client=await pool.connect();
     try{
-      await client.query('BEGIN');
-      if(options.skipUserMessage!==true)await insertMessage(client,session,lessonId,instructorId,'USER',prompt,'QUIZ_ACTION');
-      const assistant=await insertMessage(client,session,lessonId,instructorId,'ASSISTANT',`I generated a ${count}-question ${difficulty.toLowerCase()} quiz draft based on the approved lesson context. Review and edit it before publishing.`,'QUIZ_ACTION',[],{action:'QUIZ_CREATED',quizId:quiz.id,difficulty,questionCount:Number(count),questionType});
-      await client.query('COMMIT');
-      return{message:assistant,quizCreated:true,quiz};
-    }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
+      const result=await runQuizGenerationTransaction({
+        client,
+        lockScope:`${lessonId}:${instructorId}`,
+        generationId,
+        findExisting:db=>existingQuizGeneration(db,lessonId,instructorId,generationId),
+        persistQuiz:db=>intelligenceService.persistPreparedQuiz(db,lessonId,instructorId,generated,onStage),
+        saveConfirmation:async(db,quiz)=>{
+          if(options.skipUserMessage!==true)await insertMessage(db,session,lessonId,instructorId,'USER',prompt,'QUIZ_ACTION');
+          return insertMessage(db,session,lessonId,instructorId,'ASSISTANT',`I generated a ${count}-question ${difficulty.toLowerCase()} quiz draft based on the approved lesson context. Review and edit it before publishing.`,'QUIZ_ACTION',[],{action:'QUIZ_CREATED',quizId:quiz.id,generationId,difficulty,questionCount:Number(count),questionType});
+        },
+        onStage,
+      });
+      onStage('QUIZ_GENERATION_COMPLETED',{quizId:result.quiz.id,idempotentReplay:Boolean(result.idempotentReplay)});
+      return result;
+    }finally{client.release();}
   });
 }
 
@@ -613,7 +660,7 @@ async function send(lessonId,instructorId,body){
   if(!message)throw new AppError('Enter a request for the lesson assistant.',400);
   if(message.length>2000)throw new AppError('Keep lesson-assistant messages under 2,000 characters.',400);
   return withSessionScope(body,message,async()=>{
-    const quizOptions={prompt:message,difficulty:body?.difficulty,questionCount:body?.questionCount,questionType:body?.questionType,quizDraft:body?.quizDraft};
+    const quizOptions={prompt:message,difficulty:body?.difficulty,questionCount:body?.questionCount,questionType:body?.questionType,quizDraft:body?.quizDraft,generationId:body?.generationId};
     const quizContinuation=Boolean(body?.quizDraft&&isQuizDraftContinuation(message));
     const explicitQuiz=explicitQuizGeneration(message);
     const quizEdit=quizEditIntent(message,body?.intent);

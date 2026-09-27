@@ -396,19 +396,20 @@ function safeQuiz(row, questions = []) {
   };
 }
 
-async function generateQuiz(lessonId, instructorId, options = {}) {
+async function prepareQuizGeneration(lessonId, instructorId, options = {}) {
   const { context, payload } = await approvedPayload(lessonId, instructorId);
   const { difficulty, questionCount } = generationOptions(options);
   const specification = quizGenerationSpec(options.prompt || '', questionCount, options.questionType);
   const allowedSources = new Set(payload.map(item => item.source));
+  options.onStage?.('QUIZ_AI_REQUEST_STARTED');
   const result = await geminiInteractive.run(
-    async ({ attempt }) => normalizeQuiz(
-      await quizProvider.generateQuiz(payload, { questionCount, difficulty, specification, repair: attempt > 1 }),
-      allowedSources,
-      questionCount,
-      difficulty,
-      specification
-    ),
+    async ({ attempt }) => {
+      const response = await quizProvider.generateQuiz(payload, { questionCount, difficulty, specification, repair: attempt > 1 });
+      options.onStage?.('QUIZ_AI_RESPONSE_RECEIVED');
+      const normalized = normalizeQuiz(response, allowedSources, questionCount, difficulty, specification);
+      options.onStage?.('QUIZ_VALIDATION_PASSED');
+      return normalized;
+    },
     {
       unavailable: 'Quiz generation could not be completed. Try again.',
       invalidOutput: 'The generated quiz could not be validated. Please try again.',
@@ -416,29 +417,48 @@ async function generateQuiz(lessonId, instructorId, options = {}) {
     },
     { label: 'QuizAI', model: GEMINI_QUIZ_MODEL, userId: instructorId }
   );
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const quizResult = await client.query(
+  return { context, difficulty, result };
+}
+
+async function persistPreparedQuiz(client, lessonId, instructorId, prepared, onStage = () => {}) {
+  const { context, difficulty, result } = prepared;
+  const quizResult = await client.query(
       `INSERT INTO lesson_quizzes(lesson_id,context_version_id,instructor_id,title,instructions,difficulty,status,provider,provider_version)
        VALUES($1,$2,$3,$4,$5,$6,'DRAFT','GEMINI',$7) RETURNING *`,
       [lessonId, context.id, instructorId, result.title.slice(0, 255), result.instructions, difficulty, GEMINI_QUIZ_MODEL]
-    );
-    const questions = [];
-    for (let index = 0; index < result.questions.length; index += 1) {
-      const item = result.questions[index];
-      const row = await client.query(
+  );
+  onStage('QUIZ_ROW_INSERTED', { quizId: quizResult.rows[0].id });
+  const questions = [];
+  for (let index = 0; index < result.questions.length; index += 1) {
+    const item = result.questions[index];
+    const row = await client.query(
         `INSERT INTO lesson_quiz_questions(quiz_id,question_order,question_type,topic,difficulty,prompt,choices,
           correct_answer,explanation,source_references,manual_grading,max_points,problem_settings)
          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
         [quizResult.rows[0].id, index + 1, item.type, item.topic, item.difficulty, item.prompt,
          JSON.stringify(item.choices), item.correctAnswer, item.explanation, JSON.stringify(item.sourceReferences), item.manualGrading, item.maxPoints, JSON.stringify(item.problemSettings)]
-      );
-      questions.push(row.rows[0]);
-    }
+    );
+    questions.push(row.rows[0]);
+  }
+  onStage('QUIZ_QUESTIONS_INSERTED', { quizId: quizResult.rows[0].id, questionCount: questions.length });
+  return safeQuiz(quizResult.rows[0], questions);
+}
+
+async function generateQuiz(lessonId, instructorId, options = {}) {
+  const prepared = await prepareQuizGeneration(lessonId, instructorId, options);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    options.onStage?.('QUIZ_TRANSACTION_STARTED');
+    const quiz = await persistPreparedQuiz(client, lessonId, instructorId, prepared, options.onStage);
     await client.query('COMMIT');
-    return safeQuiz(quizResult.rows[0], questions);
-  } catch (error) { await client.query('ROLLBACK'); throw error; }
+    options.onStage?.('QUIZ_TRANSACTION_COMMITTED', { quizId: quiz.id });
+    return quiz;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    options.onStage?.('QUIZ_TRANSACTION_ROLLED_BACK');
+    throw error;
+  }
   finally { client.release(); }
 }
 
@@ -491,6 +511,13 @@ async function list(lessonId, instructorId) {
     materials: materialItems,
   } : null;
   return { materials: materialItems, quizzes: quizItems, approvedContextVersionId: context.id, document: payload ? buildLessonDocument(payload) : null };
+}
+
+async function getPersistedQuiz(quizId, instructorId, client = pool) {
+  const quiz = await client.query('SELECT * FROM lesson_quizzes WHERE id=$1 AND instructor_id=$2', [quizId, instructorId]);
+  if (!quiz.rows.length) return null;
+  const questions = await client.query('SELECT * FROM lesson_quiz_questions WHERE quiz_id=$1 ORDER BY question_order', [quizId]);
+  return safeQuiz(quiz.rows[0], questions.rows);
 }
 
 async function ownedQuiz(quizId, instructorId, client = pool) {
@@ -927,4 +954,4 @@ async function publishQuiz(quizId, instructorId) {
   }
 }
 
-module.exports = { generateMaterials, publishMaterials, generateQuiz, list, updateQuiz, updateQuestion, replaceQuizQuestions, applyQuizEdit, deleteQuestion, publishQuiz, closeQuiz, setQuizStatus, deleteQuiz, archiveDuplicateMaterials, materialRevision, currentGeneratedDocument };
+module.exports = { generateMaterials, publishMaterials, generateQuiz, prepareQuizGeneration, persistPreparedQuiz, getPersistedQuiz, list, updateQuiz, updateQuestion, replaceQuizQuestions, applyQuizEdit, deleteQuestion, publishQuiz, closeQuiz, setQuizStatus, deleteQuiz, archiveDuplicateMaterials, materialRevision, currentGeneratedDocument };

@@ -1,6 +1,6 @@
 import api from './api';
-export async function getLessonContext(lessonId) {
-  const { data } = await api.get(`/lessons/${lessonId}/context`);
+export async function getLessonContext(lessonId, config = {}) {
+  const { data } = await api.get(`/lessons/${lessonId}/context`, config);
   return data.data.context;
 }
 export async function buildLessonContext(lessonId) {

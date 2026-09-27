@@ -7,6 +7,7 @@ import GeneratedContent from './GeneratedContent';
 import LessonChatHistory from './LessonChatHistory';
 import QuizDraftPreview from './QuizDraftPreview';
 import { quizDraftPresentation } from '../../utils/quizDraftResponse';
+import { QUIZ_REQUEST_TIMEOUT_MS, createQuizGenerationId, isCurrentWorkspaceRequest, isPersistedQuizResult, quizGenerationFailure } from '../../utils/workspaceReliability';
 import '../../../../shared/quizEditTargeting.cjs';
 import { deleteLessonChatConversation, generateQuizFromLessonChat, getLessonChat, sendLessonChatMessage, undoLastLessonEdit } from '../../services/lessonChatApi';
 
@@ -18,7 +19,6 @@ const GENERAL_ACTIONS = [
 ];
 
 const HISTORY_PREFERENCE_KEY = 'sea-it-solved.lesson-assistant.history-open';
-
 function storedHistoryPreference() {
   if (typeof window === 'undefined') return false;
   try {
@@ -167,6 +167,9 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
   const activityTimerRef = useRef(null);
   const taskTimersRef = useRef([]);
   const requestInFlightRef = useRef(false);
+  const requestControllerRef = useRef(null);
+  const requestSequenceRef = useRef(0);
+  const mountedRef = useRef(true);
   const suggestedActions = useMemo(() => GENERAL_ACTIONS, []);
   const displayMessages = useMemo(() => messages.map(message => ({
     ...message,
@@ -266,7 +269,24 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
     return () => { active = false; };
   }, [lessonId]);
 
-  useEffect(() => () => { window.clearTimeout(activityTimerRef.current); clearTaskProgressTimers(); }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      requestSequenceRef.current += 1;
+      requestControllerRef.current?.abort();
+      window.clearTimeout(activityTimerRef.current);
+      clearTaskProgressTimers();
+    };
+  }, []);
+
+  useEffect(() => () => {
+    requestSequenceRef.current += 1;
+    requestControllerRef.current?.abort();
+    requestControllerRef.current = null;
+    requestInFlightRef.current = false;
+    clearTaskProgressTimers();
+  }, [lessonId]);
 
   useEffect(() => () => recognitionRef.current?.abort?.(), []);
 
@@ -369,6 +389,12 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
     const taskAction = quizEditing ? 'EDIT_QUIZ' : regenerateNotes ? 'REGENERATE_LESSON' : generateNotes ? 'GENERATE_LESSON' : generateQuiz ? 'GENERATE_QUIZ' : editing ? 'EDIT_LESSON' : '';
     const taskRequest = Boolean(taskAction);
     const optimisticId = retryMessageId || `local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const quizGenerationId = generateQuiz ? `quiz_${optimisticId.replace(/[^A-Za-z0-9_-]/g, '_')}` : undefined;
+    const requestSequence = ++requestSequenceRef.current;
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
+    let timedOut = false;
+    const timeout = taskAction === 'GENERATE_QUIZ' ? window.setTimeout(() => { timedOut = true; controller.abort(); }, QUIZ_REQUEST_TIMEOUT_MS) : null;
     if (!documentAction) setDocumentTask(null);
     requestInFlightRef.current = true;
     setSending(true);
@@ -411,7 +437,12 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
         quizDraft: quizContinuation ? pendingQuizDraft : undefined,
         conversationId: activeConversationId || undefined,
         newConversation: !activeConversationId,
-      });
+        generationId: quizGenerationId,
+      }, { signal: controller.signal });
+      if (!isCurrentWorkspaceRequest(requestSequence, requestSequenceRef.current, mountedRef.current)) return;
+      if (taskAction === 'GENERATE_QUIZ' && !result?.requiresQuizOptions && !isPersistedQuizResult(result)) {
+        throw new Error('Quiz generation response did not include a persisted quiz.');
+      }
       upsertConversation(result);
       setMessages(current => current.map(item => item.localId === optimisticId ? { ...item, pending: false, failed: false } : item));
       const resultMessage = result.quiz
@@ -458,7 +489,8 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
         showActivity('Response ready');
       }
     } catch (nextError) {
-      const message = friendly(nextError, taskRequest);
+      if (!isCurrentWorkspaceRequest(requestSequence, requestSequenceRef.current, mountedRef.current)) return;
+      const message = taskAction === 'GENERATE_QUIZ' ? quizGenerationFailure(nextError, timedOut) : friendly(nextError, taskRequest);
       setMessages(current => current.map(item => item.localId === optimisticId ? { ...item, pending: false, failed: true } : item));
       if (taskRequest) {
         clearTaskProgressTimers();
@@ -476,7 +508,10 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
       }
       showActivity(taskRequest ? quizEditing ? 'Quiz update failed' : 'Document update failed' : 'Request failed');
     } finally {
+      if (timeout) window.clearTimeout(timeout);
+      if (!isCurrentWorkspaceRequest(requestSequence, requestSequenceRef.current, mountedRef.current)) return;
       if (documentAction) onEditStateChange?.({ active: false, targetMaterialId: '' });
+      requestControllerRef.current = null;
       requestInFlightRef.current = false;
       setSending(false);
     }
@@ -484,6 +519,12 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
 
   async function generateQuiz(options) {
     if (requestInFlightRef.current) return;
+    const requestOptions = { ...options, generationId: options.generationId || createQuizGenerationId() };
+    const requestSequence = ++requestSequenceRef.current;
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
+    let timedOut = false;
+    const timeout = window.setTimeout(() => { timedOut = true; controller.abort(); }, QUIZ_REQUEST_TIMEOUT_MS);
     requestInFlightRef.current = true;
     setSending(true);
     setOperation('GENERATE_QUIZ');
@@ -493,8 +534,8 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
       type: 'quiz_action',
       action: 'GENERATE_QUIZ',
       title: 'Generating quiz draft',
-      prompt: options.prompt,
-      options,
+      prompt: requestOptions.prompt,
+      options: requestOptions,
       status: 'running',
       progress: 10,
       detail: 'Starting...',
@@ -504,11 +545,13 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
     beginTaskProgress('GENERATE_QUIZ');
     try {
       const result = await generateQuizFromLessonChat(lessonId, {
-        ...options,
+        ...requestOptions,
         conversationId: activeConversationId || undefined,
         newConversation: !activeConversationId,
         skipUserMessage: Boolean(activeConversationId),
-      });
+      }, { signal: controller.signal });
+      if (!isCurrentWorkspaceRequest(requestSequence, requestSequenceRef.current, mountedRef.current)) return;
+      if (!isPersistedQuizResult(result)) throw new Error('Quiz generation response did not include a persisted quiz.');
       upsertConversation(result);
       clearTaskProgressTimers();
       advanceTask('apply', 96, 'Saving quiz draft...');
@@ -524,11 +567,15 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
       if (result.quizCreated) onQuizCreated?.();
       showActivity('Quiz draft created');
     } catch (nextError) {
+      if (!isCurrentWorkspaceRequest(requestSequence, requestSequenceRef.current, mountedRef.current)) return;
       clearTaskProgressTimers();
-      const message = nextError.response?.data?.error || 'Quiz generation could not be completed. Please try again.';
+      const message = quizGenerationFailure(nextError, timedOut);
       setDocumentTask(current => current ? { ...current, status: 'failed', error: message, stages: current.stages.map(stage => stage.status === 'active' ? { ...stage, status: 'failed' } : stage) } : current);
       showActivity('Quiz generation failed');
     } finally {
+      window.clearTimeout(timeout);
+      if (!isCurrentWorkspaceRequest(requestSequence, requestSequenceRef.current, mountedRef.current)) return;
+      requestControllerRef.current = null;
       requestInFlightRef.current = false;
       setSending(false);
     }
@@ -652,7 +699,7 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
                   <GeneratedContent markdown={message.quizPresentation?.messageText || message.content} assistantText={!userMessage}/>
                   {message.quizPresentation && <QuizDraftPreview quiz={message.quizPresentation.quiz} onOpen={onReviewQuiz}/>}
                   {message.sourceReferences?.length > 0 && <details><summary>Sources · {message.sourceReferences.length}</summary><ul>{message.sourceReferences.map((source, sourceIndex) => <li key={`${source}-${sourceIndex}`}>{source}</li>)}</ul></details>}
-                  {message.action === 'QUIZ_CREATED' && !message.quizPresentation && <Btn size="sm" variant="secondary" onClick={onReviewQuiz}>Open Quiz Draft</Btn>}
+                  {message.action === 'QUIZ_CREATED' && !message.quizPresentation && <Alert type="warning">This quiz draft is no longer available. Generate a new quiz to continue.</Alert>}
                 </div>
               </motion.article>;
             })}

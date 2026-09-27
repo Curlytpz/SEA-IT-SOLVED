@@ -2,15 +2,17 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 import {
-  QUIZ_REQUEST_TIMEOUT_MS,
+  QUIZ_ENQUEUE_TIMEOUT_MS,
   isCurrentWorkspaceRequest,
   isPersistedQuizResult,
   normalizeApiError,
   normalizeGenerationTask,
+  normalizeQuizGenerationJob,
   normalizeLessonChatResult,
   normalizePendingQuizRequest,
   normalizeWorkspaceIntelligence,
   quizGenerationFailure,
+  quizGenerationTaskFromJob,
   restoredPendingQuizRequest,
   safeRuntimeDiagnostic,
 } from './workspaceReliability.js';
@@ -72,7 +74,7 @@ test('quiz success requires a matching persisted quiz identifier', () => {
 });
 
 test('timeout and backend failures produce visible terminal messages', () => {
-  assert.equal(QUIZ_REQUEST_TIMEOUT_MS, 180000);
+  assert.equal(QUIZ_ENQUEUE_TIMEOUT_MS, 30000);
   assert.match(quizGenerationFailure({ code: 'ECONNABORTED' }).message, /took too long/i);
   assert.equal(quizGenerationFailure({ response: { data: { error: 'Persistence failed safely.' } } }).message, 'Persistence failed safely.');
 });
@@ -94,6 +96,35 @@ test('stale or unmounted requests cannot update a new workspace', () => {
   assert.equal(isCurrentWorkspaceRequest(3, 3, true), true);
   assert.equal(isCurrentWorkspaceRequest(2, 3, true), false);
   assert.equal(isCurrentWorkspaceRequest(3, 3, false), false);
+});
+
+test('durable quiz jobs expose only persisted queue phases', () => {
+  const pending = normalizeQuizGenerationJob({ id: 'job-1', status: 'PENDING', phase: 'QUEUED' });
+  assert.equal(quizGenerationTaskFromJob(pending).detail, 'Queued for generation...');
+  const processing = quizGenerationTaskFromJob({ id: 'job-1', status: 'PROCESSING', phase: 'VALIDATING' });
+  assert.equal(processing.progress, 78);
+  assert.equal(processing.stages.find(stage => stage.id === 'validate').status, 'active');
+  const completed = quizGenerationTaskFromJob({ id: 'job-1', status: 'COMPLETED', phase: 'COMPLETED', quizId: 'quiz-1' });
+  assert.equal(completed.status, 'completed');
+  assert.equal(completed.progress, 100);
+});
+
+test('failed quiz jobs expose a safe retryable task error', () => {
+  const failed = quizGenerationTaskFromJob({ id: 'job-1', status: 'FAILED', phase: 'FAILED', failure: {
+    code: 'QUIZ_TIMEOUT', message: 'Quiz generation took too long.',
+  } });
+  assert.equal(failed.status, 'failed');
+  assert.equal(failed.error.code, 'QUIZ_TIMEOUT');
+  assert.match(failed.error.message, /too long/i);
+});
+
+test('quiz workspace queues and polls instead of requiring a persisted quiz in the POST response', () => {
+  const assistant = fs.readFileSync(new URL('../components/reasoning/LessonChatAssistant.jsx', import.meta.url), 'utf8');
+  const api = fs.readFileSync(new URL('../services/lessonChatApi.js', import.meta.url), 'utf8');
+  assert.match(assistant, /pollQuizGeneration\(result\.job/);
+  assert.match(assistant, /getActiveQuizGenerationJob/);
+  assert.doesNotMatch(assistant, /beginTaskProgress\('GENERATE_QUIZ'\)/);
+  assert.match(api, /quiz-generation-jobs\/\$\{jobId\}/);
 });
 
 test('workspace page includes explicit load failure and scoped error-boundary fallbacks', () => {

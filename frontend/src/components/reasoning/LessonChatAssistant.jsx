@@ -8,20 +8,22 @@ import LessonChatHistory from './LessonChatHistory';
 import QuizDraftPreview from './QuizDraftPreview';
 import { quizDraftPresentation } from '../../utils/quizDraftResponse';
 import {
-  QUIZ_REQUEST_TIMEOUT_MS,
+  QUIZ_ENQUEUE_TIMEOUT_MS,
   apiErrorMessage,
   createQuizGenerationId,
   isCurrentWorkspaceRequest,
   isPersistedQuizResult,
   normalizeChatMessage,
   normalizeGenerationTask,
+  normalizeQuizGenerationJob,
+  quizGenerationTaskFromJob,
   normalizeLessonChatResult,
   normalizePendingQuizRequest,
   quizGenerationFailure,
   restoredPendingQuizRequest,
 } from '../../utils/workspaceReliability';
 import '../../../../shared/quizEditTargeting.cjs';
-import { deleteLessonChatConversation, generateQuizFromLessonChat, getLessonChat, sendLessonChatMessage, undoLastLessonEdit } from '../../services/lessonChatApi';
+import { deleteLessonChatConversation, generateQuizFromLessonChat, getActiveQuizGenerationJob, getLessonChat, getQuizGenerationJob, sendLessonChatMessage, undoLastLessonEdit } from '../../services/lessonChatApi';
 
 const GENERAL_ACTIONS = [
   ['Explain lesson', 'Explain the approved lesson clearly and concisely.', 'ASK'],
@@ -164,6 +166,9 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
   const taskTimersRef = useRef([]);
   const requestInFlightRef = useRef(false);
   const requestControllerRef = useRef(null);
+  const quizPollControllerRef = useRef(null);
+  const quizPollTimerRef = useRef(null);
+  const quizPollJobRef = useRef(null);
   const requestSequenceRef = useRef(0);
   const mountedRef = useRef(true);
   const suggestedActions = useMemo(() => GENERAL_ACTIONS, []);
@@ -193,6 +198,68 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
   function clearTaskProgressTimers() {
     taskTimersRef.current.forEach(timer => window.clearTimeout(timer));
     taskTimersRef.current = [];
+  }
+
+  function stopQuizPolling() {
+    window.clearTimeout(quizPollTimerRef.current);
+    quizPollTimerRef.current = null;
+    quizPollControllerRef.current?.abort();
+    quizPollControllerRef.current = null;
+    quizPollJobRef.current = null;
+  }
+
+  async function finishCompletedQuizJob(job) {
+    const result = await getLessonChat(lessonId);
+    if (!mountedRef.current || quizPollJobRef.current !== job.id) return;
+    applyConversationResult(result);
+    setQuizOptions(null);
+    setDocumentTask(quizGenerationTaskFromJob(job));
+    onQuizCreated?.();
+    showActivity('Quiz draft created');
+    quizPollJobRef.current = null;
+    quizPollControllerRef.current = null;
+    window.setTimeout(() => { if (mountedRef.current) setDocumentTask(null); }, reduceMotion ? 0 : 520);
+  }
+
+  async function pollQuizGeneration(job, options) {
+    const canonical = normalizeQuizGenerationJob(job);
+    if (!canonical) return;
+    stopQuizPolling();
+    quizPollJobRef.current = canonical.id;
+    const poll = async () => {
+      if (!mountedRef.current || quizPollJobRef.current !== canonical.id) return;
+      const controller = new AbortController();
+      quizPollControllerRef.current = controller;
+      try {
+        const result = await getQuizGenerationJob(lessonId, canonical.id, { signal: controller.signal });
+        if (!mountedRef.current || quizPollJobRef.current !== canonical.id) return;
+        const current = normalizeQuizGenerationJob(result?.job);
+        if (!current) throw new Error('Quiz generation status was unavailable.');
+        setDocumentTask(quizGenerationTaskFromJob(current, options));
+        if (current.status === 'COMPLETED') {
+          await finishCompletedQuizJob(current);
+          return;
+        }
+        if (current.status === 'FAILED') {
+          quizPollJobRef.current = null;
+          setSending(false);
+          showActivity('Quiz generation failed');
+          return;
+        }
+        quizPollTimerRef.current = window.setTimeout(poll, 1500);
+      } catch (nextError) {
+        if (controller.signal.aborted || !mountedRef.current) return;
+        if ([401, 403, 404].includes(nextError?.response?.status)) {
+          setDocumentTask(current => current ? { ...current, status: 'failed', error: quizGenerationFailure(nextError) } : current);
+          quizPollJobRef.current = null;
+          return;
+        }
+        setDocumentTask(current => current ? { ...current, status: 'running', detail: 'Reconnecting to quiz generation...' } : current);
+        quizPollTimerRef.current = window.setTimeout(poll, 2000);
+      }
+    };
+    setDocumentTask(quizGenerationTaskFromJob(canonical, options));
+    await poll();
   }
 
   function advanceTask(stageId, progress, detail) {
@@ -272,6 +339,7 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
       mountedRef.current = false;
       requestSequenceRef.current += 1;
       requestControllerRef.current?.abort();
+      stopQuizPolling();
       window.clearTimeout(activityTimerRef.current);
       clearTaskProgressTimers();
     };
@@ -280,9 +348,21 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
   useEffect(() => () => {
     requestSequenceRef.current += 1;
     requestControllerRef.current?.abort();
+    stopQuizPolling();
     requestControllerRef.current = null;
     requestInFlightRef.current = false;
     clearTaskProgressTimers();
+  }, [lessonId]);
+
+  useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+    getActiveQuizGenerationJob(lessonId, { signal: controller.signal })
+      .then(result => {
+        if (active && result?.job) pollQuizGeneration(result.job);
+      })
+      .catch(() => {});
+    return () => { active = false; controller.abort(); };
   }, [lessonId]);
 
   useEffect(() => () => recognitionRef.current?.abort?.(), []);
@@ -391,7 +471,7 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
     const controller = new AbortController();
     requestControllerRef.current = controller;
     let timedOut = false;
-    const timeout = taskAction === 'GENERATE_QUIZ' ? window.setTimeout(() => { timedOut = true; controller.abort(); }, QUIZ_REQUEST_TIMEOUT_MS) : null;
+    const timeout = taskAction === 'GENERATE_QUIZ' ? window.setTimeout(() => { timedOut = true; controller.abort(); }, QUIZ_ENQUEUE_TIMEOUT_MS) : null;
     if (!documentAction) setDocumentTask(null);
     requestInFlightRef.current = true;
     setSending(true);
@@ -421,7 +501,7 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
         stages: documentStages(taskAction),
         error: '',
       });
-      beginTaskProgress(taskAction);
+      if (taskAction !== 'GENERATE_QUIZ') beginTaskProgress(taskAction);
     }
     setMessages(current => retryMessageId
       ? current.map(item => item.localId === retryMessageId ? { ...item, pending: true, failed: false } : item)
@@ -437,11 +517,18 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
         generationId: quizGenerationId,
       }, { signal: controller.signal });
       if (!isCurrentWorkspaceRequest(requestSequence, requestSequenceRef.current, mountedRef.current)) return;
-      if (taskAction === 'GENERATE_QUIZ' && !result?.requiresQuizOptions && !isPersistedQuizResult(result)) {
-        throw new Error('Quiz generation response did not include a persisted quiz.');
+      if (taskAction === 'GENERATE_QUIZ' && !result?.requiresQuizOptions && !result?.job && !isPersistedQuizResult(result)) {
+        throw new Error('Quiz generation response did not include a durable job.');
       }
       upsertConversation(result);
       setMessages(current => current.map(item => item.localId === optimisticId ? { ...item, pending: false, failed: false } : item));
+      if (result.job) {
+        clearTaskProgressTimers();
+        setQuizOptions(null);
+        showActivity('Quiz generation queued');
+        await pollQuizGeneration(result.job, { prompt: clean, generationId: quizGenerationId });
+        return;
+      }
       const resultMessage = normalizeChatMessage(result.quiz
         ? { ...result.message, quiz: result.quiz, quizId: result.quiz.id }
         : result.message);
@@ -525,8 +612,6 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
     const requestSequence = ++requestSequenceRef.current;
     const controller = new AbortController();
     requestControllerRef.current = controller;
-    let timedOut = false;
-    const timeout = window.setTimeout(() => { timedOut = true; controller.abort(); }, QUIZ_REQUEST_TIMEOUT_MS);
     requestInFlightRef.current = true;
     setSending(true);
     setOperation('GENERATE_QUIZ');
@@ -544,7 +629,6 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
       stages: documentStages('GENERATE_QUIZ'),
       error: '',
     });
-    beginTaskProgress('GENERATE_QUIZ');
     try {
       const result = await generateQuizFromLessonChat(lessonId, {
         ...requestOptions,
@@ -553,30 +637,18 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
         skipUserMessage: Boolean(activeConversationId),
       }, { signal: controller.signal });
       if (!isCurrentWorkspaceRequest(requestSequence, requestSequenceRef.current, mountedRef.current)) return;
-      if (!isPersistedQuizResult(result)) throw new Error('Quiz generation response did not include a persisted quiz.');
+      if (!result?.job) throw new Error('Quiz generation response did not include a durable job.');
       upsertConversation(result);
-      clearTaskProgressTimers();
-      advanceTask('apply', 96, 'Saving quiz draft...');
       setQuizOptions(null);
-      setDocumentTask(current => current ? { ...current, status: 'completed', progress: 100, detail: '✓ Update complete', stages: current.stages.map(stage => ({ ...stage, status: 'completed' })) } : current);
-      if (!reduceMotion) await new Promise(resolve => window.setTimeout(resolve, 520));
-      setDocumentTask(null);
-      const resultMessage = normalizeChatMessage(result.quiz
-        ? { ...result.message, quiz: result.quiz, quizId: result.quiz.id }
-        : result.message);
-      if (!resultMessage) throw new Error('Quiz generation response did not include a valid message.');
-      setMessages(current => [...current, resultMessage]);
-      if (result.quiz) onQuizUpdated?.(result.quiz);
-      if (result.quizCreated) onQuizCreated?.();
-      showActivity('Quiz draft created');
+      showActivity('Quiz generation queued');
+      await pollQuizGeneration(result.job, requestOptions);
     } catch (nextError) {
       if (!isCurrentWorkspaceRequest(requestSequence, requestSequenceRef.current, mountedRef.current)) return;
       clearTaskProgressTimers();
-      const message = quizGenerationFailure(nextError, timedOut);
+      const message = quizGenerationFailure(nextError);
       setDocumentTask(current => current ? { ...current, status: 'failed', error: message, stages: current.stages.map(stage => stage.status === 'active' ? { ...stage, status: 'failed' } : stage) } : current);
       showActivity('Quiz generation failed');
     } finally {
-      window.clearTimeout(timeout);
       if (!isCurrentWorkspaceRequest(requestSequence, requestSequenceRef.current, mountedRef.current)) return;
       requestControllerRef.current = null;
       requestInFlightRef.current = false;
@@ -610,11 +682,14 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
     }
   }
 
+  const taskRunning = documentTask?.status === 'running';
   const avatarState = error ? 'error'
-    : sending ? ['EDIT_LESSON', 'GENERATE_LESSON', 'REGENERATE_LESSON', 'EDIT_QUIZ', 'GENERATE_QUIZ'].includes(operation) ? 'responding' : 'thinking'
+    : taskRunning ? 'responding'
+      : sending ? ['EDIT_LESSON', 'GENERATE_LESSON', 'REGENERATE_LESSON', 'EDIT_QUIZ', 'GENERATE_QUIZ'].includes(operation) ? 'responding' : 'thinking'
       : activity ? 'done' : loading ? 'thinking' : 'idle';
   const statusText = loading ? 'Loading...'
-    : sending ? ['EDIT_LESSON', 'GENERATE_LESSON', 'REGENERATE_LESSON', 'EDIT_QUIZ', 'GENERATE_QUIZ'].includes(operation) ? 'Updating...' : 'Thinking...'
+    : taskRunning ? 'Updating...'
+      : sending ? ['EDIT_LESSON', 'GENERATE_LESSON', 'REGENERATE_LESSON', 'EDIT_QUIZ', 'GENERATE_QUIZ'].includes(operation) ? 'Updating...' : 'Thinking...'
       : error ? 'Needs attention' : activity ? 'Done' : 'Ready';
   const statusTone = avatarState === 'error' ? 'is-error' : avatarState === 'done' ? 'is-success' : ['thinking', 'responding'].includes(avatarState) ? 'is-working' : '';
   const waitingText = operation === 'GENERATE_QUIZ' ? 'Generating quiz draft...' : 'Thinking...';

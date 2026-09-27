@@ -73,11 +73,11 @@ test('media preflight reports availability without throwing for missing tools', 
   ]);
 });
 
-test('supervisor launches the API and both workers with inherited output', () => {
+test('supervisor launches the API and all three workers with inherited output', () => {
   const state = harness();
   state.supervisor.start();
 
-  assert.equal(state.launches.length, 3);
+  assert.equal(state.launches.length, 4);
   assert.deepEqual(
     state.launches.map(item => path.relative(BACKEND_ROOT, item.args[0])),
     CHILD_PROCESSES.map(item => item.entry),
@@ -96,8 +96,10 @@ test('unexpected child exit stops siblings and exits non-zero', () => {
   state.children[0].emit('exit', 0, null);
   assert.deepEqual(state.children[1].signals, ['SIGTERM']);
   assert.deepEqual(state.children[2].signals, ['SIGTERM']);
+  assert.deepEqual(state.children[3].signals, ['SIGTERM']);
   state.children[1].emit('exit', 0, 'SIGTERM');
   state.children[2].emit('exit', 0, 'SIGTERM');
+  state.children[3].emit('exit', 0, 'SIGTERM');
   assert.deepEqual(state.exitCodes, [1]);
 });
 

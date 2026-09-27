@@ -19,6 +19,16 @@ export async function generateQuizFromLessonChat(lessonId, options, config = {})
   return data.data;
 }
 
+export async function getQuizGenerationJob(lessonId, jobId, config = {}) {
+  const { data } = await api.get(`/lessons/${lessonId}/quiz-generation-jobs/${jobId}`, config);
+  return data.data;
+}
+
+export async function getActiveQuizGenerationJob(lessonId, config = {}) {
+  const { data } = await api.get(`/lessons/${lessonId}/quiz-generation-jobs/active`, config);
+  return data.data;
+}
+
 export async function undoLastLessonEdit(lessonId, payload = {}) {
   const { data } = await api.post(`/lessons/${lessonId}/chat/undo`, payload);
   return data.data;

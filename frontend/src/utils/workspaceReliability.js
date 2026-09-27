@@ -1,4 +1,4 @@
-export const QUIZ_REQUEST_TIMEOUT_MS = 180000;
+export const QUIZ_ENQUEUE_TIMEOUT_MS = 30000;
 const QUIZ_TYPES = new Set(['MULTIPLE_CHOICE', 'TRUE_FALSE', 'PROBLEM_SOLVING', 'MIXED']);
 const QUIZ_DIFFICULTIES = new Set(['EASY', 'MEDIUM', 'HARD']);
 const QUIZ_PARAMETERS = ['questionCount', 'difficulty', 'questionType'];
@@ -159,6 +159,59 @@ export function quizGenerationFailure(error, timedOut = false) {
 
 export function isPersistedQuizResult(result) {
   return Boolean(result?.quiz?.id && result?.message?.action === 'QUIZ_CREATED' && result.message.quizId === result.quiz.id);
+}
+
+const QUIZ_JOB_STATUSES = new Set(['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED']);
+const QUIZ_JOB_PHASES = {
+  QUEUED: { stage: 'context', progress: 10, detail: 'Queued for generation...' },
+  GENERATING: { stage: 'generate', progress: 55, detail: 'Generating quiz questions...' },
+  VALIDATING: { stage: 'validate', progress: 78, detail: 'Validating questions and answers...' },
+  SAVING: { stage: 'apply', progress: 92, detail: 'Saving quiz draft...' },
+  COMPLETED: { stage: 'apply', progress: 100, detail: '✓ Quiz draft created' },
+  FAILED: { stage: 'apply', progress: 0, detail: 'Generation stopped' },
+};
+
+export function normalizeQuizGenerationJob(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || typeof value.id !== 'string') return null;
+  const status = QUIZ_JOB_STATUSES.has(value.status) ? value.status : 'FAILED';
+  const phase = typeof value.phase === 'string' && QUIZ_JOB_PHASES[value.phase] ? value.phase : status === 'PENDING' ? 'QUEUED' : status;
+  return {
+    ...value,
+    status,
+    phase,
+    quizId: typeof value.quizId === 'string' ? value.quizId : null,
+    failure: status === 'FAILED' ? normalizeApiError(value.failure, 'Quiz generation could not be completed. Please try again.') : null,
+  };
+}
+
+export function quizGenerationTaskFromJob(value, options) {
+  const job = normalizeQuizGenerationJob(value);
+  if (!job) return null;
+  const requestOptions = options || (job.options && typeof job.options === 'object' ? job.options : null);
+  const presentation = QUIZ_JOB_PHASES[job.phase] || QUIZ_JOB_PHASES[job.status] || QUIZ_JOB_PHASES.QUEUED;
+  const activeIndex = documentStagesForJob().findIndex(stage => stage.id === presentation.stage);
+  return {
+    type: 'quiz_action', action: 'GENERATE_QUIZ', title: 'Generating quiz draft',
+    prompt: requestOptions?.prompt || '', options: requestOptions, jobId: job.id,
+    status: job.status === 'COMPLETED' ? 'completed' : job.status === 'FAILED' ? 'failed' : 'running',
+    progress: presentation.progress, detail: presentation.detail,
+    error: job.failure,
+    stages: documentStagesForJob().map((stage, index) => ({
+      ...stage,
+      status: job.status === 'FAILED' && index === activeIndex ? 'failed'
+        : job.status === 'COMPLETED' || index < activeIndex ? 'completed'
+          : index === activeIndex ? 'active' : 'pending',
+    })),
+  };
+}
+
+function documentStagesForJob() {
+  return [
+    { id: 'context', label: 'Queued with approved lesson context' },
+    { id: 'generate', label: 'Creating questions' },
+    { id: 'validate', label: 'Validating answers' },
+    { id: 'apply', label: 'Saving quiz draft' },
+  ];
 }
 
 export function isCurrentWorkspaceRequest(sequence, currentSequence, mounted) {

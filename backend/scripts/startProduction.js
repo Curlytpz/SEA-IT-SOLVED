@@ -7,6 +7,7 @@ const CHILD_PROCESSES = Object.freeze([
   { name: 'api', entry: 'server.js' },
   { name: 'recognition-worker', entry: path.join('src', 'workers', 'recognition.worker.js') },
   { name: 'transcription-worker', entry: path.join('src', 'workers', 'transcription.worker.js') },
+  { name: 'quiz-generation-worker', entry: path.join('src', 'workers', 'quiz-generation.worker.js') },
 ]);
 
 function normalizeExecutable(value, fallback) {

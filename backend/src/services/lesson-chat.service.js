@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const { AsyncLocalStorage } = require('node:async_hooks');
 const contextService = require('./lesson-context.service');
 const intelligenceService = require('./lesson-intelligence.service');
+const quizJobService = require('./quiz-generation-job.service');
 const geminiInteractive = require('./geminiInteractive.service');
 const GeminiLessonChatProvider = require('../reasoning/GeminiLessonChatProvider');
 const { normalizeGeneratedLessonTitle, normalizeGeneratedText } = require('../utils/generatedContent');
@@ -11,7 +12,7 @@ const { normalizeLessonMathContent } = require('../utils/mathContent');
 const { conversationTitle } = require('../utils/lessonChatHistory');
 const { runQuizGenerationTransaction } = require('../utils/quizGenerationTransaction');
 const { explicitQuizGeneration, quizIntent, quizEditIntent, generateNotesIntent, editIntent, wholeLessonEditIntent, prepareQuizDraft, quizClarificationMessage, isQuizDraftContinuation } = require('../utils/lessonChatIntent');
-const { GEMINI_API_KEY, GEMINI_CHAT_MODEL, GEMINI_INTERACTIVE_TIMEOUT_MS } = require('../config/env');
+const { GEMINI_API_KEY, GEMINI_CHAT_MODEL, GEMINI_INTERACTIVE_TIMEOUT_MS, QUIZ_GENERATION_MAX_ATTEMPTS } = require('../config/env');
 
 const provider = new GeminiLessonChatProvider({ apiKey: GEMINI_API_KEY, model: GEMINI_CHAT_MODEL, timeoutMs: GEMINI_INTERACTIVE_TIMEOUT_MS });
 const MATERIAL_TYPES = ['SUMMARY','NOTES','EXPLANATION','KEY_FORMULAS','WORKED_EXAMPLE','COMMON_MISTAKES'];
@@ -202,38 +203,51 @@ async function createQuiz(lessonId,instructorId,options={}) {
     const{difficulty,questionCount:count,questionType}=prepared.draft;
     const generationPrompt=String(options.quizDraft?.prompt||prompt).trim();
     const generationId=quizGenerationId(options.generationId);
-    await currentSession(lessonId,instructorId,false);
-    const replay=await existingQuizGeneration(pool,lessonId,instructorId,generationId);
-    if(replay){quizStage('QUIZ_GENERATION_COMPLETED',generationId,{quizId:replay.quiz.id,idempotentReplay:true});return replay;}
-    let generated;
-    let lastStage='QUIZ_AI_REQUEST_STARTED';
-    const onStage=(stage,details={})=>{lastStage=stage;quizStage(stage,generationId,details);};
-    try{
-      generated=await intelligenceService.prepareQuizGeneration(lessonId,instructorId,{difficulty,questionCount:count,questionType,prompt:generationPrompt,onStage});
-    }catch(error){
-      const timeout=/timeout|timed out|ETIMEDOUT/i.test(`${error?.code||''} ${error?.message||''}`);
-      quizStage(timeout?'QUIZ_TIMEOUT':lastStage==='QUIZ_AI_RESPONSE_RECEIVED'?'QUIZ_VALIDATION_FAILED':'QUIZ_AI_FAILED',generationId,{name:error?.name,code:error?.code||null,status:error?.status||error?.statusCode||null});
-      throw error;
-    }
-    const{session}=await currentSession(lessonId,instructorId,true);
-    const client=await pool.connect();
-    try{
-      const result=await runQuizGenerationTransaction({
-        client,
-        lockScope:`${lessonId}:${instructorId}`,
-        generationId,
-        findExisting:db=>existingQuizGeneration(db,lessonId,instructorId,generationId),
-        persistQuiz:db=>intelligenceService.persistPreparedQuiz(db,lessonId,instructorId,generated,onStage),
-        saveConfirmation:async(db,quiz)=>{
-          if(options.skipUserMessage!==true)await insertMessage(db,session,lessonId,instructorId,'USER',prompt,'QUIZ_ACTION');
-          return insertMessage(db,session,lessonId,instructorId,'ASSISTANT',`I generated a ${count}-question ${difficulty.toLowerCase()} quiz draft based on the approved lesson context. Review and edit it before publishing.`,'QUIZ_ACTION',[],{action:'QUIZ_CREATED',quizId:quiz.id,generationId,difficulty,questionCount:Number(count),questionType});
-        },
-        onStage,
-      });
-      onStage('QUIZ_GENERATION_COMPLETED',{quizId:result.quiz.id,idempotentReplay:Boolean(result.idempotentReplay)});
-      return result;
-    }finally{client.release();}
+    const{context,session}=await currentSession(lessonId,instructorId,true);
+    const job=await quizJobService.enqueue({
+      generationId,lessonId,contextVersionId:context.id,instructorId,sessionId:session.id,
+      prompt:generationPrompt,difficulty,questionCount:Number(count),questionType,
+      skipUserMessage:options.skipUserMessage===true||Boolean(chatSessionScope.getStore()?.persistedUser),maxAttempts:QUIZ_GENERATION_MAX_ATTEMPTS,
+    });
+    quizStage('QUIZ_JOB_QUEUED',generationId,{jobId:job.id,status:job.status});
+    return{job,queued:true,conversation:safeConversation(session,generationPrompt)};
   });
+}
+
+async function processQueuedQuiz(job,{signal,onStage=()=>{}}={}) {
+  const generationId=job.generation_id;
+  const stage=(name,details={})=>{quizStage(name,generationId,{jobId:job.id,...details});onStage(name,details);};
+  const generated=await intelligenceService.prepareQuizGeneration(job.lesson_id,job.instructor_id,{
+    difficulty:job.difficulty,questionCount:Number(job.question_count),questionType:job.question_type,
+    prompt:job.prompt,contextVersionId:job.context_version_id,signal,maxRetries:1,onStage:stage,
+  });
+  const session={id:job.session_id};
+  const client=await pool.connect();
+  try{
+    const result=await runQuizGenerationTransaction({
+      client,lockScope:`${job.lesson_id}:${job.instructor_id}`,generationId,
+      findExisting:db=>existingQuizGeneration(db,job.lesson_id,job.instructor_id,generationId),
+      persistQuiz:db=>intelligenceService.persistPreparedQuiz(db,job.lesson_id,job.instructor_id,generated,stage),
+      saveConfirmation:async(db,quiz)=>{
+        if(job.skip_user_message!==true)await insertMessage(db,session,job.lesson_id,job.instructor_id,'USER',job.prompt,'QUIZ_ACTION');
+        return insertMessage(db,session,job.lesson_id,job.instructor_id,'ASSISTANT',`I generated a ${job.question_count}-question ${job.difficulty.toLowerCase()} quiz draft based on the approved lesson context. Review and edit it before publishing.`,'QUIZ_ACTION',[],{action:'QUIZ_CREATED',quizId:quiz.id,generationId,difficulty:job.difficulty,questionCount:Number(job.question_count),questionType:job.question_type});
+      },
+      beforeCommit:(db,quiz)=>quizJobService.markCompleted(db,job.id,quiz.id),
+      onStage:stage,
+    });
+    stage('QUIZ_GENERATION_COMPLETED',{quizId:result.quiz.id,idempotentReplay:Boolean(result.idempotentReplay)});
+    return result;
+  }finally{client.release();}
+}
+
+async function getQuizGenerationJob(lessonId,instructorId,jobId){
+  const job=await quizJobService.getOwned(jobId,lessonId,instructorId);
+  if(!job)throw new AppError('Quiz generation job not found.',404);
+  return{job};
+}
+
+async function getActiveQuizGenerationJob(lessonId,instructorId){
+  return{job:await quizJobService.getActive(lessonId,instructorId)};
 }
 
 async function generateNotes(lessonId,instructorId,message){
@@ -707,4 +721,4 @@ async function deleteConversation(lessonId,instructorId,conversationId){
   return{deletedConversationId:result.rows[0].id};
 }
 
-module.exports={list,send,createQuiz,undo,deleteConversation,quizEditPlan};
+module.exports={list,send,createQuiz,processQueuedQuiz,getQuizGenerationJob,getActiveQuizGenerationJob,undo,deleteConversation,quizEditPlan};

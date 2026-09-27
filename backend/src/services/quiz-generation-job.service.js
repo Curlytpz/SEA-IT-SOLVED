@@ -155,14 +155,22 @@ async function fail(job, error) {
     : 'Quiz generation could not be completed. Please try again.';
   const shouldRetry = retryable(error) && Number(job.attempt_count) < Number(job.max_attempts);
   const delaySeconds = Math.min(30, Math.max(2, Number(job.attempt_count || 1) * 5));
-  const { rows } = await pool.query(
-    `UPDATE quiz_generation_jobs SET status=$3,phase=$4,
-       next_attempt_at=CASE WHEN $3='PENDING' THEN NOW()+($5::integer*INTERVAL '1 second') ELSE next_attempt_at END,
-       worker_id=NULL,locked_at=NULL,failure_code=$6,failure_message=$7,
-       completed_at=CASE WHEN $3='FAILED' THEN NOW() ELSE NULL END,updated_at=NOW()
-     WHERE id=$1 AND worker_id=$2 AND status='PROCESSING' RETURNING *`,
-    [job.id, job.worker_id, shouldRetry ? 'PENDING' : 'FAILED', shouldRetry ? 'QUEUED' : 'FAILED', delaySeconds, code, message],
-  );
+  const { rows } = shouldRetry
+    ? await pool.query(
+      `UPDATE quiz_generation_jobs SET status='PENDING',phase='QUEUED',
+         next_attempt_at=NOW()+($3::integer*INTERVAL '1 second'),
+         worker_id=NULL,locked_at=NULL,failure_code=$4::varchar(80),failure_message=$5::text,
+         completed_at=NULL,updated_at=NOW()
+       WHERE id=$1 AND worker_id=$2 AND status='PROCESSING' RETURNING *`,
+      [job.id, job.worker_id, delaySeconds, code, message],
+    )
+    : await pool.query(
+      `UPDATE quiz_generation_jobs SET status='FAILED',phase='FAILED',
+         worker_id=NULL,locked_at=NULL,failure_code=$3::varchar(80),failure_message=$4::text,
+         completed_at=NOW(),updated_at=NOW()
+       WHERE id=$1 AND worker_id=$2 AND status='PROCESSING' RETURNING *`,
+      [job.id, job.worker_id, code, message],
+    );
   return safeJob(rows[0]);
 }
 

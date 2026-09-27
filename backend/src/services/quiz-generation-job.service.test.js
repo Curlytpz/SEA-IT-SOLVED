@@ -12,6 +12,19 @@ function row(overrides = {}) {
   };
 }
 
+function failureResult(sql, values, attemptCount = 1) {
+  const pending = /status='PENDING'/.test(sql);
+  return { rows: [row({
+    status: pending ? 'PENDING' : 'FAILED',
+    phase: pending ? 'QUEUED' : 'FAILED',
+    attempt_count: attemptCount,
+    worker_id: null,
+    locked_at: null,
+    failure_code: pending ? values[3] : values[2],
+    failure_message: pending ? values[4] : values[3],
+  })] };
+}
+
 test('same generation id is enqueued idempotently', async () => {
   const calls = [];
   const db = { query: async (sql, values) => { calls.push({ sql, values }); return { rows: [row()] }; } };
@@ -51,10 +64,9 @@ test('SKIP LOCKED claiming permits only one worker to receive a queued job', asy
 test('retryable failures return a claimed job to PENDING and terminal failures become FAILED', async () => {
   const originalQuery = pool.query;
   const statuses = [];
-  pool.query = async (_sql, values) => {
-    statuses.push(values[2]);
-    return { rows: [row({ status: values[2], phase: values[3], attempt_count: 1,
-      failure_code: values[5], failure_message: values[6] })] };
+  pool.query = async (sql, values) => {
+    statuses.push(/status='PENDING'/.test(sql) ? 'PENDING' : 'FAILED');
+    return failureResult(sql, values);
   };
   try {
     const retry = await service.fail(row({ status: 'PROCESSING', attempt_count: 1, worker_id: 'worker-a' }), { code: 'QUIZ_TIMEOUT', message: 'Timed out' });
@@ -68,12 +80,9 @@ test('retryable failures return a claimed job to PENDING and terminal failures b
 test('two provider timeouts produce one retry and then a terminal QUIZ_AI_TIMEOUT failure', async () => {
   const originalQuery = pool.query;
   const statuses = [];
-  pool.query = async (_sql, values) => {
-    statuses.push(values[2]);
-    return { rows: [row({
-      status: values[2], phase: values[3], attempt_count: statuses.length,
-      failure_code: values[5], failure_message: values[6],
-    })] };
+  pool.query = async (sql, values) => {
+    statuses.push(/status='PENDING'/.test(sql) ? 'PENDING' : 'FAILED');
+    return failureResult(sql, values, statuses.length);
   };
   try {
     const first = await service.fail(row({ status: 'PROCESSING', attempt_count: 1, worker_id: 'worker-a' }), {
@@ -86,6 +95,62 @@ test('two provider timeouts produce one retry and then a terminal QUIZ_AI_TIMEOU
     assert.equal(second.status, 'FAILED');
     assert.equal(second.failure.code, 'QUIZ_AI_TIMEOUT');
     assert.deepEqual(statuses, ['PENDING', 'FAILED']);
+  } finally { pool.query = originalQuery; }
+});
+
+test('first provider rate limit safely requeues with a bounded delay and clears the worker lock', async () => {
+  const originalQuery = pool.query;
+  let call;
+  pool.query = async (sql, values) => {
+    call = { sql, values };
+    return failureResult(sql, values);
+  };
+  try {
+    const result = await service.fail(row({
+      status: 'PROCESSING', attempt_count: 1, max_attempts: 2, worker_id: 'worker-a', locked_at: new Date(),
+    }), { code: 'PROVIDER_RATE_LIMITED', message: 'Quiz generation is temporarily rate-limited.' });
+    assert.equal(result.status, 'PENDING');
+    assert.equal(result.phase, 'QUEUED');
+    assert.equal(call.values[2], 5);
+    assert.match(call.sql, /next_attempt_at=NOW\(\)\+\(\$3::integer\*INTERVAL '1 second'\)/);
+    assert.match(call.sql, /worker_id=NULL,locked_at=NULL/);
+  } finally { pool.query = originalQuery; }
+});
+
+test('retry SQL does not reuse one parameter as incompatible status and delay types', async () => {
+  const originalQuery = pool.query;
+  let statement = '';
+  pool.query = async (sql, values) => {
+    statement = sql;
+    return failureResult(sql, values);
+  };
+  try {
+    await service.fail(row({ status: 'PROCESSING', attempt_count: 1, max_attempts: 2, worker_id: 'worker-a' }), {
+      code: 'PROVIDER_RATE_LIMITED', message: 'Rate limited.',
+    });
+    assert.doesNotMatch(statement, /status=\$3|WHEN \$3=/);
+    assert.equal((statement.match(/\$3/g) || []).length, 1);
+    assert.match(statement, /\$3::integer/);
+    assert.match(statement, /\$4::varchar\(80\)/);
+    assert.match(statement, /\$5::text/);
+  } finally { pool.query = originalQuery; }
+});
+
+test('final provider rate limit marks the job FAILED with a safe failure code', async () => {
+  const originalQuery = pool.query;
+  let statement = '';
+  pool.query = async (sql, values) => {
+    statement = sql;
+    return failureResult(sql, values, 2);
+  };
+  try {
+    const result = await service.fail(row({ status: 'PROCESSING', attempt_count: 2, max_attempts: 2, worker_id: 'worker-a' }), {
+      code: 'PROVIDER_RATE_LIMITED', message: 'Quiz generation is temporarily rate-limited.',
+    });
+    assert.equal(result.status, 'FAILED');
+    assert.equal(result.failure.code, 'PROVIDER_RATE_LIMITED');
+    assert.match(statement, /status='FAILED',phase='FAILED'/);
+    assert.match(statement, /worker_id=NULL,locked_at=NULL/);
   } finally { pool.query = originalQuery; }
 });
 

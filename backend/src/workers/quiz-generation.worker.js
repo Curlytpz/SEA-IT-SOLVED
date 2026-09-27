@@ -5,6 +5,7 @@ const chatService = require('../services/lesson-chat.service');
 const jobService = require('../services/quiz-generation-job.service');
 const { runQuizGenerationWithinDeadline } = require('../utils/quizGenerationDeadline');
 const { phaseForQuizGenerationStage } = require('../utils/quizGenerationPhase');
+const { runQuizWorkerIteration } = require('../utils/quizGenerationWorkerLoop');
 const {
   GEMINI_API_KEY,
   GEMINI_QUIZ_MODEL,
@@ -59,8 +60,14 @@ async function processJob(job) {
     console.log(`[QuizGeneration] Job ${job.id} completed.`);
   } catch (error) {
     await phaseUpdates.catch(() => {});
-    const result = await jobService.fail(job, error);
-    console.error(`[QuizGeneration] Job ${job.id} ${result?.status === 'PENDING' ? 'will retry' : 'failed'} (${error?.code || 'QUIZ_GENERATION_FAILED'}).`);
+    try {
+      const result = await jobService.fail(job, error);
+      console.error(`[QuizGeneration] Job ${job.id} ${result?.status === 'PENDING' ? 'will retry' : 'failed'} (${error?.code || 'QUIZ_GENERATION_FAILED'}).`);
+    } catch (transitionError) {
+      transitionError.quizJobId = job.id;
+      transitionError.quizJobCauseCode = error?.code || 'QUIZ_GENERATION_FAILED';
+      throw transitionError;
+    }
   }
 }
 
@@ -76,9 +83,19 @@ async function run() {
       if (count) console.log(`[QuizGeneration] Recovered ${count} stale job(s).`);
       lastRecoveryAt = Date.now();
     }
-    const job = await jobService.claimNext(workerId);
-    if (job) await processJob(job);
-    else await wait(QUIZ_GENERATION_POLL_INTERVAL_MS);
+    const processed = await runQuizWorkerIteration({
+      claimNext: () => jobService.claimNext(workerId),
+      processJob,
+      onJobError: (error, job) => {
+        console.error('[QuizGeneration] Job failure was contained; worker will continue.', {
+          jobId: job.id,
+          causeCode: error?.quizJobCauseCode || null,
+          stateUpdateCode: error?.code || null,
+          message: String(error?.message || 'Unable to update failed quiz job.').slice(0, 300),
+        });
+      },
+    });
+    if (!processed) await wait(QUIZ_GENERATION_POLL_INTERVAL_MS);
   }
 }
 

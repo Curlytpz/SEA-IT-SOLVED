@@ -3134,6 +3134,18 @@ pre {
 .quiz-tutor-practice-error::before { position:absolute; inset:0 auto 0 0; width:4px; content:''; }
 .quiz-tutor-practice-review.is-correct::before { background:hsl(var(--success)); }
 .quiz-tutor-practice-review.is-review::before { background:hsl(var(--warning)); }
+
+.has-math-review {
+  border-radius: .75rem;
+  outline: 2px solid hsl(var(--warning) / .55);
+  outline-offset: 4px;
+}
+
+.has-math-review .math-editor-segments textarea,
+.has-math-review .math-editor-segments input,
+.has-math-review .visual-math-field {
+  border-color: hsl(var(--warning));
+}
 .quiz-tutor-practice-review > p { color:hsl(var(--muted-foreground)); font-size:.65rem; font-weight:760; letter-spacing:.07em; text-transform:uppercase; }
 .quiz-tutor-practice-review h4 { color:hsl(var(--foreground)); font-size:1rem; font-weight:760; }
 .quiz-tutor-practice-review h5 { margin-bottom:.28rem; color:hsl(var(--muted-foreground)); font-size:.68rem; font-weight:720; text-transform:uppercase; }

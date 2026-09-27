@@ -80,6 +80,35 @@ async function verifyDraftPublication() {
   assert.equal(committed, true);
 }
 
+async function verifyInvalidMathBlocksPublication() {
+  const invalidQuestion = {
+    id: 'question-1', quiz_id: 'quiz-1', question_order: 1, question_type: 'MULTIPLE_CHOICE',
+    topic: 'Limits', difficulty: 'MEDIUM', prompt: 'Evaluate $\\sqrt{$.', choices: ['1', '2', '3', '4'],
+    correct_answer: '2', explanation: 'Select the correct result.', source_references: [], manual_grading: false,
+    max_points: 1, problem_settings: {},
+  };
+  let rolledBack = false;
+  let published = false;
+  const client = {
+    async query(sql) {
+      if (sql === 'BEGIN') return { rows: [] };
+      if (sql === 'ROLLBACK') { rolledBack = true; return { rows: [] }; }
+      if (sql.includes('SELECT * FROM lesson_quizzes')) return { rows: [quizRow('DRAFT')] };
+      if (sql.includes('SELECT * FROM lesson_quiz_questions')) return { rows: [invalidQuestion] };
+      if (sql.includes("SET status='PUBLISHED'")) { published = true; return { rows: [quizRow('PUBLISHED')] }; }
+      throw new Error(`Unexpected SQL in invalid math publication test: ${sql}`);
+    },
+    release() {},
+  };
+  pool.connect = async () => client;
+  await assert.rejects(service.publishQuiz('quiz-1', 'owner-1'), error => (
+    error.statusCode === 409
+    && /Question 1 prompt contains a math expression that needs review/.test(error.message)
+  ));
+  assert.equal(rolledBack, true, 'Invalid math rolls back publication.');
+  assert.equal(published, false, 'Invalid math never reaches the publish update.');
+}
+
 function deletionClient(attemptCount, { ownerId = 'owner-1', deleteRowCount = 1, failOn = '' } = {}) {
   let deleted = false;
   let committed = false;
@@ -168,6 +197,7 @@ async function verifyDeletionSafety() {
 (async () => {
   try {
     await verifyDraftPublication();
+    await verifyInvalidMathBlocksPublication();
     await verifyStatusAndOwnership();
     await verifyDeletionSafety();
     console.log('Quiz management verification passed.');

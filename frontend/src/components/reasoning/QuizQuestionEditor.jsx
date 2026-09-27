@@ -5,7 +5,6 @@ import GeneratedContent from './GeneratedContent';
 import MathAwareEditor from './MathAwareEditor';
 import QuizProblemSettings from './QuizProblemSettings';
 import { composeQuizQuestionStem, normalizeQuizDisplayContent } from '../../utils/generatedContent';
-import { normalizeLessonMathContent } from '../../utils/mathContent';
 
 function editableQuestion(question) {
   return {
@@ -26,15 +25,14 @@ function choicesFor(question) {
   return [...(question.choices || []), '', '', '', ''].slice(0, 4);
 }
 
-function MathFieldReview({ label, value }) {
-  const needsReview = useMemo(() => normalizeLessonMathContent(value).needsReview.length > 0, [value]);
-  if (!needsReview) return null;
-  return <Alert type="warning" label="Math review" className="mb-0 mt-2">
-    {label} contains math that needs review. Open the editor and correct the expression before saving.
+function MathFieldReview({ issue }) {
+  if (!issue) return null;
+  return <Alert type="warning" label={issue.label} className="mb-0 mt-2">
+    {issue.reason}. Correct this field, then save the question.
   </Alert>;
 }
 
-function QuizQuestionEditor({ quizId, canEditQuiz, editingPublishedQuiz, canDelete = true, question, questionIndex, initialDraft, busy, onDraftChange, onSave, onDelete }) {
+function QuizQuestionEditor({ quizId, canEditQuiz, editingPublishedQuiz, canDelete = true, question, questionIndex, mathIssues = [], initialDraft, busy, onDraftChange, onSave, onDelete }) {
   const preparedQuestion = useMemo(() => editableQuestion(question), [question]);
   const [draft, setDraft] = useState(() => initialDraft || preparedQuestion);
   const draftRef = useRef(draft);
@@ -61,6 +59,7 @@ function QuizQuestionEditor({ quizId, canEditQuiz, editingPublishedQuiz, canDele
   }, [onDraftChange, question.id]);
 
   const changed = snapshot(draft) !== baselineRef.current;
+  const issueFor = field => mathIssues.find(issue => issue.field === field);
 
   function patch(patchValue) {
     commitDraft({ ...draftRef.current, ...patchValue });
@@ -84,10 +83,10 @@ function QuizQuestionEditor({ quizId, canEditQuiz, editingPublishedQuiz, canDele
       <span>{draft.type.replaceAll('_', ' ')}</span>
     </div>
     {canEditQuiz ? <>
-      <div className="quiz-editor-field">
+      <div className={`quiz-editor-field ${issueFor('prompt') ? 'has-math-review' : ''}`}>
         <h4>Question stem</h4>
         <MathAwareEditor unified preview={false} label={`Question ${questionIndex + 1}`} value={draft.prompt} onChange={value => patch({ prompt: value })}/>
-        <MathFieldReview label="Question stem" value={draft.prompt}/>
+        <MathFieldReview issue={issueFor('prompt')}/>
       </div>
       <label className="quiz-editor-label">Question type
         <Select className="mt-2" value={draft.type} onChange={event => {
@@ -107,26 +106,27 @@ function QuizQuestionEditor({ quizId, canEditQuiz, editingPublishedQuiz, canDele
       </label>
       {!['SHORT_ANSWER','PROBLEM_SOLVING'].includes(draft.type) && <fieldset className="mt-4">
         <legend className="quiz-editor-label">Answer choices and correct answer</legend>
-        <div className="mt-2 space-y-3">
-          {choicesFor(draft).map((choice, index) => <div key={index} className="quiz-choice-editor">
+        <div className={`mt-2 space-y-3 ${issueFor('correctAnswer') ? 'has-math-review' : ''}`}>
+          {choicesFor(draft).map((choice, index) => <div key={index} className={`quiz-choice-editor ${issueFor(`choices.${index}`) ? 'has-math-review' : ''}`}>
             <label>
               <input type="radio" name={`correct-${draft.id}`} checked={draft.correctAnswer === choice && Boolean(choice)} onChange={() => patch({ correctAnswer: choice })} disabled={!choice}/>
               <strong>{String.fromCharCode(65 + index)}.</strong>
             </label>
             <MathAwareEditor unified preview={false} label={`Choice ${String.fromCharCode(65 + index)}`} value={choice} multiline={false} disabled={draft.type === 'TRUE_FALSE'} onChange={value => patchChoice(index, value)}/>
-            <MathFieldReview label={`Choice ${String.fromCharCode(65 + index)}`} value={choice}/>
+            <MathFieldReview issue={issueFor(`choices.${index}`)}/>
           </div>)}
+          <MathFieldReview issue={issueFor('correctAnswer')}/>
         </div>
       </fieldset>}
-      {draft.type === 'SHORT_ANSWER' && <div className="quiz-editor-field">
+      {draft.type === 'SHORT_ANSWER' && <div className={`quiz-editor-field ${issueFor('correctAnswer') ? 'has-math-review' : ''}`}>
         <h4>Model answer</h4>
         <MathAwareEditor unified preview={false} label="Model answer" value={draft.correctAnswer} multiline={false} onChange={value => patch({ correctAnswer: value })}/>
-        <MathFieldReview label="Model answer" value={draft.correctAnswer}/>
+        <MathFieldReview issue={issueFor('correctAnswer')}/>
       </div>}
-      {draft.type === 'PROBLEM_SOLVING' ? <QuizProblemSettings draft={draft} onChange={patch}/> : <div className="quiz-editor-field">
+      {draft.type === 'PROBLEM_SOLVING' ? <QuizProblemSettings draft={draft} mathIssues={mathIssues} onChange={patch}/> : <div className={`quiz-editor-field ${issueFor('explanation') ? 'has-math-review' : ''}`}>
         <h4>Explanation</h4>
         <MathAwareEditor unified preview={false} label={`Question ${questionIndex + 1} explanation`} value={draft.explanation} onChange={value => patch({ explanation: value })}/>
-        <MathFieldReview label="Explanation" value={draft.explanation}/>
+        <MathFieldReview issue={issueFor('explanation')}/>
       </div>}
       {draft.sourceReferences?.length > 0 && <p className="quiz-source-caption"><strong>Instructor source metadata:</strong> {draft.sourceReferences.join(' • ')}</p>}
       <div className="quiz-question-preview-control">

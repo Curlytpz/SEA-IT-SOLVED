@@ -21,11 +21,11 @@ import { deleteQuiz, deleteQuizQuestion, generateLessonMaterials, getLessonIntel
 import { humanText, latexValues } from '../../utils/structuredContent';
 import { studentQuizTitle } from '../../utils/quizDisplay';
 import { buildLessonContextPreview, normalizeLessonContextMathValues } from '../../utils/lessonContextPreview';
-import { normalizeLessonMathContent } from '../../utils/mathContent';
 import { buildTranscriptReviewSources, formatTranscriptTime, patchTranscriptReviewSource } from '../../utils/transcriptReview';
 import { createLessonContextDraftGate, isExpectedSourcesProcessingError, lessonContextReadiness } from '../../utils/lessonContextReadiness';
 import { sectionBackLabel, sectionOriginFromState, sectionOriginState, sectionReturnPath } from '../../utils/instructorLessonNavigation';
 import { getQuizEditingState } from '../../utils/quizEditingState';
+import { getQuizMathIssues } from '../../utils/quizMathReview';
 
 const PUBLISH_STATE = Object.freeze({ IDLE: 'idle', PUBLISHING: 'publishing', SUCCESS: 'success', ERROR: 'error' });
 
@@ -725,7 +725,8 @@ function QuizEditor({ lessonId, navigationState, quiz, expanded, busy, onToggle,
   const [editSessionRevision, setEditSessionRevision] = useState(0);
   const [removedQuestionIds, setRemovedQuestionIds] = useState([]);
   const editingState = getQuizEditingState(quiz.status, editingPublishedQuiz);
-  const hasUnresolvedMath = useMemo(() => quiz.questions.some(question => [question.prompt, question.explanation, question.correctAnswer, ...(question.choices || [])].some(value => normalizeLessonMathContent(value).needsReview.length > 0)), [quiz.questions]);
+  const mathReviewIssues = useMemo(() => getQuizMathIssues(quiz), [quiz]);
+  const hasUnresolvedMath = mathReviewIssues.length > 0;
   const draftsRef = useRef(new Map());
   const previousStatusRef = useRef(quiz.status);
   const rememberDraft = useCallback((questionId, draft, changed) => {
@@ -825,7 +826,10 @@ function QuizEditor({ lessonId, navigationState, quiz, expanded, busy, onToggle,
           {quiz.status !== 'DRAFT' && lessonId && <Link to={`/instructor/quizzes/${quiz.id}/analytics`} state={{ ...navigationState, from: `/instructor/lessons/${lessonId}/review?view=workspace`, quizId: quiz.id }}><Btn variant="secondary">View Analytics</Btn></Link>}
         </div>
       </div>
-      {quiz.status === 'DRAFT' && hasUnresolvedMath && <Alert type="warning" label="Math review" className="mb-4">Resolve the marked math fields and save each question before publishing.</Alert>}
+      {quiz.status === 'DRAFT' && hasUnresolvedMath && <Alert type="warning" label="Math review" className="mb-4">
+        <p>Resolve the marked math fields and save each affected question before publishing.</p>
+        <ul className="mt-2 list-disc space-y-1 pl-5">{mathReviewIssues.map((issue, index) => <li key={`${issue.questionId}-${issue.field}-${index}`}><strong>{issue.questionLabel} · {issue.label}:</strong> {issue.reason}</li>)}</ul>
+      </Alert>}
       <div className={`quiz-disclosure-questions ${editingState.canEditQuiz ? 'is-editable' : 'is-locked'}`}>{visibleQuestions.map((question, questionIndex) => <QuizQuestionEditor
         key={`${question.id}-${editSessionRevision}`}
         quizId={quiz.id}
@@ -834,6 +838,7 @@ function QuizEditor({ lessonId, navigationState, quiz, expanded, busy, onToggle,
         canDelete={!editingState.isEditingPublishedQuiz || visibleQuestions.length > 1}
         question={question}
         questionIndex={questionIndex}
+        mathIssues={mathReviewIssues.filter(issue => issue.questionId === question.id)}
         initialDraft={draftsRef.current.get(question.id)?.draft}
         busy={busy === question.id}
         onDraftChange={rememberDraft}

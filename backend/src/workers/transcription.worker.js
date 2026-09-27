@@ -8,7 +8,7 @@ const aiProvider = require('../services/aiProvider.service');
 const GeminiSpeechTranscriptionProvider = require('../transcription/GeminiSpeechTranscriptionProvider');
 const { TranscriptionProviderError, mapTranscriptionError } = require('../transcription/transcriptionErrorMapper');
 const { materializeStorageFile, sha256File, cleanupTemporaryDirectory } = require('../utils/storageTempFile');
-const { prepareAudioForGemini, probeAudioDuration } = require('../utils/audioTranscode');
+const { prepareAudioForGemini, verifyAudioForTranscription } = require('../utils/audioTranscode');
 const {
   GEMINI_API_KEY,
   GEMINI_TRANSCRIPTION_MODEL,
@@ -86,16 +86,27 @@ async function processAttempt(attempt) {
     if (Number(temporary.size) !== Number(source.file_size)) {
       throw new TranscriptionProviderError('AUDIO_NOT_FOUND', 'The protected recording file is incomplete.', false);
     }
-    const durationMs = await probeAudioDuration({
+    const verification = await verifyAudioForTranscription({
       sourcePath: temporary.sourcePath,
+      sourceMime: source.mime_type,
       ffprobePath: FFPROBE_PATH,
-      timeoutMs: Math.min(TRANSCRIPTION_FFMPEG_TIMEOUT_MS, 60000),
+      ffmpegPath: FFMPEG_PATH,
+      probeTimeoutMs: Math.min(TRANSCRIPTION_FFMPEG_TIMEOUT_MS, 60000),
+      ffmpegTimeoutMs: TRANSCRIPTION_FFMPEG_TIMEOUT_MS,
+      maxDurationSeconds: TRANSCRIPTION_MAX_AUDIO_MINUTES * 60,
+      maxOutputBytes: TRANSCRIPTION_MAX_OUTPUT_MB * 1024 * 1024,
+      referenceDurationMs: source.duration_ms,
+      onStage: (stage, code) => {
+        const safeCode = String(code || 'UNKNOWN').replace(/[^A-Z0-9_]/gi, '').slice(0, 64) || 'UNKNOWN';
+        console.warn(`[Transcription] Attempt ${attempt.id} audio verification stage: ${stage} (${safeCode}).`);
+      },
     });
+    const durationMs = verification.durationMs;
     if (durationMs > TRANSCRIPTION_MAX_AUDIO_MINUTES * 60 * 1000) {
       throw new TranscriptionProviderError('UNSUPPORTED_AUDIO', `The lesson recording exceeds the ${TRANSCRIPTION_MAX_AUDIO_MINUTES}-minute transcription limit.`, false);
     }
     const sha256 = await sha256File(temporary.sourcePath);
-    const prepared = await prepareAudioForGemini({
+    const prepared = verification.preparedAudio || await prepareAudioForGemini({
       sourcePath: temporary.sourcePath,
       sourceMime: source.mime_type,
       ffmpegPath: FFMPEG_PATH,

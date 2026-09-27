@@ -66,14 +66,26 @@ async function probeAudioDuration({ sourcePath, ffprobePath, timeoutMs = 30000, 
   let result;
   try {
     result = await runner(executable, [
-      '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', sourcePath,
-    ], { timeoutMs, maxStdoutBytes: 1024, maxStderrBytes: 4096 });
+      '-v', 'error', '-select_streams', 'a', '-show_entries', 'format=duration:stream=codec_type,duration', '-of', 'json', sourcePath,
+    ], { timeoutMs, maxStdoutBytes: 16384, maxStderrBytes: 4096 });
   } catch (error) {
     if (error.code === 'MEDIA_TOOL_NOT_FOUND') error.code = 'FFPROBE_NOT_FOUND';
+    else if (error.code === 'AUDIO_CONVERSION_FAILED') error.code = 'AUDIO_DURATION_PROBE_FAILED';
     throw error;
   }
-  const { stdout } = result;
-  const seconds = Number(String(stdout || '').trim());
+  let metadata;
+  try {
+    metadata = JSON.parse(String(result.stdout || ''));
+  } catch {
+    metadata = null;
+  }
+  const candidates = [
+    metadata?.format?.duration,
+    ...(Array.isArray(metadata?.streams)
+      ? metadata.streams.filter(stream => !stream?.codec_type || stream.codec_type === 'audio').map(stream => stream.duration)
+      : []),
+  ];
+  const seconds = candidates.map(Number).find(value => Number.isFinite(value) && value > 0);
   if (!Number.isFinite(seconds) || seconds <= 0) {
     const error = new Error('The recording duration could not be determined.');
     error.code = 'AUDIO_DURATION_PROBE_FAILED';
@@ -98,27 +110,127 @@ async function prepareAudioForGemini({ sourcePath, sourceMime, ffmpegPath, maxDu
   const args = ['-nostdin', '-hide_banner', '-loglevel', 'error', '-y', '-i', sourcePath];
   if (Number.isFinite(maxDurationSeconds) && maxDurationSeconds > 0) args.push('-t', String(maxDurationSeconds));
   args.push('-vn', '-ac', '1', '-ar', '16000', '-c:a', 'flac', outputPath);
-  try { await runner(executable, args, {
-    timeoutMs,
-    onTick: async () => {
-      const stat = await fs.stat(outputPath).catch(error => error.code === 'ENOENT' ? null : Promise.reject(error));
-      if (stat && stat.size > maxOutputBytes) {
-        const error = new Error('Prepared audio exceeded its size limit.');
-        error.code = 'AUDIO_OUTPUT_LIMIT';
-        throw error;
-      }
-    },
-  }); } catch (error) {
+  try {
+    await runner(executable, args, {
+      timeoutMs,
+      onTick: async () => {
+        const stat = await fs.stat(outputPath).catch(error => error.code === 'ENOENT' ? null : Promise.reject(error));
+        if (stat && stat.size > maxOutputBytes) {
+          const error = new Error('Prepared audio exceeded its size limit.');
+          error.code = 'AUDIO_OUTPUT_LIMIT';
+          throw error;
+        }
+      },
+    });
+  } catch (error) {
+    await fs.rm(outputPath, { force: true }).catch(() => {});
     if (error.code === 'MEDIA_TOOL_NOT_FOUND') error.code = 'FFMPEG_NOT_FOUND';
     throw error;
   }
-  const stat = await fs.stat(outputPath);
-  if (stat.size > maxOutputBytes) {
-    const error = new Error('Prepared audio exceeded its size limit.');
-    error.code = 'AUDIO_OUTPUT_LIMIT';
+  let stat;
+  try {
+    stat = await fs.stat(outputPath);
+    if (stat.size > maxOutputBytes) {
+      const error = new Error('Prepared audio exceeded its size limit.');
+      error.code = 'AUDIO_OUTPUT_LIMIT';
+      throw error;
+    }
+  } catch (error) {
+    await fs.rm(outputPath, { force: true }).catch(() => {});
     throw error;
   }
   return { audioPath: outputPath, mimeType: 'audio/flac', converted: true };
 }
 
-module.exports = { prepareAudioForGemini, probeAudioDuration, runMediaProcess };
+async function verifyAudioForTranscription({
+  sourcePath,
+  sourceMime,
+  ffprobePath,
+  ffmpegPath,
+  probeTimeoutMs = 30000,
+  ffmpegTimeoutMs = 600000,
+  maxDurationSeconds,
+  maxOutputBytes,
+  referenceDurationMs,
+  runner = runMediaProcess,
+  onStage = () => {},
+}) {
+  let durationMs;
+  try {
+    durationMs = await probeAudioDuration({ sourcePath, ffprobePath, timeoutMs: probeTimeoutMs, runner });
+    return { durationMs, preparedAudio: null };
+  } catch (error) {
+    if (error.code !== 'AUDIO_DURATION_PROBE_FAILED') throw error;
+    onStage('FFPROBE_METADATA_DURATION_UNAVAILABLE', error.code);
+  }
+
+  const normalizedMime = String(sourceMime || '').split(';')[0].trim().toLowerCase();
+  if (normalizedMime !== 'audio/webm') {
+    const error = new Error('The recording duration could not be determined.');
+    error.code = 'AUDIO_DURATION_PROBE_FAILED';
+    throw error;
+  }
+
+  let preparedAudio;
+  try {
+    const verificationDurationLimit = Number.isFinite(maxDurationSeconds) && maxDurationSeconds > 0
+      ? maxDurationSeconds + 1
+      : maxDurationSeconds;
+    preparedAudio = await prepareAudioForGemini({
+      sourcePath,
+      sourceMime,
+      ffmpegPath,
+      maxDurationSeconds: verificationDurationLimit,
+      timeoutMs: ffmpegTimeoutMs,
+      maxOutputBytes,
+      runner,
+    });
+  } catch (error) {
+    if (error.code === 'AUDIO_CONVERSION_FAILED') {
+      const decodeError = new Error('The recording does not contain valid decodable audio.');
+      decodeError.code = 'AUDIO_DECODE_INVALID';
+      decodeError.audioStage = 'AUDIO_DECODE_INVALID';
+      decodeError.cause = error;
+      onStage(decodeError.audioStage, decodeError.code);
+      throw decodeError;
+    }
+    error.audioStage = 'FFMPEG_NORMALIZATION_FAILED';
+    onStage(error.audioStage, error.code);
+    throw error;
+  }
+
+  try {
+    durationMs = await probeAudioDuration({
+      sourcePath: preparedAudio.audioPath,
+      ffprobePath,
+      timeoutMs: probeTimeoutMs,
+      runner,
+    });
+  } catch (cause) {
+    if (preparedAudio.converted) {
+      await fs.rm(preparedAudio.audioPath, { force: true }).catch(() => {});
+    }
+    const error = new Error('The normalized recording duration could not be determined.');
+    error.code = 'AUDIO_DURATION_PROBE_FAILED';
+    error.audioStage = 'NORMALIZED_DURATION_UNAVAILABLE';
+    error.cause = cause;
+    onStage(error.audioStage, cause?.code);
+    throw error;
+  }
+
+  const reference = Number(referenceDurationMs);
+  if (Number.isFinite(reference) && reference > 0) {
+    const difference = Math.abs(reference - durationMs);
+    if (difference > Math.max(5000, durationMs * 0.5)) {
+      onStage('DURATION_REFERENCE_MISMATCH', 'REFERENCE_ONLY');
+    }
+  }
+  return { durationMs, preparedAudio };
+}
+
+module.exports = {
+  prepareAudioForGemini,
+  probeAudioDuration,
+  runMediaProcess,
+  verifyAudioForTranscription,
+};

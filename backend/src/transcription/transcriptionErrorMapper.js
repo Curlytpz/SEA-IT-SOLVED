@@ -40,6 +40,7 @@ function mapTranscriptionError(error) {
   if (error?.code === 'UNSUPPORTED_AUDIO') return new TranscriptionProviderError('UNSUPPORTED_AUDIO', 'The lesson recording format could not be transcribed.', false, error);
   if (['MEDIA_TOOL_NOT_FOUND','FFMPEG_NOT_FOUND','FFPROBE_NOT_FOUND'].includes(error?.code)) return new TranscriptionProviderError('AUDIO_CONVERSION_UNAVAILABLE', 'Audio processing is not configured on the server.', false, error);
   if (error?.code === 'AUDIO_DURATION_PROBE_FAILED') return new TranscriptionProviderError('UNSUPPORTED_AUDIO', 'The lesson recording duration could not be verified.', false, error);
+  if (error?.code === 'AUDIO_DECODE_INVALID') return new TranscriptionProviderError('UNSUPPORTED_AUDIO', 'The lesson recording does not contain valid decodable audio.', false, error);
   if (error?.code === 'AUDIO_CONVERSION_TIMEOUT') return new TranscriptionProviderError('AUDIO_CONVERSION_TIMEOUT', 'Audio preparation exceeded its time limit.', false, error);
   if (error?.code === 'AUDIO_OUTPUT_LIMIT') return new TranscriptionProviderError('AUDIO_OUTPUT_LIMIT', 'The prepared recording exceeded the server limit.', false, error);
   if (error?.code === 'AUDIO_CONVERSION_FAILED') return new TranscriptionProviderError('AUDIO_CONVERSION_FAILED', 'The lesson recording could not be prepared for transcription.', false, error);

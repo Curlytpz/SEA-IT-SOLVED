@@ -2,6 +2,9 @@ const ReasoningProvider = require('./ReasoningProvider');
 const { mapProviderError } = require('../recognition/ProviderErrorMapper');
 const mathOutputConvention = require('./mathOutputConvention');
 
+const QUIZ_MAX_OUTPUT_TOKENS = 4096;
+const QUIZ_THINKING_BUDGET = 512;
+
 const SYSTEM = `Use the approved lesson context as the authoritative source for what was taught and supplied.
 Do not claim the professor taught something unless the approved context supports it.
 You may add mathematical clarification when useful, but integrate it naturally into the lesson and keep provenance separate from student-facing prose.
@@ -128,7 +131,13 @@ class GeminiReasoningProvider extends ReasoningProvider {
     }
     return this.client;
   }
-  async request(context, instruction, schema, { systemInstruction = SYSTEM, contextLabel = 'APPROVED LESSON CONTEXT', signal } = {}) {
+  async request(context, instruction, schema, {
+    systemInstruction = SYSTEM,
+    contextLabel = 'APPROVED LESSON CONTEXT',
+    signal,
+    maxOutputTokens,
+    thinkingBudget,
+  } = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     const abortSignal = signal && typeof AbortSignal.any === 'function'
@@ -151,6 +160,8 @@ class GeminiReasoningProvider extends ReasoningProvider {
           responseMimeType: 'application/json',
           responseJsonSchema: schema,
           abortSignal,
+          ...(Number.isInteger(maxOutputTokens) ? { maxOutputTokens } : {}),
+          ...(Number.isInteger(thinkingBudget) ? { thinkingConfig: { thinkingBudget } } : {}),
         },
       });
       return JSON.parse(response.text || '{}');
@@ -179,7 +190,11 @@ class GeminiReasoningProvider extends ReasoningProvider {
       : 'Use only MULTIPLE_CHOICE and TRUE_FALSE.';
     return this.request(context,
       `Create exactly ${questionCount} instructor-reviewable questions at the instructor-selected ${difficulty} difficulty. ${guidance}${repairInstruction} Create a concise, academically natural quiz title based on the actual lesson topics, preferably 3–8 words. Use a normal title such as "Quiz: Indefinite Integration" or "Review Quiz: Calculus and Algebra". Never include Easy, Medium, Hard, AI-generated, assessment level, filenames, source labels, or exaggerated wording in the title. Difficulty must affect question complexity only. Keep instructions brief and natural, preferably "Answer all ${questionCount} questions." ${typeInstruction} For every MULTIPLE_CHOICE question return exactly four distinct choices and exactly one answer that matches a choice. Set topic to one concise concept label supported by the cited approved source; use an empty topic only when no reliable concept label exists. Every question must cite at least one approved sourceReference. Keep sourceReferences separate from prompt wording and never mention whiteboard pages, filenames, uploads, OCR, or transcript chunks in questions or explanations. Keep explanations accurate and concise (1–3 sentences). Keep normal prose as plain text. Put only mathematical expressions inside inline $...$ delimiters, for example $x \\to 1$ or $\\lim_{x \\to 1} f(x)$. A prose currency amount such as $0.49 is money, not a math delimiter; leave it as ordinary currency text and never pair its dollar sign with a later expression. After JSON decoding, every supported LaTeX command must have exactly one backslash and valid braces. Never emit a raw escaped newline, an orphan backslash, an unsupported control sequence such as \\xapproaches1, an unmatched $, \\(, or \\[, or a Markdown code fence. Do not alternate between raw LaTeX, \\( ... \\), or Unicode-only equations.`,
-      quizSchema, { signal });
+      quizSchema, {
+        signal,
+        maxOutputTokens: QUIZ_MAX_OUTPUT_TOKENS,
+        thinkingBudget: QUIZ_THINKING_BUDGET,
+      });
   }
   reviewSolution(input) {
     return this.request(input,

@@ -10,8 +10,9 @@ const { normalizeLessonMathContent } = require('../utils/mathContent');
 const { normalizeQuizMathContent } = require('../utils/quizMathContent');
 const { buildLessonDocument } = require('./lesson-document.service');
 const { randomizeMultipleChoiceQuestions } = require('../utils/quizOptions');
+const { compactQuizContextWithMetrics } = require('../utils/quizGenerationContext');
 const {
-  GEMINI_API_KEY, GEMINI_REASONING_MODEL, GEMINI_QUIZ_MODEL, GEMINI_QUIZ_TIMEOUT_MS,
+  GEMINI_API_KEY, GEMINI_REASONING_MODEL, GEMINI_QUIZ_MODEL, QUIZ_GENERATION_PROVIDER_TIMEOUT_MS,
   GEMINI_INTERACTIVE_TIMEOUT_MS,
 } = require('../config/env');
 
@@ -23,7 +24,7 @@ const provider = new GeminiReasoningProvider({
 const quizProvider = new GeminiReasoningProvider({
   apiKey: GEMINI_API_KEY,
   model: GEMINI_QUIZ_MODEL,
-  timeoutMs: GEMINI_QUIZ_TIMEOUT_MS,
+  timeoutMs: QUIZ_GENERATION_PROVIDER_TIMEOUT_MS,
 });
 
 const MATERIAL_TYPES = ['SUMMARY','NOTES','EXPLANATION','KEY_FORMULAS','WORKED_EXAMPLE','COMMON_MISTAKES'];
@@ -115,16 +116,15 @@ async function approvedPayload(lessonId, instructorId, contextVersionId = null) 
   const context = contextVersionId
     ? await contextService.getVersionForReasoning(lessonId, instructorId, contextVersionId)
     : await contextService.getApprovedForReasoning(lessonId, instructorId);
-  return {
-    context,
-    payload: context.chunks.map(chunk => ({
+  const canonical = context.chunks.map(chunk => ({
       type: chunk.type,
       source: sourceLabel(chunk),
       text: chunk.text,
       math: chunk.math,
       uncertain: chunk.uncertain,
-    })),
-  };
+  }));
+  const compacted = compactQuizContextWithMetrics(canonical);
+  return { context, ...compacted };
 }
 
 function invalidQuizOutput(message) {
@@ -399,17 +399,23 @@ function safeQuiz(row, questions = []) {
 }
 
 async function prepareQuizGeneration(lessonId, instructorId, options = {}) {
-  const { context, payload } = await approvedPayload(lessonId, instructorId);
+  const contextStartedAt = Date.now();
+  const { context, payload, metrics } = await approvedPayload(lessonId, instructorId, options.contextVersionId);
+  options.onStage?.('QUIZ_CONTEXT_LOADED', { durationMs: Date.now() - contextStartedAt, ...metrics });
+  const promptStartedAt = Date.now();
   const { difficulty, questionCount } = generationOptions(options);
   const specification = quizGenerationSpec(options.prompt || '', questionCount, options.questionType);
   const allowedSources = new Set(payload.map(item => item.source));
-  options.onStage?.('QUIZ_AI_REQUEST_STARTED');
+  options.onStage?.('QUIZ_PROMPT_BUILT', { durationMs: Date.now() - promptStartedAt, questionCount });
   const result = await geminiInteractive.run(
     async ({ attempt }) => {
+      const providerStartedAt = Date.now();
+      options.onStage?.('QUIZ_AI_REQUEST_STARTED', { attempt });
       const response = await quizProvider.generateQuiz(payload, { questionCount, difficulty, specification, repair: attempt > 1, signal: options.signal });
-      options.onStage?.('QUIZ_AI_RESPONSE_RECEIVED');
+      options.onStage?.('QUIZ_AI_RESPONSE_RECEIVED', { attempt, durationMs: Date.now() - providerStartedAt });
+      const validationStartedAt = Date.now();
       const normalized = normalizeQuiz(response, allowedSources, questionCount, difficulty, specification);
-      options.onStage?.('QUIZ_VALIDATION_PASSED');
+      options.onStage?.('QUIZ_VALIDATION_PASSED', { durationMs: Date.now() - validationStartedAt });
       return normalized;
     },
     {
@@ -418,7 +424,7 @@ async function prepareQuizGeneration(lessonId, instructorId, options = {}) {
       invalidOutputCode: 'QUIZ_AI_RESPONSE_INVALID',
       rateLimited: 'Quiz generation is temporarily rate-limited. Please try again shortly.',
       timeout: 'Quiz generation took too long. Please try again.',
-      timeoutCode: 'QUIZ_TIMEOUT',
+      timeoutCode: 'QUIZ_AI_TIMEOUT',
       unavailableCode: 'QUIZ_AI_REQUEST_FAILED',
     },
     { label: 'QuizAI', model: GEMINI_QUIZ_MODEL, userId: instructorId, maxRetries: options.maxRetries ?? 1 }
@@ -427,6 +433,7 @@ async function prepareQuizGeneration(lessonId, instructorId, options = {}) {
 }
 
 async function persistPreparedQuiz(client, lessonId, instructorId, prepared, onStage = () => {}) {
+  const persistenceStartedAt = Date.now();
   const { context, difficulty, result } = prepared;
   const quizResult = await client.query(
       `INSERT INTO lesson_quizzes(lesson_id,context_version_id,instructor_id,title,instructions,difficulty,status,provider,provider_version)
@@ -446,7 +453,11 @@ async function persistPreparedQuiz(client, lessonId, instructorId, prepared, onS
     );
     questions.push(row.rows[0]);
   }
-  onStage('QUIZ_QUESTIONS_INSERTED', { quizId: quizResult.rows[0].id, questionCount: questions.length });
+  onStage('QUIZ_QUESTIONS_INSERTED', {
+    quizId: quizResult.rows[0].id,
+    questionCount: questions.length,
+    durationMs: Date.now() - persistenceStartedAt,
+  });
   return safeQuiz(quizResult.rows[0], questions);
 }
 

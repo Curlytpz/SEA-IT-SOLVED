@@ -9,6 +9,7 @@ async function runQuizGenerationTransaction({
   onStage = () => {},
 }) {
   let phase = 'transaction';
+  const persistenceStartedAt = Date.now();
   try {
     await client.query('BEGIN');
     onStage('QUIZ_TRANSACTION_STARTED');
@@ -18,7 +19,11 @@ async function runQuizGenerationTransaction({
       phase = 'completion';
       await beforeCommit(client, replay.quiz);
       await client.query('COMMIT');
-      onStage('QUIZ_TRANSACTION_COMMITTED', { quizId: replay.quiz.id, idempotentReplay: true });
+      onStage('QUIZ_TRANSACTION_COMMITTED', {
+        quizId: replay.quiz.id,
+        idempotentReplay: true,
+        durationMs: Date.now() - persistenceStartedAt,
+      });
       return replay;
     }
     phase = 'persistence';
@@ -29,7 +34,7 @@ async function runQuizGenerationTransaction({
     phase = 'completion';
     await beforeCommit(client, quiz);
     await client.query('COMMIT');
-    onStage('QUIZ_TRANSACTION_COMMITTED', { quizId: quiz.id });
+    onStage('QUIZ_TRANSACTION_COMMITTED', { quizId: quiz.id, durationMs: Date.now() - persistenceStartedAt });
     return { message, quizCreated: true, quiz };
   } catch (error) {
     await client.query('ROLLBACK');

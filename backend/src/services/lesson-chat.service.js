@@ -219,7 +219,7 @@ async function processQueuedQuiz(job,{signal,onStage=()=>{}}={}) {
   const stage=(name,details={})=>{quizStage(name,generationId,{jobId:job.id,...details});onStage(name,details);};
   const generated=await intelligenceService.prepareQuizGeneration(job.lesson_id,job.instructor_id,{
     difficulty:job.difficulty,questionCount:Number(job.question_count),questionType:job.question_type,
-    prompt:job.prompt,contextVersionId:job.context_version_id,signal,maxRetries:1,onStage:stage,
+    prompt:job.prompt,contextVersionId:job.context_version_id,signal,maxRetries:0,onStage:stage,
   });
   const session={id:job.session_id};
   const client=await pool.connect();

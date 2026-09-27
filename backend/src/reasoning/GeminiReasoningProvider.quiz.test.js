@@ -17,4 +17,28 @@ test('quiz prompt explicitly separates prose currency from delimited LaTeX', asy
   assert.match(instruction, /unsupported control sequence/i);
   assert.equal(request.config.responseMimeType, 'application/json');
   assert.equal(request.config.responseJsonSchema.properties.questions.items.properties.prompt.type, 'string');
+  assert.equal(request.config.maxOutputTokens, 4096);
+  assert.deepEqual(request.config.thinkingConfig, { thinkingBudget: 512 });
+});
+
+test('hanging quiz request is actually aborted by the provider timeout', async () => {
+  const provider = new GeminiReasoningProvider({ apiKey: 'test-key', model: 'test-model', timeoutMs: 20 });
+  let suppliedSignal;
+  provider.client = { models: { generateContent: input => {
+    suppliedSignal = input.config.abortSignal;
+    return new Promise((_resolve, reject) => {
+      suppliedSignal.addEventListener('abort', () => {
+        const error = new Error('The operation was aborted');
+        error.name = 'AbortError';
+        reject(error);
+      }, { once: true });
+    });
+  } } };
+  const startedAt = Date.now();
+  await assert.rejects(
+    provider.generateQuiz([], { questionCount: 5, difficulty: 'MEDIUM' }),
+    error => error.code === 'PROVIDER_TIMEOUT' && error.retryable === true,
+  );
+  assert.equal(suppliedSignal.aborted, true);
+  assert.ok(Date.now() - startedAt < 500, 'provider timeout must bound the hanging request');
 });

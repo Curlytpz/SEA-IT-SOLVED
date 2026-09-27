@@ -23,6 +23,20 @@ test('quiz deadline preserves a normal successful generation result', async () =
   assert.deepEqual(await runQuizGenerationWithinDeadline(async () => ({ id: 'quiz-1' }), 100), { id: 'quiz-1' });
 });
 
+test('provider timeout and whole-job timeout keep separate failure codes', async () => {
+  await assert.rejects(
+    runQuizGenerationWithinDeadline(() => new Promise(() => {}), 10, {
+      code: 'QUIZ_JOB_TIMEOUT',
+      message: 'Whole job timed out.',
+    }),
+    error => error.code === 'QUIZ_JOB_TIMEOUT' && /whole job/i.test(error.message),
+  );
+  const provider = mapInteractiveFailure({ code: 'PROVIDER_TIMEOUT' }, {
+    timeoutCode: 'QUIZ_AI_TIMEOUT', timeout: 'Provider timed out.',
+  });
+  assert.equal(provider.code, 'QUIZ_AI_TIMEOUT');
+});
+
 test('interactive quiz failures map to stable status and code contracts', () => {
   const timeout = mapInteractiveFailure({ code: 'PROVIDER_TIMEOUT' }, { timeoutCode: 'QUIZ_TIMEOUT', timeout: 'Quiz timed out.' });
   assert.equal(timeout.statusCode, 504);

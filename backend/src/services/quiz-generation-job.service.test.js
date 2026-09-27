@@ -65,6 +65,30 @@ test('retryable failures return a claimed job to PENDING and terminal failures b
   } finally { pool.query = originalQuery; }
 });
 
+test('two provider timeouts produce one retry and then a terminal QUIZ_AI_TIMEOUT failure', async () => {
+  const originalQuery = pool.query;
+  const statuses = [];
+  pool.query = async (_sql, values) => {
+    statuses.push(values[2]);
+    return { rows: [row({
+      status: values[2], phase: values[3], attempt_count: statuses.length,
+      failure_code: values[5], failure_message: values[6],
+    })] };
+  };
+  try {
+    const first = await service.fail(row({ status: 'PROCESSING', attempt_count: 1, worker_id: 'worker-a' }), {
+      code: 'QUIZ_AI_TIMEOUT', message: 'Quiz generation took too long.',
+    });
+    const second = await service.fail(row({ status: 'PROCESSING', attempt_count: 2, worker_id: 'worker-a' }), {
+      code: 'QUIZ_AI_TIMEOUT', message: 'Quiz generation took too long.',
+    });
+    assert.equal(first.status, 'PENDING');
+    assert.equal(second.status, 'FAILED');
+    assert.equal(second.failure.code, 'QUIZ_AI_TIMEOUT');
+    assert.deepEqual(statuses, ['PENDING', 'FAILED']);
+  } finally { pool.query = originalQuery; }
+});
+
 test('stale PROCESSING jobs are recovered with bounded attempts', async () => {
   const originalQuery = pool.query;
   let statement = '';

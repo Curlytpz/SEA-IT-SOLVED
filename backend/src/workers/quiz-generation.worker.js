@@ -4,6 +4,7 @@ const pool = require('../db/pool');
 const chatService = require('../services/lesson-chat.service');
 const jobService = require('../services/quiz-generation-job.service');
 const { runQuizGenerationWithinDeadline } = require('../utils/quizGenerationDeadline');
+const { phaseForQuizGenerationStage } = require('../utils/quizGenerationPhase');
 const {
   GEMINI_API_KEY,
   GEMINI_QUIZ_MODEL,
@@ -31,22 +32,29 @@ async function closePool() {
   await pool.end();
 }
 
-function phaseForStage(stage) {
-  if (stage === 'QUIZ_AI_RESPONSE_RECEIVED') return 'VALIDATING';
-  if (['QUIZ_VALIDATION_PASSED','QUIZ_TRANSACTION_STARTED','QUIZ_ROW_INSERTED','QUIZ_QUESTIONS_INSERTED'].includes(stage)) return 'SAVING';
-  return null;
-}
-
 async function processJob(job) {
   let phaseUpdates = Promise.resolve();
   try {
     await runQuizGenerationWithinDeadline(signal => chatService.processQueuedQuiz(job, {
       signal,
-      onStage: stage => {
-        const phase = phaseForStage(stage);
+      onStage: (stage, details = {}) => {
+        const phase = phaseForQuizGenerationStage(stage);
         if (phase) phaseUpdates = phaseUpdates.then(() => jobService.updatePhase(job.id, workerId, phase));
+        if (Number.isFinite(details.durationMs)) {
+          console.log('[QuizGeneration] Stage timing', {
+            jobId: job.id,
+            stage,
+            durationMs: details.durationMs,
+            ...(Number.isFinite(details.originalBytes) ? { contextBytesBefore: details.originalBytes } : {}),
+            ...(Number.isFinite(details.compactBytes) ? { contextBytesAfter: details.compactBytes } : {}),
+            ...(Number.isFinite(details.chunkCount) ? { contextChunks: details.chunkCount } : {}),
+          });
+        }
       },
-    }), QUIZ_GENERATION_JOB_TIMEOUT_MS);
+    }), QUIZ_GENERATION_JOB_TIMEOUT_MS, {
+      code: 'QUIZ_JOB_TIMEOUT',
+      message: 'The complete quiz generation job exceeded its safety deadline. Please try again.',
+    });
     await phaseUpdates;
     console.log(`[QuizGeneration] Job ${job.id} completed.`);
   } catch (error) {

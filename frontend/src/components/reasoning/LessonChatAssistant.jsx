@@ -7,7 +7,18 @@ import GeneratedContent from './GeneratedContent';
 import LessonChatHistory from './LessonChatHistory';
 import QuizDraftPreview from './QuizDraftPreview';
 import { quizDraftPresentation } from '../../utils/quizDraftResponse';
-import { QUIZ_REQUEST_TIMEOUT_MS, createQuizGenerationId, isCurrentWorkspaceRequest, isPersistedQuizResult, quizGenerationFailure } from '../../utils/workspaceReliability';
+import {
+  QUIZ_REQUEST_TIMEOUT_MS,
+  createQuizGenerationId,
+  isCurrentWorkspaceRequest,
+  isPersistedQuizResult,
+  normalizeChatMessage,
+  normalizeGenerationTask,
+  normalizeLessonChatResult,
+  normalizePendingQuizRequest,
+  quizGenerationFailure,
+  restoredPendingQuizRequest,
+} from '../../utils/workspaceReliability';
 import '../../../../shared/quizEditTargeting.cjs';
 import { deleteLessonChatConversation, generateQuizFromLessonChat, getLessonChat, sendLessonChatMessage, undoLastLessonEdit } from '../../services/lessonChatApi';
 
@@ -121,22 +132,6 @@ function semanticMaterialTarget(message, materials, fallbackId = '') {
   return materials.find(item => item.type === targetType)?.id || fallbackId || '';
 }
 
-function restoredQuizOptions(messages) {
-  const relevant=[...(messages||[])].reverse().find(message =>
-    message.role === 'ASSISTANT' && ['QUIZ_OPTIONS_REQUIRED', 'QUIZ_CREATED'].includes(message.action)
-  );
-  if(relevant?.action !== 'QUIZ_OPTIONS_REQUIRED')return null;
-  const draft=relevant.quizDraft||{};
-  return {
-    prompt: relevant.quizPrompt || draft.prompt || '',
-    difficulty: draft.difficulty || null,
-    questionCount: draft.questionCount ?? null,
-    questionType: draft.questionType || null,
-    missingParameters: relevant.missingQuizParameters || ['questionCount','difficulty','questionType'],
-    instruction: relevant.content || '',
-  };
-}
-
 export default function LessonChatAssistant({ lessonId, lessonTitle, materials, quizzes = [], selectedMaterialId, documentPageContext, onMaterialsUpdated, onEditStateChange, onQuizCreated, onReviewQuiz, onQuizUpdated }) {
   const reduceMotion = useReducedMotion();
   const [messages, setMessages] = useState([]);
@@ -235,12 +230,13 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
   }
 
   function applyConversationResult(result) {
-    const nextMessages=result.messages||[];
-    setConversations(result.conversations||[]);
-    setActiveConversationId(result.activeConversationId||null);
+    const canonical=normalizeLessonChatResult(result);
+    const nextMessages=canonical.messages;
+    setConversations(canonical.conversations);
+    setActiveConversationId(canonical.activeConversationId);
     setMessages(nextMessages);
-    setCanUndo(Boolean(result.canUndo));
-    setQuizOptions(restoredQuizOptions(nextMessages));
+    setCanUndo(Boolean(canonical.canUndo));
+    setQuizOptions(restoredPendingQuizRequest(nextMessages));
   }
 
   function upsertConversation(result) {
@@ -445,14 +441,14 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
       }
       upsertConversation(result);
       setMessages(current => current.map(item => item.localId === optimisticId ? { ...item, pending: false, failed: false } : item));
-      const resultMessage = result.quiz
+      const resultMessage = normalizeChatMessage(result.quiz
         ? { ...result.message, quiz: result.quiz, quizId: result.quiz.id }
-        : result.message;
+        : result.message);
+      if (!resultMessage) throw new Error('Lesson assistant response did not include a valid message.');
       const appendResultMessage = () => setMessages(current => [...current, resultMessage]);
       if (result.requiresQuizOptions) {
         appendResultMessage();
-        const draft=result.quizDraft||{};
-        setQuizOptions({prompt:result.quizPrompt||clean,difficulty:draft.difficulty||result.difficulty||null,questionCount:draft.questionCount??result.questionCount??null,questionType:draft.questionType||result.questionType||null,missingParameters:result.missingQuizParameters||['questionCount','difficulty','questionType'],instruction:result.message?.content||''});
+        setQuizOptions(normalizePendingQuizRequest({ ...result, instruction: result.message?.content }, clean));
         setDocumentTask(null);
         showActivity('Quiz options needed');
       } else if (result.materials || result.quiz || result.quizCreated) {
@@ -519,7 +515,12 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
 
   async function generateQuiz(options) {
     if (requestInFlightRef.current) return;
-    const requestOptions = { ...options, generationId: options.generationId || createQuizGenerationId() };
+    const pendingRequest = normalizePendingQuizRequest(options);
+    if (!pendingRequest || pendingRequest.missingParameters.length) {
+      setError('Choose all required quiz details before generating the quiz.');
+      return;
+    }
+    const requestOptions = { ...pendingRequest, generationId: options?.generationId || createQuizGenerationId() };
     const requestSequence = ++requestSequenceRef.current;
     const controller = new AbortController();
     requestControllerRef.current = controller;
@@ -559,9 +560,10 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
       setDocumentTask(current => current ? { ...current, status: 'completed', progress: 100, detail: '✓ Update complete', stages: current.stages.map(stage => ({ ...stage, status: 'completed' })) } : current);
       if (!reduceMotion) await new Promise(resolve => window.setTimeout(resolve, 520));
       setDocumentTask(null);
-      const resultMessage = result.quiz
+      const resultMessage = normalizeChatMessage(result.quiz
         ? { ...result.message, quiz: result.quiz, quizId: result.quiz.id }
-        : result.message;
+        : result.message);
+      if (!resultMessage) throw new Error('Quiz generation response did not include a valid message.');
       setMessages(current => [...current, resultMessage]);
       if (result.quiz) onQuizUpdated?.(result.quiz);
       if (result.quizCreated) onQuizCreated?.();
@@ -615,9 +617,11 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
       : error ? 'Needs attention' : activity ? 'Done' : 'Ready';
   const statusTone = avatarState === 'error' ? 'is-error' : avatarState === 'done' ? 'is-success' : ['thinking', 'responding'].includes(avatarState) ? 'is-working' : '';
   const waitingText = operation === 'GENERATE_QUIZ' ? 'Generating quiz draft...' : 'Thinking...';
-  const missingQuizParameters = quizOptions?.missingParameters || [];
-  const quizCountValid = Number.isInteger(Number(quizOptions?.questionCount)) && Number(quizOptions?.questionCount) >= 1 && Number(quizOptions?.questionCount) <= 20;
-  const quizOptionsComplete = Boolean(quizOptions?.difficulty && quizCountValid && quizOptions?.questionType);
+  const pendingQuizRequest = normalizePendingQuizRequest(quizOptions);
+  const missingQuizParameters = pendingQuizRequest?.missingParameters || [];
+  const quizCountValid = Number.isInteger(pendingQuizRequest?.questionCount);
+  const quizOptionsComplete = Boolean(pendingQuizRequest?.difficulty && quizCountValid && pendingQuizRequest?.questionType && !missingQuizParameters.length);
+  const visibleDocumentTask = normalizeGenerationTask(documentTask);
 
   return <>
     <aside className={`lesson-chat-assistant ${desktopHistoryOpen ? 'is-history-open' : ''}`} aria-labelledby="lesson-assistant-title">
@@ -703,7 +707,7 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
                 </div>
               </motion.article>;
             })}
-            {quizOptions && <motion.section
+            {pendingQuizRequest && <motion.section
               className="lesson-chat-quiz-options"
               aria-label="Quiz generation options"
               initial={reduceMotion ? false : { opacity: 0, y: 8 }}
@@ -713,45 +717,45 @@ export default function LessonChatAssistant({ lessonId, lessonTitle, materials, 
               <AiAssistantAvatar state="idle" size="sm"/>
               <div className="lesson-chat-quiz-options-content">
                 <strong>{missingQuizParameters.length === 1 ? 'Choose quiz detail' : 'Choose quiz details'}</strong>
-                 <GeneratedContent markdown={quizOptions.instruction} assistantText/>
+                 <GeneratedContent markdown={pendingQuizRequest.instruction} assistantText/>
                 {missingQuizParameters.includes('difficulty') && <div className="lesson-chat-quiz-option-group" role="group" aria-label="Quiz difficulty">
                   <span>Difficulty</span>
-                  <div>{['EASY', 'MEDIUM', 'HARD'].map(value => <button key={value} type="button" aria-pressed={quizOptions.difficulty === value} disabled={sending} onClick={() => setQuizOptions(current => ({ ...current, difficulty: value }))}>{value[0] + value.slice(1).toLowerCase()}</button>)}</div>
+                  <div>{['EASY', 'MEDIUM', 'HARD'].map(value => <button key={value} type="button" aria-pressed={pendingQuizRequest.difficulty === value} disabled={sending} onClick={() => setQuizOptions(current => normalizePendingQuizRequest({ ...current, difficulty: value }))}>{value[0] + value.slice(1).toLowerCase()}</button>)}</div>
                 </div>}
                 {missingQuizParameters.includes('questionCount') && <label className="lesson-chat-quiz-option-group">
                   <span>Questions</span>
-                  <Input type="number" min="1" max="20" step="1" inputMode="numeric" className="max-w-28" value={quizOptions.questionCount??''} disabled={sending} onChange={event=>setQuizOptions(current=>({...current,questionCount:event.target.value===''?null:Number(event.target.value)}))}/>
+                  <Input type="number" min="1" max="20" step="1" inputMode="numeric" className="max-w-28" value={pendingQuizRequest.questionCount??''} disabled={sending} onChange={event=>setQuizOptions(current=>normalizePendingQuizRequest({...current,questionCount:event.target.value===''?null:Number(event.target.value)}))}/>
                   <small className="text-muted-foreground">Choose a whole number from 1 to 20.</small>
                 </label>}
                 {missingQuizParameters.includes('questionType') && <div className="lesson-chat-quiz-option-group" role="group" aria-label="Quiz question type">
                   <span>Question type</span>
-                  <div>{[['MULTIPLE_CHOICE','Multiple choice'],['PROBLEM_SOLVING','Problem solving']].map(([value,label])=><button key={value} type="button" aria-pressed={quizOptions.questionType===value} disabled={sending} onClick={()=>setQuizOptions(current=>({...current,questionType:value}))}>{label}</button>)}</div>
+                  <div>{[['MULTIPLE_CHOICE','Multiple choice'],['TRUE_FALSE','True / False'],['PROBLEM_SOLVING','Problem solving'],['MIXED','Mixed objective']].map(([value,label])=><button key={value} type="button" aria-pressed={pendingQuizRequest.questionType===value} disabled={sending} onClick={()=>setQuizOptions(current=>normalizePendingQuizRequest({...current,questionType:value}))}>{label}</button>)}</div>
                 </div>}
-                <div className="lesson-chat-quiz-option-actions"><Btn size="sm" disabled={sending||!quizOptionsComplete} onClick={() => generateQuiz(quizOptions)}>Generate Quiz</Btn><button type="button" disabled={sending} onClick={() => setQuizOptions(null)}>Cancel</button></div>
+                <div className="lesson-chat-quiz-option-actions"><Btn size="sm" disabled={sending||!quizOptionsComplete} onClick={() => generateQuiz(pendingQuizRequest)}>Generate Quiz</Btn><button type="button" disabled={sending} onClick={() => setQuizOptions(null)}>Cancel</button></div>
               </div>
             </motion.section>}
-            {documentTask && <motion.section
-              className={`lesson-chat-task is-${documentTask.status}`}
-              aria-label={documentTask.title}
+            {visibleDocumentTask && <motion.section
+              className={`lesson-chat-task is-${visibleDocumentTask.status}`}
+              aria-label={visibleDocumentTask.title}
               aria-live="polite"
               initial={reduceMotion ? false : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: reduceMotion ? 0 : .24, ease: 'easeOut' }}
             >
               <div className="lesson-chat-task-heading">
-                <AiAssistantAvatar state={documentTask.status === 'failed' ? 'error' : documentTask.status === 'completed' ? 'done' : 'responding'} size="sm"/>
-                <strong>{documentTask.title}</strong>
+                <AiAssistantAvatar state={visibleDocumentTask.status === 'failed' ? 'error' : visibleDocumentTask.status === 'completed' ? 'done' : 'responding'} size="sm"/>
+                <strong>{visibleDocumentTask.title}</strong>
               </div>
               <div className="lesson-chat-task-progress">
-                <div role="progressbar" aria-label={`${documentTask.title} progress`} aria-valuemin="0" aria-valuemax="100" aria-valuenow={documentTask.progress || 0}><span style={{ width: `${documentTask.progress || 0}%` }}/></div>
+                <div role="progressbar" aria-label={`${visibleDocumentTask.title} progress`} aria-valuemin="0" aria-valuemax="100" aria-valuenow={visibleDocumentTask.progress}><span style={{ width: `${visibleDocumentTask.progress}%` }}/></div>
               </div>
               <div className="lesson-chat-task-status">
                 <AnimatePresence mode="wait" initial={false}>
-                  <motion.span key={`${documentTask.status}-${documentTask.detail}`} initial={reduceMotion ? false : { opacity: 0, y: 3 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? undefined : { opacity: 0, y: -3 }} transition={{ duration: reduceMotion ? 0 : .18 }}>{documentTask.status === 'failed' ? 'Update stopped' : documentTask.detail || 'Starting...'}</motion.span>
+                  <motion.span key={`${visibleDocumentTask.status}-${visibleDocumentTask.detail}`} initial={reduceMotion ? false : { opacity: 0, y: 3 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? undefined : { opacity: 0, y: -3 }} transition={{ duration: reduceMotion ? 0 : .18 }}>{visibleDocumentTask.status === 'failed' ? 'Update stopped' : visibleDocumentTask.detail}</motion.span>
                 </AnimatePresence>
-                <span>{documentTask.progress || 0}%</span>
+                <span>{visibleDocumentTask.progress}%</span>
               </div>
-              {documentTask.status === 'failed' && <div className="lesson-chat-task-error"><p>{documentTask.error || 'The requested update could not be completed.'}</p><button type="button" onClick={() => documentTask.action === 'GENERATE_QUIZ' && documentTask.options ? generateQuiz(documentTask.options) : submit(documentTask.prompt, documentTask.action, documentTask.messageId)}><RotateCcw size={14}/>Retry</button></div>}
+              {visibleDocumentTask.status === 'failed' && <div className="lesson-chat-task-error"><p>{visibleDocumentTask.error || 'The requested update could not be completed.'}</p><button type="button" onClick={() => visibleDocumentTask.action === 'GENERATE_QUIZ' && visibleDocumentTask.options ? generateQuiz(visibleDocumentTask.options) : submit(visibleDocumentTask.prompt, visibleDocumentTask.action, visibleDocumentTask.messageId)}><RotateCcw size={14}/>Retry</button></div>}
             </motion.section>}
             {sending && !documentTask && <div className="lesson-chat-thinking" role="status"><AiAssistantAvatar state={avatarState} size="sm"/><div><strong>{waitingText}</strong></div></div>}
             <div ref={endRef}/>

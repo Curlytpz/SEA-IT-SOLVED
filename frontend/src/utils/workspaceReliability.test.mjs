@@ -5,8 +5,13 @@ import {
   QUIZ_REQUEST_TIMEOUT_MS,
   isCurrentWorkspaceRequest,
   isPersistedQuizResult,
+  normalizeGenerationTask,
+  normalizeLessonChatResult,
+  normalizePendingQuizRequest,
   normalizeWorkspaceIntelligence,
   quizGenerationFailure,
+  restoredPendingQuizRequest,
+  safeRuntimeDiagnostic,
 } from './workspaceReliability.js';
 
 test('normal and malformed workspace payloads always expose render-safe collections', () => {
@@ -14,6 +19,49 @@ test('normal and malformed workspace payloads always expose render-safe collecti
   const valid = normalizeWorkspaceIntelligence({ materials: [{ id: 'm1' }], quizzes: [{ id: 'q1' }], document: { title: 'Lesson' } });
   assert.equal(valid.materials.length, 1);
   assert.equal(valid.quizzes.length, 1);
+  assert.deepEqual(normalizeWorkspaceIntelligence({ quizzes: [{ id: 'q1', questions: null }, null] }).quizzes[0].questions, []);
+});
+
+test('reproduces the former partial quiz metadata render exception and canonicalizes it', () => {
+  const malformed = { missingQuizParameters: { difficulty: true } };
+  assert.throws(() => malformed.missingQuizParameters.includes('difficulty'), /includes is not a function/);
+  const pending = normalizePendingQuizRequest({
+    quizDraft: { questionCount: 5, difficulty: null, questionType: 'MULTIPLE_CHOICE' },
+    missingQuizParameters: malformed.missingQuizParameters,
+    content: 'What difficulty would you like?',
+  });
+  assert.deepEqual(pending.missingParameters, ['difficulty']);
+  assert.equal(pending.instruction, 'What difficulty would you like?');
+});
+
+test('QUIZ_OPTIONS_REQUIRED restores safely and supplying difficulty completes the request', () => {
+  const messages = normalizeLessonChatResult({ messages: [{
+    role: 'ASSISTANT', action: 'QUIZ_OPTIONS_REQUIRED', content: 'What difficulty would you like?',
+    quizPrompt: 'Generate 5 questions.',
+    quizDraft: { questionCount: 5, difficulty: null, questionType: 'MIXED' },
+    missingQuizParameters: ['difficulty'],
+  }] }).messages;
+  const restored = restoredPendingQuizRequest(messages);
+  assert.equal(restored.questionType, 'MIXED');
+  assert.deepEqual(restored.missingParameters, ['difficulty']);
+  const resumed = normalizePendingQuizRequest({ ...restored, difficulty: 'HARD' });
+  assert.deepEqual(resumed.missingParameters, []);
+  assert.equal(resumed.difficulty, 'HARD');
+});
+
+test('partial drafts and mixed objective requests remain canonical and renderable', () => {
+  const partial = normalizePendingQuizRequest({ quizDraft: { questionCount: '5' }, missingQuizParameters: null });
+  assert.equal(partial.questionCount, 5);
+  assert.deepEqual(partial.missingParameters, ['difficulty', 'questionType']);
+  const mixed = normalizePendingQuizRequest({ questionCount: 5, difficulty: 'medium', questionType: 'mixed' });
+  assert.deepEqual(mixed.missingParameters, []);
+  assert.equal(mixed.questionType, 'MIXED');
+});
+
+test('generation progress is clamped and malformed stages cannot crash rendering', () => {
+  assert.equal(normalizeGenerationTask({ status: 'running', progress: 950, stages: null }).progress, 100);
+  assert.deepEqual(normalizeGenerationTask({ status: 'running', progress: Number.NaN, stages: {} }).stages, []);
+  assert.equal(normalizeGenerationTask({ status: 'unknown', progress: -10 }).status, 'failed');
 });
 
 test('quiz success requires a matching persisted quiz identifier', () => {
@@ -36,11 +84,26 @@ test('stale or unmounted requests cannot update a new workspace', () => {
 
 test('workspace page includes explicit load failure and scoped error-boundary fallbacks', () => {
   const page = fs.readFileSync(new URL('../pages/instructor/LessonContextReview.jsx', import.meta.url), 'utf8');
+  const assistant = fs.readFileSync(new URL('../components/reasoning/LessonChatAssistant.jsx', import.meta.url), 'utf8');
   const boundary = fs.readFileSync(new URL('../components/reasoning/WorkspaceErrorBoundary.jsx', import.meta.url), 'utf8');
   assert.match(page, /Workspace could not load/);
   assert.match(page, /loadController\.current\?\.abort/);
+  assert.match(page, /normalizeWorkspaceIntelligence\(\{ quizzes: \[nextQuiz\] \}\)/);
+  assert.match(assistant, /normalizeLessonChatResult\(result\)/);
+  assert.match(assistant, /normalizePendingQuizRequest\(quizOptions\)/);
   assert.match(boundary, /Something went wrong loading this workspace/);
   assert.match(boundary, />Retry</);
   assert.match(boundary, /Back to Lessons/);
   assert.match(boundary, /\/instructor\/sections/);
+  assert.match(boundary, /revision: current\.revision \+ 1/);
+  assert.match(boundary, /key=\{this\.state\.revision\}/);
+});
+
+test('error diagnostics retain bounded technical metadata without exposing UI stacks', () => {
+  const diagnostic = safeRuntimeDiagnostic(new TypeError('missingQuizParameters.includes is not a function'), {
+    componentStack: '\n at LessonChatAssistant (LessonChatAssistant.jsx:717)\n at LessonContextReview',
+  });
+  assert.equal(diagnostic.name, 'TypeError');
+  assert.match(diagnostic.message, /includes is not a function/);
+  assert.ok(diagnostic.componentStack.length <= 8);
 });

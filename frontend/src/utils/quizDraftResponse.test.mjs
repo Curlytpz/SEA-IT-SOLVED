@@ -44,6 +44,12 @@ const presentation = quizDraftPresentation({ role: 'ASSISTANT', action: 'QUIZ_CR
 assert.equal(presentation.quiz.title, 'Persisted title');
 assert.equal(presentation.messageText, 'Quiz generated.');
 
+const stalePresentation = quizDraftPresentation(
+  { role: 'ASSISTANT', action: 'QUIZ_CREATED', content: JSON.stringify(payload), quizId: 'deleted-quiz', quiz: payload },
+  [canonical],
+);
+assert.equal(stalePresentation, null, 'a stale explicit quiz id must not resurrect embedded data or attach an unrelated persisted quiz');
+
 const rawPresentation = quizDraftPresentation({ role: 'ASSISTANT', content: JSON.stringify(payload) }, []);
 assert.equal(rawPresentation.messageText, 'Your quiz draft is ready.');
 assert.equal(rawPresentation.quiz.title, payload.title);

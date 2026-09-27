@@ -1,6 +1,7 @@
 import { Component } from 'react';
 import { Link } from 'react-router-dom';
 import { Btn, Card } from '../ui';
+import { safeRuntimeDiagnostic } from '../../utils/workspaceReliability';
 
 export default class WorkspaceErrorBoundary extends Component {
   state = { error: null, revision: 0 };
@@ -8,11 +9,7 @@ export default class WorkspaceErrorBoundary extends Component {
   static getDerivedStateFromError(error) { return { error }; }
 
   componentDidCatch(error, info) {
-    console.error('[LessonWorkspace] Unexpected render failure', {
-      name: error?.name,
-      message: import.meta.env.DEV ? error?.message : 'Workspace render failed',
-      componentStack: import.meta.env.DEV ? info?.componentStack : undefined,
-    });
+    console.error('[LessonWorkspace] Unexpected render failure', safeRuntimeDiagnostic(error, info, import.meta.env.DEV));
   }
 
   retry = () => this.setState(current => ({ error: null, revision: current.revision + 1 }));

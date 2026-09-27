@@ -121,6 +121,7 @@ function canonicalQuizForMessage(message, quizzes) {
   if (quizId) {
     const match = quizzes.find(quiz => String(quiz.id) === quizId);
     if (match) return normalizeQuizDraftPayload(match);
+    return null;
   }
   if (message?.action === 'QUIZ_CREATED') return normalizeQuizDraftPayload(quizzes[0]);
   return null;
@@ -128,12 +129,16 @@ function canonicalQuizForMessage(message, quizzes) {
 
 export function quizDraftPresentation(message, quizzes = []) {
   if (!message || message.role === 'USER') return null;
+  const explicitQuizId = text(message.quizId || message.quiz?.id);
+  const canonical = canonicalQuizForMessage(message, Array.isArray(quizzes) ? quizzes : []);
+  // A persisted QUIZ_CREATED message is authoritative by id. If that quiz no
+  // longer exists, do not resurrect an embedded or historical payload.
+  if (message.action === 'QUIZ_CREATED' && explicitQuizId && !canonical) return null;
   const structuredContent = normalizeQuizDraftPayload(message.content);
   const parsed = structuredContent || parseQuizDraftContent(message.content, { logFailure: true });
   const direct = normalizeQuizDraftPayload(message.quiz)
     || normalizeQuizDraftPayload(message.structuredQuiz)
     || normalizeQuizDraftPayload(message.quizDraft);
-  const canonical = canonicalQuizForMessage(message, Array.isArray(quizzes) ? quizzes : []);
   const quiz = canonical || direct || parsed;
   if (!quiz) return null;
   return {

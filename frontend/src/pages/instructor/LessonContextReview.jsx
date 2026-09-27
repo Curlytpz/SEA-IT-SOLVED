@@ -397,13 +397,15 @@ function LessonContextReview() {
     if (nextState.active && window.matchMedia('(max-width: 1279px)').matches) setWorkspaceView('document');
   }
   function updateEditedQuiz(nextQuiz) {
+    const canonicalQuiz = normalizeWorkspaceIntelligence({ quizzes: [nextQuiz] }).quizzes[0];
+    if (!canonicalQuiz) return;
     setIntelligence(current => ({
       ...current,
-      quizzes: current.quizzes.some(item => item.id === nextQuiz.id)
-        ? current.quizzes.map(item => item.id === nextQuiz.id ? nextQuiz : item)
-        : [nextQuiz, ...current.quizzes],
+      quizzes: current.quizzes.some(item => item.id === canonicalQuiz.id)
+        ? current.quizzes.map(item => item.id === canonicalQuiz.id ? canonicalQuiz : item)
+        : [canonicalQuiz, ...current.quizzes],
     }));
-    setExpandedQuizId(nextQuiz.id);
+    setExpandedQuizId(canonicalQuiz.id);
   }
   const saveQuestion = useCallback(async (quizId, question) => {
     setBusy(question.id);

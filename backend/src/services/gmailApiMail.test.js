@@ -90,12 +90,56 @@ test('Gmail API sends a UTF-8 multipart plain-text and HTML message as base64url
   assert.doesNotMatch(request.requestBody.raw, /[+/=]/);
 
   const message = decodeBase64Url(request.requestBody.raw);
+  assert.equal(message.replace(/\r\n/g, '').includes('\n'), false);
   assert.match(message, /^From: SEA-IT-SOLVED <seaitsolved\.project@gmail\.com>\r\n/);
   assert.match(message, /To: student@student\.hau\.edu\.ph/);
   assert.match(message, /Subject: Reset your SEA-IT-SOLVED password/);
   assert.match(message, /Content-Type: multipart\/alternative/);
   assert.ok(decodeMimePart(message, 'text/plain').includes(resetUrl));
   assert.ok(decodeMimePart(message, 'text/html').includes(resetUrl));
+});
+
+test('Gmail API verification message has deliverability-friendly headers and both MIME alternatives', async () => {
+  let request;
+  const gmailClient = { users: { messages: { send: async value => {
+    request = value;
+    return { data: { id: 'verification-message-id' } };
+  } } } };
+  const verificationUrl = 'https://app.example.edu/verify-email?token=redacted-verification-token';
+  const entries = [];
+  const originalInfo = console.info;
+  console.info = (...values) => entries.push(values.join(' '));
+  try {
+    await emailService.sendWithGmailApi({
+      email: 'student@student.hau.edu.ph', verificationUrl, expiresInMinutes: 60,
+    }, { settings: { ...settings, from: 'Different Name <different@gmail.com>' }, gmailClient });
+  } finally {
+    console.info = originalInfo;
+  }
+
+  const message = decodeBase64Url(request.requestBody.raw);
+  assert.match(message, /^From: SEA-IT-SOLVED <seaitsolved\.project@gmail\.com>\r\n/);
+  assert.match(message, /\r\nTo: student@student\.hau\.edu\.ph\r\n/);
+  assert.match(message, /\r\nSubject: Verify your SEA-IT-SOLVED email\r\n/);
+  assert.match(message, /\r\nMIME-Version: 1\.0\r\n/);
+  assert.match(message, /Content-Type: multipart\/alternative; boundary="[^"]+"\r\n/);
+  const text = decodeMimePart(message, 'text/plain');
+  const html = decodeMimePart(message, 'text/html');
+  assert.match(text, /^SEA-IT-SOLVED\r\n\r\nVerify your email address by opening the link below:/);
+  assert.ok(text.includes(verificationUrl));
+  assert.match(text, /This link expires in 1 hour\./);
+  assert.ok(html.includes(verificationUrl));
+  assert.match(html, />Verify Email<\/a>/);
+  assert.doesNotMatch(html, /<img|<script|@import|tracking/i);
+
+  const logs = entries.join('\n');
+  assert.match(logs, /\[Mail\] Verification send started/);
+  assert.match(logs, /\[Mail\] Provider accepted message: YES/);
+  assert.match(logs, /\[Mail\] Message ID present: YES/);
+  assert.match(logs, /\[Mail\] Recipient domain: student\.hau\.edu\.ph/);
+  assert.equal(logs.includes('student@student.hau.edu.ph'), false);
+  assert.equal(logs.includes(verificationUrl), false);
+  assert.equal(logs.includes('redacted-verification-token'), false);
 });
 
 test('shared provider selection routes password reset and verification through Gmail API', async () => {
@@ -185,7 +229,9 @@ test('Gmail API failures expose only redacted diagnostics', async () => {
   }
   const logs = entries.join('\n');
   for (const secret of secrets) assert.equal(logs.includes(secret), false);
-  assert.match(logs, /Gmail API error status: 401/);
+  assert.match(logs, /Provider accepted message: NO/);
+  assert.match(logs, /Message ID present: NO/);
+  assert.match(logs, /Recipient domain: student\.hau\.edu\.ph/);
 });
 
 test('existing Resend and Gmail SMTP transports remain usable', async () => {

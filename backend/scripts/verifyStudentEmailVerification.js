@@ -85,12 +85,16 @@ async function main() {
     assert.equal(deliveries.length, 2);
     const secondToken = deliveryToken();
     assert.notEqual(secondToken, firstToken);
+    await expectInvalid(() => verification.verifyEmail({ token: firstToken }));
+    const active = await pool.query(
+      'SELECT token_hash,used_at FROM email_verification_tokens WHERE user_id=$1 AND used_at IS NULL',
+      [userId]
+    );
+    assert.equal(active.rows.length, 1);
+    assert.equal(active.rows[0].token_hash, verification.hashVerificationToken(secondToken));
+    assert.notEqual(active.rows[0].token_hash, secondToken);
 
-    emailService.sendStudentVerificationEmail = async () => { throw Object.assign(new Error('provider details must stay internal'), { statusCode: 503 }); };
-    const failedDelivery = await verification.resendVerification({ email });
-    assert.equal(failedDelivery.message, verification.PUBLIC_RESEND_MESSAGE);
-
-    const verified = await verification.verifyEmail({ token: firstToken });
+    const verified = await verification.verifyEmail({ token: secondToken });
     assert.equal(verified.message, verification.VERIFIED_MESSAGE);
     await expectInvalid(() => verification.verifyEmail({ token: firstToken }));
     await expectInvalid(() => verification.verifyEmail({ token: secondToken }));
@@ -103,7 +107,7 @@ async function main() {
     console.log('PASS verification tokens are random, SHA-256 hashed, expiring, and single use');
     console.log('PASS unverified student JWT reuse and enrollment are denied centrally');
     console.log('PASS resend response is enumeration-safe and resend rate limiting is enforced');
-    console.log('PASS failed resend delivery does not invalidate an already delivered link');
+    console.log('PASS resend invalidates previous links and leaves exactly one hashed active token');
     console.log('PASS successful verification activates login and invalidates remaining links');
   } finally {
     if (server) await new Promise(resolve => server.close(resolve));

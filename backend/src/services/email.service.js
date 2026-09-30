@@ -6,8 +6,8 @@ const nodemailer = require('nodemailer');
 const config = require('../config/env');
 
 const RESET_SUBJECT = 'Reset your SEA-IT-SOLVED password';
-const VERIFICATION_SUBJECT = 'Verify your SEA-IT-SOLVED student email';
-const INSTRUCTOR_VERIFICATION_SUBJECT = 'Verify your SEA-IT-SOLVED instructor email';
+const VERIFICATION_SUBJECT = 'Verify your SEA-IT-SOLVED email';
+const INSTRUCTOR_VERIFICATION_SUBJECT = VERIFICATION_SUBJECT;
 const DEVELOPMENT_PROVIDER = 'development';
 const MICROSOFT_GRAPH_PROVIDER = 'microsoft_graph';
 const RESEND_PROVIDER = 'resend';
@@ -154,41 +154,29 @@ function escapeHtml(value) {
 function verificationEmail({ verificationUrl, expiresInMinutes, role = 'STUDENT', accountStatus }) {
   const instructor = role === 'INSTRUCTOR';
   const instructorPending = instructor && accountStatus !== 'ACTIVE';
-  const heading = instructor ? 'Verify your instructor email' : 'Verify your student email';
-  const description = instructorPending
-    ? 'Verify your institutional email address before an administrator can approve your instructor account.'
-    : instructor
-      ? 'Verify your institutional email address to continue using your instructor account.'
-      : 'Verify your institutional email address to activate your student account.';
-  const actionLabel = instructor ? 'Verify Instructor Email' : 'Verify Student Email';
+  const expiry = Number(expiresInMinutes) === 60 ? '1 hour' : `${Number(expiresInMinutes)} minutes`;
   const text = [
-    heading, '',
-    description, '',
-    actionLabel + ':', verificationUrl, '',
-    'If the button does not work, copy and paste this link into your browser:',
+    'SEA-IT-SOLVED', '',
+    'Verify your email address by opening the link below:', '',
     verificationUrl, '',
-    `This link expires in ${expiresInMinutes} minutes.`, '',
-    'If you did not create this account, ignore this email.',
+    `This link expires in ${expiry}.`, '',
+    'If you did not create this account, you can ignore this email.',
+    ...(instructorPending ? ['', 'After verification, your instructor account will remain pending until administrator approval.'] : []),
   ].join('\n');
   const safeVerificationUrl = escapeHtml(verificationUrl);
-  const safeExpiry = escapeHtml(expiresInMinutes);
+  const safeExpiry = escapeHtml(expiry);
   const html = [
-    '<!doctype html><html><body style="margin:0;padding:0;background-color:#f4f7f6;color:#17231f;font-family:Arial,Helvetica,sans-serif;">',
-    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background-color:#f4f7f6;">',
-    '<tr><td align="center" style="padding:32px 16px;">',
-    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:600px;background-color:#ffffff;border:1px solid #d8e2de;">',
-    '<tr><td style="padding:32px;">',
-    '<p style="margin:0 0 16px;color:#0d9488;font-size:14px;font-weight:bold;letter-spacing:0.04em;">SEA-IT-SOLVED</p>',
-    '<h1 style="margin:0 0 16px;color:#17231f;font-size:28px;line-height:1.25;">' + heading + '</h1>',
-    '<p style="margin:0 0 24px;color:#42534d;font-size:16px;line-height:1.6;">' + description + '</p>',
-    '<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 24px;"><tr>',
-    `<td align="center" bgcolor="#0d9488" style="border-radius:6px;"><a href="${safeVerificationUrl}" target="_blank" style="display:inline-block;padding:14px 24px;color:#ffffff;font-size:16px;font-weight:bold;line-height:1;text-decoration:none;">${actionLabel}</a></td>`,
-    '</tr></table>',
+    '<!doctype html><html><body style="margin:0;padding:24px;background:#ffffff;color:#17231f;font-family:Arial,Helvetica,sans-serif;">',
+    '<div style="max-width:600px;margin:0 auto;">',
+    '<h1 style="margin:0 0 20px;font-size:26px;line-height:1.3;color:#17231f;">SEA-IT-SOLVED</h1>',
+    '<p style="margin:0 0 20px;font-size:16px;line-height:1.5;">Verify your email address by clicking the button below.</p>',
+    `<p style="margin:0 0 24px;"><a href="${safeVerificationUrl}" style="display:inline-block;padding:12px 20px;background:#0d9488;color:#ffffff;text-decoration:none;border-radius:4px;font-weight:bold;">Verify Email</a></p>`,
     '<p style="margin:0 0 8px;color:#42534d;font-size:14px;line-height:1.6;">If the button does not work, copy and paste this link into your browser:</p>',
-    `<p style="margin:0 0 24px;font-size:14px;line-height:1.6;word-break:break-all;"><a href="${safeVerificationUrl}" target="_blank" style="color:#0b766d;text-decoration:underline;">${safeVerificationUrl}</a></p>`,
-    `<p style="margin:0 0 12px;color:#42534d;font-size:14px;line-height:1.6;">This link expires in ${safeExpiry} minutes.</p>`,
-    '<p style="margin:0;color:#6b7974;font-size:13px;line-height:1.6;">If you did not create this account, ignore this email.</p>',
-    '</td></tr></table></td></tr></table></body></html>',
+    `<p style="margin:0 0 20px;font-size:14px;line-height:1.5;word-break:break-all;"><a href="${safeVerificationUrl}" style="color:#0b766d;">${safeVerificationUrl}</a></p>`,
+    `<p style="margin:0 0 12px;font-size:14px;line-height:1.5;">This link expires in ${safeExpiry}.</p>`,
+    '<p style="margin:0;font-size:14px;line-height:1.5;color:#52615c;">If you did not create this account, you can ignore this email.</p>',
+    ...(instructorPending ? ['<p style="margin:16px 0 0;font-size:14px;line-height:1.5;color:#52615c;">After verification, your instructor account will remain pending until administrator approval.</p>'] : []),
+    '</div></body></html>',
   ].join('');
   return { text, html };
 }
@@ -394,7 +382,8 @@ function encodeMailHeader(value) {
 }
 
 function encodeMimeBody(value) {
-  return Buffer.from(String(value || ''), 'utf8')
+  const normalized = String(value || '').replace(/\r?\n/g, '\r\n');
+  return Buffer.from(normalized, 'utf8')
     .toString('base64')
     .match(/.{1,76}/g)
     ?.join('\r\n') || '';
@@ -433,6 +422,17 @@ function buildGmailApiRawMessage({ from, to, subject, text, html }) {
   return encodeBase64Url(message);
 }
 
+function recipientDomain(email) {
+  const domain = String(email || '').trim().toLowerCase().split('@').pop();
+  return /^[a-z0-9.-]+$/.test(domain || '') ? domain : 'UNKNOWN';
+}
+
+function logVerificationSendResult(email, accepted, messageIdPresent) {
+  console.info(`[Mail] Provider accepted message: ${accepted ? 'YES' : 'NO'}`);
+  console.info(`[Mail] Message ID present: ${messageIdPresent ? 'YES' : 'NO'}`);
+  console.info(`[Mail] Recipient domain: ${recipientDomain(email)}`);
+}
+
 function createGmailApiClient(settings = gmailApiSettings(), googleApi = google) {
   const validated = validateGmailApiSettings(settings);
   const auth = new googleApi.auth.OAuth2(validated.clientId, validated.clientSecret);
@@ -448,7 +448,7 @@ async function sendWithGmailApi(
   const client = gmailClient || createGmailApiClient(validated, googleApi);
   const { subject, content } = messageContent(payload);
   const raw = buildGmailApiRawMessage({
-    from: validated.from,
+    from: gmailFromHeader(validated),
     to: payload.email,
     subject,
     text: content.text,
@@ -456,7 +456,8 @@ async function sendWithGmailApi(
   });
 
   let response;
-  console.info('[Mail] Gmail API send started');
+  const verification = Boolean(payload.verificationUrl);
+  console.info(verification ? '[Mail] Verification send started' : '[Mail] Gmail API send started');
   try {
     response = await client.users.messages.send({
       userId: 'me',
@@ -469,11 +470,15 @@ async function sendWithGmailApi(
       : ['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND'].includes(rawCode) ? rawCode : 'UNKNOWN';
     const safeName = ['Error', 'GaxiosError'].includes(String(error?.name)) ? String(error.name) : 'Error';
     const status = Number(error?.response?.status ?? error?.statusCode ?? error?.status);
-    console.info('[Mail] Gmail API accepted: NO');
-    console.info('[Mail] Gmail API message ID present: NO');
-    console.error(`[Mail] Gmail API error code: ${safeCode}`);
-    console.error(`[Mail] Gmail API error name: ${safeName}`);
-    console.error(`[Mail] Gmail API error status: ${Number.isInteger(status) ? status : 'UNKNOWN'}`);
+    if (verification) {
+      logVerificationSendResult(payload.email, false, false);
+    } else {
+      console.info('[Mail] Gmail API accepted: NO');
+      console.info('[Mail] Gmail API message ID present: NO');
+      console.error(`[Mail] Gmail API error code: ${safeCode}`);
+      console.error(`[Mail] Gmail API error name: ${safeName}`);
+      console.error(`[Mail] Gmail API error status: ${Number.isInteger(status) ? status : 'UNKNOWN'}`);
+    }
     const safeError = new Error('Gmail API email request failed.');
     safeError.name = 'GmailApiError';
     safeError.statusCode = Number.isInteger(status) ? status : undefined;
@@ -481,8 +486,11 @@ async function sendWithGmailApi(
   }
 
   const accepted = Boolean(response?.data?.id);
-  console.info(`[Mail] Gmail API accepted: ${accepted ? 'YES' : 'NO'}`);
-  console.info(`[Mail] Gmail API message ID present: ${accepted ? 'YES' : 'NO'}`);
+  if (verification) logVerificationSendResult(payload.email, accepted, accepted);
+  else {
+    console.info(`[Mail] Gmail API accepted: ${accepted ? 'YES' : 'NO'}`);
+    console.info(`[Mail] Gmail API message ID present: ${accepted ? 'YES' : 'NO'}`);
+  }
   if (!accepted) throw new Error('Gmail API did not accept the email.');
   return { provider: GMAIL_API_PROVIDER, accepted: true, messageIdPresent: true };
 }

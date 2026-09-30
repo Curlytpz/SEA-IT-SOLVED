@@ -28,9 +28,12 @@ test('verification email uses the shared production provider with verification c
   assert.equal(sent.subject, emailService.VERIFICATION_SUBJECT);
   assert.ok(sent.text.includes(verificationUrl));
   assert.ok(sent.html.includes(verificationUrl));
-  assert.match(sent.html, new RegExp(`<a href="${verificationUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*>Verify Student Email</a>`));
+  assert.match(sent.html, new RegExp(`<a href="${verificationUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*>Verify Email</a>`));
   assert.match(sent.html, /If the button does not work, copy and paste this link into your browser:/);
-  assert.match(sent.html, /This link expires in 60 minutes\./);
+  assert.match(sent.html, /This link expires in 1 hour\./);
+  assert.match(sent.text, /^SEA-IT-SOLVED\n\nVerify your email address by opening the link below:/);
+  assert.match(sent.text, /This link expires in 1 hour\./);
+  assert.match(sent.text, /If you did not create this account, you can ignore this email\./);
   assert.equal(logs.some(line => line.includes('secret-verification-token')), false);
 });
 
@@ -80,9 +83,10 @@ test('instructor verification email uses instructor wording and the same safe li
   }
 
   assert.equal(sent.subject, emailService.INSTRUCTOR_VERIFICATION_SUBJECT);
-  assert.match(sent.text, /Verify your instructor email/);
+  assert.match(sent.text, /Verify your email address by opening the link below:/);
   assert.ok(sent.text.includes(verificationUrl));
   assert.ok(sent.html.includes(verificationUrl));
-  assert.match(sent.html, />Verify Instructor Email<\/a>/);
+  assert.match(sent.html, />Verify Email<\/a>/);
+  assert.match(sent.html, /remain pending until administrator approval/);
   assert.equal(logs.some(line => line.includes('instructor-secret-token')), false);
 });

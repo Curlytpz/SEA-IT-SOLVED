@@ -33,8 +33,30 @@ async function createToken(client, userId) {
   return { rawToken, expiresAt };
 }
 
+async function replaceUnusedTokens(client, userId) {
+  await client.query(
+    'UPDATE email_verification_tokens SET used_at=NOW() WHERE user_id=$1 AND used_at IS NULL',
+    [userId]
+  );
+  return createToken(client, userId);
+}
+
+function buildVerificationUrl(rawToken, {
+  frontendUrl = config.FRONTEND_URL,
+  nodeEnv = config.NODE_ENV,
+} = {}) {
+  const base = String(frontendUrl || '').replace(/\/$/, '');
+  const verificationUrl = new URL(`${base}/verify-email`);
+  if (nodeEnv === 'production'
+      && (verificationUrl.protocol !== 'https:' || /^(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])$/i.test(verificationUrl.hostname))) {
+    throw new Error('Production email verification requires a public HTTPS FRONTEND_URL.');
+  }
+  verificationUrl.searchParams.set('token', rawToken);
+  return verificationUrl.toString();
+}
+
 async function deliverVerification({ email, rawToken, role = 'STUDENT', status }) {
-  const verificationUrl = `${config.FRONTEND_URL.replace(/\/$/, '')}/verify-email?token=${encodeURIComponent(rawToken)}`;
+  const verificationUrl = buildVerificationUrl(rawToken);
   return emailService.sendStudentVerificationEmail({
     email,
     verificationUrl,
@@ -79,7 +101,7 @@ async function resendVerification({ email }) {
       [normalizedEmail]
     );
     if (result.rows[0]) {
-      const token = await createToken(client, result.rows[0].id);
+      const token = await replaceUnusedTokens(client, result.rows[0].id);
       delivery = {
         email: result.rows[0].email,
         rawToken: token.rawToken,
@@ -165,6 +187,8 @@ module.exports = {
   resendVerification,
   verifyEmail,
   hashVerificationToken,
+  buildVerificationUrl,
+  replaceUnusedTokens,
   PUBLIC_RESEND_MESSAGE,
   INVALID_TOKEN_MESSAGE,
   VERIFIED_MESSAGE,

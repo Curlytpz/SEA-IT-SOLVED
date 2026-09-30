@@ -90,7 +90,7 @@ export default function InstructorSectionDetail() {
           </div>
           <h1 className="text-xl font-bold text-foreground">{section.sectionName}</h1>
           <p className="text-sm text-muted-foreground">{section.subjectName}</p>
-          <ClassCode code={section.joinCode} subjectCode={section.subjectCode} sectionName={section.sectionName} />
+          <ClassCode sectionId={section.id} code={section.joinCode} subjectCode={section.subjectCode} sectionName={section.sectionName} />
         </div>
         <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground sm:justify-end">
           <span>👥 {section.enrolledCount} enrolled</span>

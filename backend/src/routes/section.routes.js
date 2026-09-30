@@ -15,6 +15,7 @@ router.patch('/instructor/folders/:folderId', authenticate, authorizeActive('INS
 router.patch('/instructor/folders/:folderId/archive', authenticate, authorizeActive('INSTRUCTOR'), ctrl.setTeachingFolderArchived);
 router.delete('/instructor/folders/:folderId', authenticate, authorizeActive('INSTRUCTOR'), ctrl.deleteTeachingFolder);
 router.patch('/:sectionId/folder', authenticate, authorizeActive('INSTRUCTOR'), ctrl.moveSectionToFolder);
+router.post('/:sectionId/regenerate-code', authenticate, authorizeActive('INSTRUCTOR'), ctrl.regenerateJoinCode);
 router.post('/',                   authenticate, authorizeActive('INSTRUCTOR'), ctrl.createSection);
 
 // /:id routes

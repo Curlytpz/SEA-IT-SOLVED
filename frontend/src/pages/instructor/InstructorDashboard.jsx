@@ -55,7 +55,7 @@ export default function InstructorDashboard() {
                         <p className="text-xs text-muted-foreground mt-0.5">{sec.subjectName}</p>
                         <div className="mt-3 flex items-center gap-1 text-xs text-muted-foreground"><Users size={13}/> {sec.enrolledCount} enrolled</div>
                       </Link>
-                      <ClassCode compact code={sec.joinCode} subjectCode={sec.subjectCode} sectionName={sec.sectionName} />
+                      <ClassCode compact sectionId={sec.id} code={sec.joinCode} subjectCode={sec.subjectCode} sectionName={sec.sectionName} />
                     </article>
                   ))}
                 </div>

@@ -29,3 +29,7 @@ export async function deleteTeachingFolder(folderId) {
 export async function moveSectionToFolder(sectionId, folderId) {
   return data(await api.patch(`/sections/${sectionId}/folder`, { folderId }));
 }
+
+export async function regenerateSectionCode(sectionId) {
+  return data(await api.post(`/sections/${sectionId}/regenerate-code`));
+}

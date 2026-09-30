@@ -77,6 +77,38 @@ async function deleteSection(sectionId, instructorId) {
   await pool.query('DELETE FROM sections WHERE id = $1', [sectionId]);
 }
 
+async function regenerateJoinCode(sectionId, instructorId) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: owned } = await client.query(
+      `SELECT id, join_code
+       FROM sections
+       WHERE id = $1 AND instructor_id = $2
+       FOR UPDATE`,
+      [sectionId, instructorId]
+    );
+    if (!owned.length) throw new AppError('Section not found or access denied.', 404);
+
+    const joinCode = await uniqueJoinCode(client);
+    const { rows } = await client.query(
+      `UPDATE sections
+       SET join_code = $1
+       WHERE id = $2 AND instructor_id = $3
+       RETURNING id, join_code`,
+      [joinCode, sectionId, instructorId]
+    );
+    if (!rows.length) throw new AppError('Section not found or access denied.', 404);
+    await client.query('COMMIT');
+    return { id: rows[0].id, joinCode: rows[0].join_code };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function getInstructorSections(instructorId) {
   const { rows } = await pool.query(
     `SELECT s.*, sub.code AS subject_code, sub.name AS subject_name,
@@ -541,7 +573,7 @@ async function getSubjects() {
 }
 
 module.exports = {
-  createSection, deleteSection, getInstructorSections, getTeachingWorkspace, getSectionById,
+  createSection, deleteSection, regenerateJoinCode, getInstructorSections, getTeachingWorkspace, getSectionById,
   createTeachingFolder, renameTeachingFolder, reorderTeachingFolders,
   setTeachingFolderArchived, deleteTeachingFolder, moveSectionToFolder,
   getJoinRequests, approveEnrollment, rejectEnrollment, getEnrolledStudents,

@@ -12,6 +12,11 @@ const deleteSection = asyncHandler(async (req, res) => {
   res.json({ success: true, data: { message: 'Section deleted successfully.' } });
 });
 
+const regenerateJoinCode = asyncHandler(async (req, res) => {
+  const section = await sectionService.regenerateJoinCode(req.params.sectionId, req.user.id);
+  res.json({ success: true, data: { section } });
+});
+
 const getInstructorSections = asyncHandler(async (req, res) => {
   const sections = await sectionService.getInstructorSections(req.user.id);
   res.json({ success: true, data: { sections } });
@@ -122,7 +127,7 @@ const getSubjects = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
-  createSection, deleteSection, getInstructorSections, getTeachingWorkspace, getSectionById,
+  createSection, deleteSection, regenerateJoinCode, getInstructorSections, getTeachingWorkspace, getSectionById,
   createTeachingFolder, renameTeachingFolder, reorderTeachingFolders,
   setTeachingFolderArchived, deleteTeachingFolder, moveSectionToFolder,
   getJoinRequests, approveEnrollment, rejectEnrollment, getEnrolledStudents,

@@ -181,7 +181,7 @@ function SectionCard({ section, folders, moving, deleting, onMove, onDelete }) {
       <div className="flex items-start justify-between gap-2"><h4 className="font-black text-foreground dark:text-foreground">{section.sectionName}</h4>{section.pendingCount > 0 && <span className="rounded-full bg-warning-subtle px-2 py-0.5 text-[10px] font-bold text-warning-subtle-foreground dark:bg-warning-subtle dark:text-warning-subtle-foreground">{section.pendingCount} pending</span>}</div>
       <div className="mt-3 flex items-center gap-1 text-xs text-muted-foreground"><Users size={13}/> {section.enrolledCount} enrolled</div>
     </Link>
-    <ClassCode compact code={section.joinCode} subjectCode={section.subjectCode} sectionName={section.sectionName} />
+    <ClassCode compact sectionId={section.id} code={section.joinCode} subjectCode={section.subjectCode} sectionName={section.sectionName} />
     <div className="grid gap-2 border-t border-border/70 p-3 dark:border-border">
       <label className="text-[10px] font-black uppercase tracking-wider text-muted-foreground" htmlFor={`folder-${section.id}`}>Folder</label>
       <div className="flex gap-2"><Select id={`folder-${section.id}`} value={section.teachingFolderId || ''} disabled={moving} onChange={event => onMove(event.target.value || null)} className="min-w-0 flex-1 text-xs"><option value="">Unorganized</option>{folders.map(folder => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</Select><Btn size="sm" variant="ghost" loading={deleting} aria-label={`Delete ${section.sectionName}`} className="shrink-0 text-destructive hover:text-destructive-subtle-foreground" onClick={onDelete}><Trash size={14}/></Btn></div>

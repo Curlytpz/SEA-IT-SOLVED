@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Copy } from 'lucide-react';
+import { Copy, RefreshCw } from 'lucide-react';
 import { BrandLogo } from '../brand/BrandLogo';
-import { Btn } from '../ui';
+import { Btn, ConfirmModal } from '../ui';
 import WorkspaceToast from '../reasoning/WorkspaceToast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
+import { regenerateSectionCode } from '../../services/teachingWorkspaceApi';
 
 async function writeClipboard(value) {
   if (navigator.clipboard?.writeText) {
@@ -23,14 +24,22 @@ async function writeClipboard(value) {
   if (!copied) throw new Error('Clipboard copy failed.');
 }
 
-export default function ClassCode({ code, subjectCode, sectionName, compact = false }) {
+export default function ClassCode({ sectionId, code, subjectCode, sectionName, compact = false }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [currentCode, setCurrentCode] = useState(() => String(code || '').trim().toUpperCase());
+  const [confirmRegeneration, setConfirmRegeneration] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [regenerationNotice, setRegenerationNotice] = useState(null);
   const timerRef = useRef(null);
-  const normalizedCode = String(code || '').trim().toUpperCase();
+  const generatingRef = useRef(false);
+  const normalizedCode = currentCode;
   const sectionLabel = [subjectCode, sectionName].filter(Boolean).join(' \u00B7 ');
 
   useEffect(() => () => clearTimeout(timerRef.current), []);
+  useEffect(() => {
+    setCurrentCode(String(code || '').trim().toUpperCase());
+  }, [code]);
 
   async function copyCode() {
     if (!normalizedCode) return;
@@ -41,6 +50,28 @@ export default function ClassCode({ code, subjectCode, sectionName, compact = fa
       timerRef.current = setTimeout(() => setCopied(false), 2400);
     } catch {
       setCopied(false);
+    }
+  }
+
+  async function createNewCode() {
+    if (!sectionId || generatingRef.current) return;
+    generatingRef.current = true;
+    setGenerating(true);
+    setRegenerationNotice(null);
+    try {
+      const result = await regenerateSectionCode(sectionId);
+      const nextCode = String(result?.section?.joinCode || '').trim().toUpperCase();
+      if (!nextCode) throw new Error('The server did not return a section code.');
+      setCurrentCode(nextCode);
+      setCopied(false);
+      setConfirmRegeneration(false);
+      setRegenerationNotice({ type: 'success', text: 'New section code created.' });
+    } catch {
+      setConfirmRegeneration(false);
+      setRegenerationNotice({ type: 'error', text: 'Unable to create a new section code. Please try again.' });
+    } finally {
+      generatingRef.current = false;
+      setGenerating(false);
     }
   }
 
@@ -81,12 +112,26 @@ export default function ClassCode({ code, subjectCode, sectionName, compact = fa
             <code className="block break-all font-mono text-[clamp(1.8rem,8vw,2.75rem)] font-bold leading-none tracking-[0.12em] text-primary-subtle-foreground">{normalizedCode}</code>
           </div>
           <p className="text-center text-sm leading-6 text-muted-foreground dark:text-muted-foreground">Students can enter this code from Join a Section.</p>
+          {regenerationNotice && <p role="status" className={`text-center text-sm font-semibold ${regenerationNotice.type === 'success' ? 'text-success' : 'text-destructive'}`}>{regenerationNotice.text}</p>}
           <DialogFooter>
-            <Btn type="button" variant="ghost" onClick={() => setOpen(false)}>Close</Btn>
-            <Btn type="button" onClick={copyCode}><Copy size={16} aria-hidden="true" /> Copy Code</Btn>
+            <Btn type="button" variant="ghost" disabled={generating} onClick={() => setOpen(false)}>Close</Btn>
+            {sectionId && <Btn type="button" variant="outline" disabled={generating} aria-busy={generating || undefined} onClick={() => setConfirmRegeneration(true)}>
+              <RefreshCw size={16} aria-hidden="true" /> {generating ? 'Generating...' : 'Create New Code'}
+            </Btn>}
+            <Btn type="button" disabled={generating} onClick={copyCode}><Copy size={16} aria-hidden="true" /> Copy Code</Btn>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {confirmRegeneration && <ConfirmModal
+        title="Generate a new section code?"
+        body="Students will no longer be able to use the previous code to join this section."
+        confirmLabel="Generate New Code"
+        confirmVariant="warning"
+        loading={generating}
+        loadingLabel="Generating..."
+        onCancel={() => { if (!generating) setConfirmRegeneration(false); }}
+        onConfirm={createNewCode}
+      />}
     </>
   );
 }

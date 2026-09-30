@@ -68,8 +68,8 @@ async function main() {
     assert.equal(studentRegistration.body.data.user.role, 'STUDENT');
     assert.equal(studentRegistration.body.data.user.status, 'PENDING');
     assert.equal(studentRegistration.body.data.token, undefined);
-    const verificationToken = new URL(verificationDeliveries.at(-1).verificationUrl).searchParams.get('token');
-    const verification = await request(base, 'POST', '/auth/verify-email', { body: { token: verificationToken } });
+    const verificationCode = verificationDeliveries.at(-1).verificationCode;
+    const verification = await request(base, 'POST', '/auth/verify-email', { body: { email: studentEmail, code: verificationCode } });
     assert.equal(verification.status, 200);
 
     const register = email => request(base, 'POST', '/auth/register/instructor', {
@@ -85,7 +85,7 @@ async function main() {
     assert.equal(pendingRegistration.body.data.token, undefined);
     const pendingDelivery = verificationDeliveries.find(item => item.email === pendingEmail);
     assert.equal(pendingDelivery.role, 'INSTRUCTOR');
-    const instructorVerificationToken = new URL(pendingDelivery.verificationUrl).searchParams.get('token');
+    let instructorVerificationCode = pendingDelivery.verificationCode;
     const pendingRow = await pool.query('SELECT status,email_verified_at FROM users WHERE id=$1', [pendingId]);
     assert.equal(pendingRow.rows[0].status, 'PENDING');
     assert.equal(pendingRow.rows[0].email_verified_at, null);
@@ -105,7 +105,7 @@ async function main() {
     assert.equal(developmentRegistration.body.data.user.status, 'PENDING');
     assert.equal(developmentRegistration.body.data.verificationRequired, true);
     const developmentDelivery = verificationDeliveries.find(item => item.email === developmentInstructorTestEmail);
-    const developmentVerificationToken = new URL(developmentDelivery.verificationUrl).searchParams.get('token');
+    const developmentVerificationCode = developmentDelivery.verificationCode;
 
     const login = (email, candidatePassword, expectedRole) =>
       request(base, 'POST', '/auth/login', { body: { email, password: candidatePassword, expectedRole } });
@@ -154,14 +154,15 @@ async function main() {
     assert.equal(resend.message, emailVerification.PUBLIC_RESEND_MESSAGE);
     assert.equal(verificationDeliveries.length, deliveriesBeforeResend + 1);
     assert.equal(verificationDeliveries.at(-1).role, 'INSTRUCTOR');
+    instructorVerificationCode = verificationDeliveries.at(-1).verificationCode;
 
     const instructorVerification = await request(base, 'POST', '/auth/verify-email', {
-      body: { token: instructorVerificationToken },
+      body: { email: pendingEmail, code: instructorVerificationCode },
     });
     assert.equal(instructorVerification.status, 200);
     assert.equal(instructorVerification.body.data.role, 'INSTRUCTOR');
     const reusedInstructorToken = await request(base, 'POST', '/auth/verify-email', {
-      body: { token: instructorVerificationToken },
+      body: { email: pendingEmail, code: instructorVerificationCode },
     });
     assert.equal(reusedInstructorToken.status, 400);
     const verifiedPendingRow = await pool.query('SELECT status,email_verified_at FROM users WHERE id=$1', [pendingId]);
@@ -175,7 +176,7 @@ async function main() {
     assert.equal(verifiedPendingLogin.body.code, 'INSTRUCTOR_PENDING');
 
     const developmentVerification = await request(base, 'POST', '/auth/verify-email', {
-      body: { token: developmentVerificationToken },
+      body: { email: developmentInstructorTestEmail, code: developmentVerificationCode },
     });
     assert.equal(developmentVerification.status, 200);
     const verifiedDevelopmentRow = await pool.query('SELECT status,email_verified_at FROM users WHERE id=$1', [developmentInstructorId]);

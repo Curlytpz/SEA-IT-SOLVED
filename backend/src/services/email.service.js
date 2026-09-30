@@ -151,29 +151,37 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-function verificationEmail({ verificationUrl, expiresInMinutes, role = 'STUDENT', accountStatus }) {
+function verificationEmail({ verificationUrl, verificationCode, expiresInMinutes, role = 'STUDENT', accountStatus }) {
+  if (!/^\d{8}$/.test(String(verificationCode || ''))) {
+    throw new Error('A valid email verification code is required.');
+  }
   const instructor = role === 'INSTRUCTOR';
   const instructorPending = instructor && accountStatus !== 'ACTIVE';
   const expiry = Number(expiresInMinutes) === 60 ? '1 hour' : `${Number(expiresInMinutes)} minutes`;
   const text = [
     'SEA-IT-SOLVED', '',
-    'Verify your email address by opening the link below:', '',
+    'Your email verification code is:', '',
+    verificationCode, '',
+    'Open:',
     verificationUrl, '',
-    `This link expires in ${expiry}.`, '',
+    'Enter the code to verify your account.', '',
+    `This code expires in ${expiry}.`, '',
     'If you did not create this account, you can ignore this email.',
     ...(instructorPending ? ['', 'After verification, your instructor account will remain pending until administrator approval.'] : []),
   ].join('\n');
   const safeVerificationUrl = escapeHtml(verificationUrl);
+  const safeVerificationCode = escapeHtml(verificationCode);
   const safeExpiry = escapeHtml(expiry);
   const html = [
     '<!doctype html><html><body style="margin:0;padding:24px;background:#ffffff;color:#17231f;font-family:Arial,Helvetica,sans-serif;">',
     '<div style="max-width:600px;margin:0 auto;">',
     '<h1 style="margin:0 0 20px;font-size:26px;line-height:1.3;color:#17231f;">SEA-IT-SOLVED</h1>',
-    '<p style="margin:0 0 20px;font-size:16px;line-height:1.5;">Verify your email address by clicking the button below.</p>',
-    `<p style="margin:0 0 24px;"><a href="${safeVerificationUrl}" style="display:inline-block;padding:12px 20px;background:#0d9488;color:#ffffff;text-decoration:none;border-radius:4px;font-weight:bold;">Verify Email</a></p>`,
-    '<p style="margin:0 0 8px;color:#42534d;font-size:14px;line-height:1.6;">If the button does not work, copy and paste this link into your browser:</p>',
+    '<p style="margin:0 0 12px;font-size:16px;line-height:1.5;">Your email verification code is:</p>',
+    `<p style="margin:0 0 24px;font-size:30px;line-height:1.2;font-weight:bold;letter-spacing:6px;color:#0d766e;">${safeVerificationCode}</p>`,
+    `<p style="margin:0 0 20px;"><a href="${safeVerificationUrl}" style="display:inline-block;padding:12px 20px;background:#0d9488;color:#ffffff;text-decoration:none;border-radius:4px;font-weight:bold;">Open Verification Page</a></p>`,
+    '<p style="margin:0 0 8px;color:#42534d;font-size:14px;line-height:1.6;">Open this page and enter the code to verify your account:</p>',
     `<p style="margin:0 0 20px;font-size:14px;line-height:1.5;word-break:break-all;"><a href="${safeVerificationUrl}" style="color:#0b766d;">${safeVerificationUrl}</a></p>`,
-    `<p style="margin:0 0 12px;font-size:14px;line-height:1.5;">This link expires in ${safeExpiry}.</p>`,
+    `<p style="margin:0 0 12px;font-size:14px;line-height:1.5;">This code expires in ${safeExpiry}.</p>`,
     '<p style="margin:0;font-size:14px;line-height:1.5;color:#52615c;">If you did not create this account, you can ignore this email.</p>',
     ...(instructorPending ? ['<p style="margin:16px 0 0;font-size:14px;line-height:1.5;color:#52615c;">After verification, your instructor account will remain pending until administrator approval.</p>'] : []),
     '</div></body></html>',
@@ -532,13 +540,13 @@ async function sendPasswordResetEmail({ email, resetUrl, expiresInMinutes }, opt
   }
 }
 
-async function sendStudentVerificationEmail({ email, verificationUrl, expiresInMinutes, role = 'STUDENT', accountStatus }, options = {}) {
+async function sendStudentVerificationEmail({ email, verificationUrl, verificationCode, expiresInMinutes, role = 'STUDENT', accountStatus }, options = {}) {
   const provider = validateEmailConfiguration();
   if (provider === DEVELOPMENT_PROVIDER) {
-    // Verification links establish account ownership and must never be written to logs.
+    // Verification codes establish account ownership and must never be written to logs.
     throw new Error('Email verification requires a configured email provider.');
   }
-  const payload = { email, verificationUrl, expiresInMinutes, role, accountStatus };
+  const payload = { email, verificationUrl, verificationCode, expiresInMinutes, role, accountStatus };
   if (provider === MICROSOFT_GRAPH_PROVIDER) return sendWithMicrosoftGraph(payload);
   if (provider === RESEND_PROVIDER) return sendWithResend(payload);
   if (provider === GMAIL_SMTP_PROVIDER) return sendWithGmailSmtp(payload);

@@ -8,6 +8,7 @@ import {
 } from './authVerificationResend.js';
 import { readCapsLockState } from './capsLock.js';
 import { togglePasswordVisibility } from './passwordVisibility.js';
+import { normalizeVerificationCode } from './emailVerification.js';
 
 assert.equal(shouldShowVerificationResend('student', 'STUDENT_EMAIL_UNVERIFIED'), true);
 assert.equal(shouldShowVerificationResend('instructor', 'INSTRUCTOR_EMAIL_UNVERIFIED'), true);
@@ -25,8 +26,9 @@ assert.deepEqual(postedRequest, {
 });
 assert.equal(verificationResendActionLabel({ sending: true, cooldownSeconds: 0 }), 'Sending...');
 assert.equal(verificationResendActionLabel({ sending: false, cooldownSeconds: 30 }), 'Resend again in 30s');
-assert.equal(verificationResendActionLabel({ sending: false, cooldownSeconds: 0 }), 'Resend verification email');
-assert.equal(VERIFICATION_RESEND_SUCCESS_MESSAGE, 'Verification email sent. Check your HAU Outlook inbox and Junk folder.');
+assert.equal(verificationResendActionLabel({ sending: false, cooldownSeconds: 0 }), 'Resend verification code');
+assert.equal(VERIFICATION_RESEND_SUCCESS_MESSAGE, 'Verification code sent. Check your HAU Outlook inbox and Junk folder.');
+assert.equal(normalizeVerificationCode('12 34-ab56-789'), '12345678');
 
 assert.equal(readCapsLockState({ getModifierState: key => key === 'CapsLock' }), true);
 assert.equal(readCapsLockState({ getModifierState: () => false }), false);
@@ -66,10 +68,16 @@ assert.equal((passwordInputSource.match(/<button\b/g) || []).length, 1, 'Caps Lo
 
 const loginSource = fs.readFileSync(new URL('../pages/Login.jsx', import.meta.url), 'utf8');
 assert.match(loginSource, /shouldShowVerificationResend\(selectedRole, loginErrorCode\)/);
+assert.match(loginSource, /to="\/verify-email"/);
+assert.match(loginSource, /state=\{\{ email: form\.email\.trim\(\)\.toLowerCase\(\) \}\}/);
 const requestsSource = fs.readFileSync(new URL('../pages/admin/InstructorRequests.jsx', import.meta.url), 'utf8');
 assert.match(requestsSource, /disabled=\{!r\.emailVerifiedAt\}/);
 assert.match(requestsSource, /Instructor must verify their institutional email before approval\./);
 const verifyEmailSource = fs.readFileSync(new URL('../pages/VerifyEmail.jsx', import.meta.url), 'utf8');
 assert.match(verifyEmailSource, /response\.data\?\.data\?\.role/);
+assert.match(verifyEmailSource, /api\.post\('\/auth\/verify-email', \{ email, code \}\)/);
+assert.match(verifyEmailSource, /pattern="\[0-9\]\{8\}"/);
+assert.match(verifyEmailSource, /autoComplete="one-time-code"/);
+assert.doesNotMatch(verifyEmailSource, /useSearchParams|localStorage|[?&]token=/);
 
 console.log('Authentication UX tests passed.');

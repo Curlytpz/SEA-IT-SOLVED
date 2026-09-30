@@ -3,9 +3,10 @@ const assert = require('node:assert/strict');
 const config = require('../config/env');
 const emailService = require('./email.service');
 
-test('verification email uses the shared production provider with verification content', async () => {
+test('verification email contains a code and token-free verification page in both alternatives', async () => {
   let sent;
-  const verificationUrl = 'https://app.example.edu/verify-email?token=secret-verification-token';
+  const verificationUrl = 'https://app.example.edu/verify-email';
+  const verificationCode = '12345678';
   const originalInfo = console.info;
   const originalError = console.error;
   const logs = [];
@@ -15,6 +16,7 @@ test('verification email uses the shared production provider with verification c
     await emailService.sendWithResend({
       email: 'student@student.hau.edu.ph',
       verificationUrl,
+      verificationCode,
       expiresInMinutes: 60,
     }, {
       settings: { apiKey: 'test-key', from: 'SEA-IT-SOLVED <no-reply@example.edu>' },
@@ -28,16 +30,19 @@ test('verification email uses the shared production provider with verification c
   assert.equal(sent.subject, emailService.VERIFICATION_SUBJECT);
   assert.ok(sent.text.includes(verificationUrl));
   assert.ok(sent.html.includes(verificationUrl));
-  assert.match(sent.html, new RegExp(`<a href="${verificationUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*>Verify Email</a>`));
-  assert.match(sent.html, /If the button does not work, copy and paste this link into your browser:/);
-  assert.match(sent.html, /This link expires in 1 hour\./);
-  assert.match(sent.text, /^SEA-IT-SOLVED\n\nVerify your email address by opening the link below:/);
-  assert.match(sent.text, /This link expires in 1 hour\./);
+  assert.ok(sent.text.includes(verificationCode));
+  assert.ok(sent.html.includes(verificationCode));
+  assert.doesNotMatch(sent.text + sent.html, /\?token=/);
+  assert.match(sent.html, />Open Verification Page<\/a>/);
+  assert.match(sent.html, /This code expires in 1 hour\./);
+  assert.match(sent.text, /^SEA-IT-SOLVED\n\nYour email verification code is:/);
+  assert.match(sent.text, /This code expires in 1 hour\./);
   assert.match(sent.text, /If you did not create this account, you can ignore this email\./);
-  assert.equal(logs.some(line => line.includes('secret-verification-token')), false);
+  assert.equal(logs.some(line => line.includes(verificationCode)), false);
+  assert.equal(logs.some(line => line.includes(verificationUrl)), false);
 });
 
-test('development verification delivery refuses the link without logging its token', async () => {
+test('development verification delivery refuses a missing provider without logging its code', async () => {
   const originalEnvironment = config.NODE_ENV;
   const originalProvider = config.MAIL_PROVIDER;
   const originalInfo = console.info;
@@ -50,7 +55,8 @@ test('development verification delivery refuses the link without logging its tok
     console.error = value => logs.push(String(value));
     await assert.rejects(() => emailService.sendStudentVerificationEmail({
       email: 'student@student.hau.edu.ph',
-      verificationUrl: 'http://localhost:5173/verify-email?token=must-not-be-logged',
+      verificationUrl: 'http://localhost:5173/verify-email',
+      verificationCode: '87654321',
       expiresInMinutes: 60,
     }), /configured email provider/);
   } finally {
@@ -59,12 +65,12 @@ test('development verification delivery refuses the link without logging its tok
     console.info = originalInfo;
     console.error = originalError;
   }
-  assert.equal(logs.some(line => line.includes('must-not-be-logged')), false);
+  assert.equal(logs.some(line => line.includes('87654321')), false);
 });
 
-test('instructor verification email uses instructor wording and the same safe link template', async () => {
+test('instructor verification uses the same code template and preserves approval wording', async () => {
   let sent;
-  const verificationUrl = 'https://app.example.edu/verify-email?token=instructor-secret-token';
+  const verificationUrl = 'https://app.example.edu/verify-email';
   const originalInfo = console.info;
   const logs = [];
   try {
@@ -72,6 +78,7 @@ test('instructor verification email uses instructor wording and the same safe li
     await emailService.sendWithResend({
       email: 'professor@hau.edu.ph',
       verificationUrl,
+      verificationCode: '34567890',
       expiresInMinutes: 60,
       role: 'INSTRUCTOR',
     }, {
@@ -83,10 +90,10 @@ test('instructor verification email uses instructor wording and the same safe li
   }
 
   assert.equal(sent.subject, emailService.INSTRUCTOR_VERIFICATION_SUBJECT);
-  assert.match(sent.text, /Verify your email address by opening the link below:/);
+  assert.match(sent.text, /Your email verification code is:/);
   assert.ok(sent.text.includes(verificationUrl));
   assert.ok(sent.html.includes(verificationUrl));
-  assert.match(sent.html, />Verify Email<\/a>/);
+  assert.match(sent.html, />Open Verification Page<\/a>/);
   assert.match(sent.html, /remain pending until administrator approval/);
-  assert.equal(logs.some(line => line.includes('instructor-secret-token')), false);
+  assert.equal(logs.some(line => line.includes('34567890')), false);
 });

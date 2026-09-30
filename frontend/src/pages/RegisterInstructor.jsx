@@ -1,16 +1,15 @@
 import { useState } from 'react';
-import { CheckCircle2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { Btn, Alert, Input, FormField } from '../components/ui';
 import AuthLayout from '../components/public/AuthLayout';
 import AuthPasswordInput from '../components/public/AuthPasswordInput';
-import { authFormClassName, authNameGridClassName, authSignInClassName, authSuccessClassName } from '../components/public/authStyles';
+import { authFormClassName, authNameGridClassName, authSignInClassName } from '../components/public/authStyles';
 
 export default function RegisterInstructor() {
+  const navigate = useNavigate();
   const [form, setForm] = useState({ firstName:'', lastName:'', email:'', password:'', confirm:'' });
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
@@ -21,14 +20,13 @@ export default function RegisterInstructor() {
     setLoading(true);
     try {
       await api.post('/auth/register/instructor', { firstName: form.firstName, lastName: form.lastName, email: form.email, password: form.password });
-      setSuccess(true);
+      navigate('/verify-email', {
+        replace: true,
+        state: { email: form.email.trim().toLowerCase() },
+      });
     } catch (err) { setError(err.response?.data?.error || 'Registration failed.'); }
     finally { setLoading(false); }
   }
-
-  if (success) return <AuthLayout backTo="/login?role=instructor" backLabel="Back to Sign In" title="Verify your instructor email" subtitle="Check your institutional inbox before administrator approval." panelTitle="Keep academic judgment at the center of AI-assisted learning." panelBody="Review recognized lesson context, edit mathematical content, and approve what students receive.">
-    <div className={authSuccessClassName}><CheckCircle2 size={30}/><p>We sent a verification link to your institutional email. Verify your email first; your account will remain pending until an administrator approves it.</p><Link to="/login?role=instructor"><Btn className="w-full">Back to Sign In</Btn></Link></div>
-  </AuthLayout>;
 
   return <AuthLayout backTo="/login?role=instructor" backLabel="Back to Sign In" title="Create Instructor Account" subtitle="Create your account. Access becomes available after administrator approval." panelTitle="A structured workspace for every mathematics lesson." panelBody="Capture lesson evidence, verify the academic context, and prepare approved materials and quizzes for your sections.">
     <Alert type="info">Instructor accounts require administrator approval before access is granted.</Alert>

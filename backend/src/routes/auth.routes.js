@@ -1,4 +1,5 @@
 const router       = require('express').Router();
+const crypto       = require('crypto');
 const authCtrl     = require('../controllers/auth.controller');
 const authenticate = require('../middleware/authenticate');
 const { createRateLimiter } = require('../middleware/rateLimit');
@@ -23,10 +24,20 @@ const resetPasswordLimiter = createRateLimiter({
   message: 'Too many password reset attempts. Try again later.',
 });
 const verificationLimiter = createRateLimiter({
-  name: 'student-email-verification',
+  name: 'email-verification-ip',
   windowMs: 15 * 60 * 1000,
   max: 10,
   message: 'Too many email verification attempts. Try again later.',
+});
+const verificationAccountLimiter = createRateLimiter({
+  name: 'email-verification-account',
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: 'Too many email verification attempts. Try again later.',
+  keyGenerator(req) {
+    const normalizedEmail = String(req.body?.email || '').trim().toLowerCase().slice(0, 255);
+    return crypto.createHash('sha256').update(normalizedEmail || 'missing-email').digest('hex');
+  },
 });
 const verificationResendLimiter = createRateLimiter({
   name: 'student-email-verification-resend',
@@ -42,7 +53,7 @@ router.post('/login',               authAttemptLimiter, authCtrl.login);
 router.post('/forgot-password', forgotPasswordLimiter, authCtrl.forgotPassword);
 router.post('/reset-password/validate', resetPasswordLimiter, authCtrl.validateResetToken);
 router.post('/reset-password', resetPasswordLimiter, authCtrl.resetPassword);
-router.post('/verify-email', verificationLimiter, authCtrl.verifyEmail);
+router.post('/verify-email', verificationLimiter, verificationAccountLimiter, authCtrl.verifyEmail);
 router.post('/verify-email/resend', verificationResendLimiter, authCtrl.resendVerification);
 
 // Protected — requires a valid JWT and current server-side account access.

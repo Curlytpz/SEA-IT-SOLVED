@@ -105,13 +105,14 @@ test('Gmail API verification message has deliverability-friendly headers and bot
     request = value;
     return { data: { id: 'verification-message-id' } };
   } } } };
-  const verificationUrl = 'https://app.example.edu/verify-email?token=redacted-verification-token';
+  const verificationUrl = 'https://app.example.edu/verify-email';
+  const verificationCode = '12345678';
   const entries = [];
   const originalInfo = console.info;
   console.info = (...values) => entries.push(values.join(' '));
   try {
     await emailService.sendWithGmailApi({
-      email: 'student@student.hau.edu.ph', verificationUrl, expiresInMinutes: 60,
+      email: 'student@student.hau.edu.ph', verificationUrl, verificationCode, expiresInMinutes: 60,
     }, { settings: { ...settings, from: 'Different Name <different@gmail.com>' }, gmailClient });
   } finally {
     console.info = originalInfo;
@@ -125,11 +126,14 @@ test('Gmail API verification message has deliverability-friendly headers and bot
   assert.match(message, /Content-Type: multipart\/alternative; boundary="[^"]+"\r\n/);
   const text = decodeMimePart(message, 'text/plain');
   const html = decodeMimePart(message, 'text/html');
-  assert.match(text, /^SEA-IT-SOLVED\r\n\r\nVerify your email address by opening the link below:/);
+  assert.match(text, /^SEA-IT-SOLVED\r\n\r\nYour email verification code is:/);
   assert.ok(text.includes(verificationUrl));
-  assert.match(text, /This link expires in 1 hour\./);
+  assert.ok(text.includes(verificationCode));
+  assert.match(text, /This code expires in 1 hour\./);
   assert.ok(html.includes(verificationUrl));
-  assert.match(html, />Verify Email<\/a>/);
+  assert.ok(html.includes(verificationCode));
+  assert.match(html, />Open Verification Page<\/a>/);
+  assert.doesNotMatch(text + html, /\?token=/);
   assert.doesNotMatch(html, /<img|<script|@import|tracking/i);
 
   const logs = entries.join('\n');
@@ -139,7 +143,7 @@ test('Gmail API verification message has deliverability-friendly headers and bot
   assert.match(logs, /\[Mail\] Recipient domain: student\.hau\.edu\.ph/);
   assert.equal(logs.includes('student@student.hau.edu.ph'), false);
   assert.equal(logs.includes(verificationUrl), false);
-  assert.equal(logs.includes('redacted-verification-token'), false);
+  assert.equal(logs.includes(verificationCode), false);
 });
 
 test('shared provider selection routes password reset and verification through Gmail API', async () => {
@@ -180,7 +184,8 @@ test('shared provider selection routes password reset and verification through G
     }, { gmailClient });
     await emailService.sendStudentVerificationEmail({
       email: 'professor@hau.edu.ph',
-      verificationUrl: 'https://app.example.edu/verify-email?token=redacted',
+      verificationUrl: 'https://app.example.edu/verify-email',
+      verificationCode: '23456789',
       expiresInMinutes: 60,
       role: 'INSTRUCTOR',
       accountStatus: 'PENDING',
@@ -197,7 +202,7 @@ test('Gmail API failures expose only redacted diagnostics', async () => {
   const secrets = [
     settings.clientSecret,
     settings.refreshToken,
-    'verification-token-secret',
+    '34567890',
     '<p>private email contents</p>',
   ];
   const providerError = new Error('failure ' + secrets.join(' '));
@@ -216,7 +221,8 @@ test('Gmail API failures expose only redacted diagnostics', async () => {
     await assert.rejects(
       () => emailService.sendWithGmailApi({
         email: 'student@student.hau.edu.ph',
-        verificationUrl: 'https://app.example.edu/verify-email?token=verification-token-secret',
+        verificationUrl: 'https://app.example.edu/verify-email',
+        verificationCode: '34567890',
         expiresInMinutes: 60,
       }, { settings, gmailClient }),
       error => error.message === 'Gmail API email request failed.'

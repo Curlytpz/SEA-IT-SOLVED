@@ -4,8 +4,8 @@ const config = require('../config/env');
 const emailService = require('./email.service');
 const AppError = require('../utils/AppError');
 
-const PUBLIC_RESEND_MESSAGE = 'If an unverified account exists for that email, a verification link has been sent.';
-const INVALID_TOKEN_MESSAGE = 'This email verification link is invalid or has expired.';
+const PUBLIC_RESEND_MESSAGE = 'If an unverified account exists for that email, a verification code has been sent.';
+const INVALID_TOKEN_MESSAGE = 'The verification code is invalid or has expired.';
 const VERIFIED_MESSAGE = 'Your student email has been verified. You can now sign in.';
 const INSTRUCTOR_VERIFIED_MESSAGE = 'Your instructor email has been verified. Your account is now awaiting admin approval.';
 const ACTIVE_INSTRUCTOR_VERIFIED_MESSAGE = 'Your instructor email has been verified. You can now sign in.';
@@ -18,19 +18,34 @@ function hashVerificationToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
-function validTokenShape(token) {
-  return typeof token === 'string' && /^[a-f0-9]{64}$/i.test(token);
+function normalizeVerificationCode(value) {
+  return String(value || '').trim().replace(/\s+/g, '');
+}
+
+function validCodeShape(code) {
+  return /^\d{8}$/.test(code);
+}
+
+function generateVerificationCode() {
+  return crypto.randomInt(0, 100000000).toString().padStart(8, '0');
 }
 
 async function createToken(client, userId) {
-  const rawToken = crypto.randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + config.EMAIL_VERIFICATION_TTL_MINUTES * 60 * 1000);
-  await client.query(
-    `INSERT INTO email_verification_tokens(user_id, token_hash, expires_at)
-     VALUES($1, $2, $3)`,
-    [userId, hashVerificationToken(rawToken), expiresAt]
-  );
-  return { rawToken, expiresAt };
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const rawCode = generateVerificationCode();
+    const inserted = await client.query(
+      `INSERT INTO email_verification_tokens(user_id, token_hash, expires_at)
+       VALUES($1, $2, $3)
+       ON CONFLICT (token_hash) DO NOTHING
+       RETURNING token_hash`,
+      [userId, hashVerificationToken(rawCode), expiresAt]
+    );
+    if (inserted.rows[0]) {
+      return { rawCode, expiresAt };
+    }
+  }
+  throw new Error('Unable to issue a unique email verification code.');
 }
 
 async function replaceUnusedTokens(client, userId) {
@@ -41,7 +56,7 @@ async function replaceUnusedTokens(client, userId) {
   return createToken(client, userId);
 }
 
-function buildVerificationUrl(rawToken, {
+function buildVerificationUrl({
   frontendUrl = config.FRONTEND_URL,
   nodeEnv = config.NODE_ENV,
 } = {}) {
@@ -51,15 +66,15 @@ function buildVerificationUrl(rawToken, {
       && (verificationUrl.protocol !== 'https:' || /^(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])$/i.test(verificationUrl.hostname))) {
     throw new Error('Production email verification requires a public HTTPS FRONTEND_URL.');
   }
-  verificationUrl.searchParams.set('token', rawToken);
   return verificationUrl.toString();
 }
 
-async function deliverVerification({ email, rawToken, role = 'STUDENT', status }) {
-  const verificationUrl = buildVerificationUrl(rawToken);
+async function deliverVerification({ email, rawCode, role = 'STUDENT', status }) {
+  const verificationUrl = buildVerificationUrl();
   return emailService.sendStudentVerificationEmail({
     email,
     verificationUrl,
+    verificationCode: rawCode,
     expiresInMinutes: config.EMAIL_VERIFICATION_TTL_MINUTES,
     role,
     accountStatus: status,
@@ -74,12 +89,12 @@ function logSafeDeliveryFailure(error) {
 
 async function issueForNewStudent(client, user) {
   const token = await createToken(client, user.id);
-  return { email: user.email, rawToken: token.rawToken, role: 'STUDENT', status: user.status };
+  return { email: user.email, rawCode: token.rawCode, role: 'STUDENT', status: user.status };
 }
 
 async function issueForNewInstructor(client, user) {
   const token = await createToken(client, user.id);
-  return { email: user.email, rawToken: token.rawToken, role: 'INSTRUCTOR', status: user.status };
+  return { email: user.email, rawCode: token.rawCode, role: 'INSTRUCTOR', status: user.status };
 }
 
 async function resendVerification({ email }) {
@@ -104,7 +119,7 @@ async function resendVerification({ email }) {
       const token = await replaceUnusedTokens(client, result.rows[0].id);
       delivery = {
         email: result.rows[0].email,
-        rawToken: token.rawToken,
+        rawCode: token.rawCode,
         role: result.rows[0].role,
         status: result.rows[0].status,
       };
@@ -122,8 +137,12 @@ async function resendVerification({ email }) {
   return { message: PUBLIC_RESEND_MESSAGE };
 }
 
-async function verifyEmail({ token }) {
-  if (!validTokenShape(token)) throw new AppError(INVALID_TOKEN_MESSAGE, 400);
+async function verifyEmail({ email, code }) {
+  const normalizedEmail = normalizeEmail(email);
+  const normalizedCode = normalizeVerificationCode(code);
+  if (!normalizedEmail || !normalizedEmail.includes('@') || !validCodeShape(normalizedCode)) {
+    throw new AppError(INVALID_TOKEN_MESSAGE, 400);
+  }
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -132,6 +151,7 @@ async function verifyEmail({ token }) {
        FROM email_verification_tokens verification
        JOIN users account ON account.id=verification.user_id
        WHERE verification.token_hash=$1
+         AND LOWER(account.email)=$2
          AND verification.used_at IS NULL
          AND verification.expires_at>NOW()
          AND (
@@ -140,7 +160,7 @@ async function verifyEmail({ token }) {
          )
          AND account.email_verified_at IS NULL
        FOR UPDATE OF verification, account`,
-      [hashVerificationToken(token)]
+      [hashVerificationToken(normalizedCode), normalizedEmail]
     );
     if (!result.rows[0]) throw new AppError(INVALID_TOKEN_MESSAGE, 400);
     const userId = result.rows[0].user_id;
@@ -187,6 +207,8 @@ module.exports = {
   resendVerification,
   verifyEmail,
   hashVerificationToken,
+  generateVerificationCode,
+  normalizeVerificationCode,
   buildVerificationUrl,
   replaceUnusedTokens,
   PUBLIC_RESEND_MESSAGE,

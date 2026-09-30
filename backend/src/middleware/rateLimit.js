@@ -1,12 +1,13 @@
 const rateLimit = require('express-rate-limit');
 
-function createRateLimiter({ name, windowMs, max, message, skip }) {
+function createRateLimiter({ name, windowMs, max, message, skip, keyGenerator }) {
   return rateLimit({
     windowMs,
     max,
     standardHeaders: true,
     legacyHeaders: false,
     skip,
+    keyGenerator,
     handler(req, res, _next, options) {
       console.warn('[RateLimit] Local API limit reached', {
         source: 'LOCAL_API',

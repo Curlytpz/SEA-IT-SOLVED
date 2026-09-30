@@ -12,8 +12,8 @@ emailService.sendStudentVerificationEmail = async payload => { deliveries.push(p
 const auth = require('../src/services/auth.service');
 const verification = require('../src/services/email-verification.service');
 
-function deliveryToken(index = -1) {
-  return new URL(deliveries.at(index).verificationUrl).searchParams.get('token');
+function deliveryCode(index = -1) {
+  return deliveries.at(index).verificationCode;
 }
 
 async function expectInvalid(fn) {
@@ -36,12 +36,12 @@ async function main() {
     assert.equal(registration.user.status, 'PENDING');
     assert.equal(registration.verificationRequired, true);
     assert.equal(deliveries.length, 1);
-    const firstToken = deliveryToken();
-    assert.match(firstToken, /^[a-f0-9]{64}$/);
+    const firstCode = deliveryCode();
+    assert.match(firstCode, /^\d{8}$/);
     const stored = await pool.query('SELECT token_hash,used_at,expires_at FROM email_verification_tokens WHERE user_id=$1', [userId]);
     assert.equal(stored.rows.length, 1);
-    assert.equal(stored.rows[0].token_hash, verification.hashVerificationToken(firstToken));
-    assert.notEqual(stored.rows[0].token_hash, firstToken);
+    assert.equal(stored.rows[0].token_hash, verification.hashVerificationToken(firstCode));
+    assert.notEqual(stored.rows[0].token_hash, firstCode);
     assert.equal(stored.rows[0].used_at, null);
 
     await assert.rejects(
@@ -77,38 +77,72 @@ async function main() {
     assert.deepEqual(resendStatuses.slice(0, 5), [200, 200, 200, 200, 200]);
     assert.equal(resendStatuses[5], 429);
 
+    const accountAttemptStatuses = [];
+    for (let index = 0; index < 11; index += 1) {
+      const response = await fetch(`${base}/auth/verify-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Forwarded-For': `203.0.113.${index + 1}`,
+        },
+        body: JSON.stringify({ email: `attempt-${suffix}@${config.STUDENT_EMAIL_DOMAIN}`, code: '00000000' }),
+      });
+      accountAttemptStatuses.push(response.status);
+    }
+    assert.deepEqual(accountAttemptStatuses.slice(0, 10), Array(10).fill(400));
+    assert.equal(accountAttemptStatuses[10], 429);
+
+    const ipAttemptStatuses = [];
+    for (let index = 0; index < 11; index += 1) {
+      const response = await fetch(`${base}/auth/verify-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Forwarded-For': '198.51.100.10',
+        },
+        body: JSON.stringify({
+          email: `ip-attempt-${index}-${suffix}@${config.STUDENT_EMAIL_DOMAIN}`,
+          code: '00000000',
+        }),
+      });
+      ipAttemptStatuses.push(response.status);
+    }
+    assert.deepEqual(ipAttemptStatuses.slice(0, 10), Array(10).fill(400));
+    assert.equal(ipAttemptStatuses[10], 429);
+
     const unknown = await verification.resendVerification({ email: `unknown-${suffix}@${config.STUDENT_EMAIL_DOMAIN}` });
     assert.equal(unknown.message, verification.PUBLIC_RESEND_MESSAGE);
     assert.equal(deliveries.length, 1);
     const resend = await verification.resendVerification({ email });
     assert.equal(resend.message, verification.PUBLIC_RESEND_MESSAGE);
     assert.equal(deliveries.length, 2);
-    const secondToken = deliveryToken();
-    assert.notEqual(secondToken, firstToken);
-    await expectInvalid(() => verification.verifyEmail({ token: firstToken }));
+    const secondCode = deliveryCode();
+    assert.notEqual(secondCode, firstCode);
+    await expectInvalid(() => verification.verifyEmail({ email, code: firstCode }));
     const active = await pool.query(
       'SELECT token_hash,used_at FROM email_verification_tokens WHERE user_id=$1 AND used_at IS NULL',
       [userId]
     );
     assert.equal(active.rows.length, 1);
-    assert.equal(active.rows[0].token_hash, verification.hashVerificationToken(secondToken));
-    assert.notEqual(active.rows[0].token_hash, secondToken);
+    assert.equal(active.rows[0].token_hash, verification.hashVerificationToken(secondCode));
+    assert.notEqual(active.rows[0].token_hash, secondCode);
 
-    const verified = await verification.verifyEmail({ token: secondToken });
+    const verified = await verification.verifyEmail({ email, code: secondCode });
     assert.equal(verified.message, verification.VERIFIED_MESSAGE);
-    await expectInvalid(() => verification.verifyEmail({ token: firstToken }));
-    await expectInvalid(() => verification.verifyEmail({ token: secondToken }));
+    await expectInvalid(() => verification.verifyEmail({ email, code: firstCode }));
+    await expectInvalid(() => verification.verifyEmail({ email, code: secondCode }));
     const login = await auth.login({ email, password, expectedRole: 'STUDENT' });
     assert.equal(login.user.status, 'ACTIVE');
     const row = await pool.query('SELECT email_verified_at FROM users WHERE id=$1', [userId]);
     assert(row.rows[0].email_verified_at);
 
     console.log('PASS student account remains pending until institutional email verification');
-    console.log('PASS verification tokens are random, SHA-256 hashed, expiring, and single use');
+    console.log('PASS verification codes are 8-digit, SHA-256 hashed, expiring, and single use');
     console.log('PASS unverified student JWT reuse and enrollment are denied centrally');
     console.log('PASS resend response is enumeration-safe and resend rate limiting is enforced');
-    console.log('PASS resend invalidates previous links and leaves exactly one hashed active token');
-    console.log('PASS successful verification activates login and invalidates remaining links');
+    console.log('PASS verification attempts are independently rate-limited by account email and client IP');
+    console.log('PASS resend invalidates previous codes and leaves exactly one hashed active code');
+    console.log('PASS successful verification activates login and invalidates remaining codes');
   } finally {
     if (server) await new Promise(resolve => server.close(resolve));
     if (userId) await pool.query('DELETE FROM users WHERE id=$1', [userId]);

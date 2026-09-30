@@ -1,5 +1,5 @@
 export const STUDENT_EMAIL_UNVERIFIED_CODE = 'STUDENT_EMAIL_UNVERIFIED';
-export const VERIFICATION_RESEND_SUCCESS_MESSAGE = 'Verification email sent. Check your HAU Outlook inbox and Junk folder.';
+export const VERIFICATION_RESEND_SUCCESS_MESSAGE = 'Verification code sent. Check your HAU Outlook inbox and Junk folder.';
 
 export const INSTRUCTOR_EMAIL_UNVERIFIED_CODE = 'INSTRUCTOR_EMAIL_UNVERIFIED';
 
@@ -11,7 +11,7 @@ export function shouldShowVerificationResend(role, errorCode) {
 export function verificationResendActionLabel({ sending, cooldownSeconds }) {
   if (sending) return 'Sending...';
   if (cooldownSeconds > 0) return 'Resend again in ' + cooldownSeconds + 's';
-  return 'Resend verification email';
+  return 'Resend verification code';
 }
 
 export function requestVerificationResend(apiClient, email) {

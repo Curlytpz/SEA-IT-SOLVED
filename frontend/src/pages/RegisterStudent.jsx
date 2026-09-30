@@ -22,9 +22,9 @@ export default function RegisterStudent() {
     setLoading(true);
     try {
       await api.post('/auth/register/student', { firstName: form.firstName, lastName: form.lastName, email: form.email, studentNumber: form.studentNumber, password: form.password });
-      navigate('/login?role=student', {
+      navigate('/verify-email', {
         replace: true,
-        state: { studentRegistrationSuccess: true },
+        state: { email: form.email.trim().toLowerCase() },
       });
     } catch (err) { setError(err.response?.data?.error || 'Registration failed.'); }
     finally { setLoading(false); }

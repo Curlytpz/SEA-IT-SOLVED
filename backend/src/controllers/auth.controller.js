@@ -42,7 +42,10 @@ const resetPassword = asyncHandler(async (req, res) => {
 });
 
 const verifyEmail = asyncHandler(async (req, res) => {
-  const result = await emailVerificationService.verifyEmail({ token: req.body.token });
+  const result = await emailVerificationService.verifyEmail({
+    email: req.body.email,
+    code: req.body.code,
+  });
   res.status(200).json({ success: true, data: result });
 });
 

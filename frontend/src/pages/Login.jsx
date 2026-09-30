@@ -192,7 +192,16 @@ export default function Login() {
                 </button>
               </div>
               <div aria-live="polite" aria-atomic="true">
-                {resendMessage && <p className="mt-2 text-xs leading-5 text-success-subtle-foreground">{resendMessage}</p>}
+                {resendMessage && <div className="mt-2 text-xs leading-5 text-success-subtle-foreground">
+                  <p>{resendMessage}</p>
+                  <Link
+                    to="/verify-email"
+                    state={{ email: form.email.trim().toLowerCase() }}
+                    className="font-semibold text-primary hover:text-primary-hover hover:underline"
+                  >
+                    Enter verification code
+                  </Link>
+                </div>}
                 {resendError && <p className="mt-2 text-xs leading-5 text-destructive">{resendError}</p>}
               </div>
             </div>}

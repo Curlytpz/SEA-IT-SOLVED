@@ -99,7 +99,7 @@ test('resend stores only a SHA-256 hash, invalidates the old code, and newest co
     const newestCode = delivered.verificationCode;
     assert.equal(result.message, verification.PUBLIC_RESEND_MESSAGE);
     assert.match(newestCode, /^\d{8}$/);
-    assert.equal(new URL(delivered.verificationUrl).search, '');
+    assert.equal(delivered.verificationUrl, undefined);
     assert.equal(harness.tokens.length, 2);
     assert.notEqual(harness.tokens[0].usedAt, null);
     assert.equal(harness.tokens[1].usedAt, null);

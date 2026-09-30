@@ -45,6 +45,7 @@ const verifyEmail = asyncHandler(async (req, res) => {
   const result = await emailVerificationService.verifyEmail({
     email: req.body.email,
     code: req.body.code,
+    verificationSession: req.body.verificationSession,
   });
   res.status(200).json({ success: true, data: result });
 });

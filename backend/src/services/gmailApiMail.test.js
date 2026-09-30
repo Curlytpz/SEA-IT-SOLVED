@@ -145,17 +145,17 @@ test('Gmail API verification message is branded multipart/alternative with reada
   const html = readSevenBitMimePart(message, 'text/html');
   assert.match(text, /^SEA-IT-SOLVED\r\n\r\nYour email verification code is:/);
   assert.ok(text.includes(verificationCode));
-  assert.ok(text.includes(verificationUrl));
+  assert.equal(text.includes(verificationUrl), false);
   assert.match(text, /This code expires in 1 hour\./);
   assert.match(html, /SEA-IT-SOLVED/);
   assert.match(html, /Automated Lecture Capturing &amp; Documentation System/);
   assert.match(html, /Verify your email/);
   assert.ok(html.includes(verificationCode));
-  assert.ok(html.includes(verificationUrl));
-  assert.match(html, />Verify Email<\/a>/);
+  assert.equal(html.includes(verificationUrl), false);
+  assert.doesNotMatch(text + html, /href\s*=|https?:\/\/|\/verify-email/i);
   assert.match(html, /background:#f4f7f8/);
   assert.match(html, /background:#ffffff/);
-  assert.match(html, /background:#0f9d94/);
+  assert.match(html, /border:1px solid #0f9d94/);
   assert.doesNotMatch(text + html, /\?token=/);
   assert.doesNotMatch(html, /<img|<script|tracking|@import|https?:\/\/[^"<]*\.(?:png|jpe?g|gif|webp)/i);
   assert.equal(decodeBase64Url(Buffer.from(message, 'utf8').toString('base64url')), message);
@@ -170,17 +170,15 @@ test('Gmail API verification message is branded multipart/alternative with reada
   assert.equal(logs.includes(verificationCode), false);
 });
 
-test('verification raw builder validates required readable content before base64url encoding', () => {
-  const verificationUrl = 'https://sea-it-solved.vercel.app/verify-email';
+test('verification raw builder validates code-only readable content before base64url encoding', () => {
   const verificationCode = '87654321';
   const text = [
     'SEA-IT-SOLVED', '',
     'Your email verification code is:', '',
     verificationCode, '',
-    'Verification page:',
-    verificationUrl,
+    'Return to SEA-IT-SOLVED and enter this code to verify your email.',
   ].join('\r\n');
-  const html = `<!doctype html><html><body><h1>SEA-IT-SOLVED</h1><p>${verificationCode}</p><a href="${verificationUrl}">Verify Email</a></body></html>`;
+  const html = `<!doctype html><html><body><h1>SEA-IT-SOLVED</h1><p>${verificationCode}</p><p>Return to SEA-IT-SOLVED and enter this code.</p></body></html>`;
   const raw = emailService.buildGmailApiVerificationRawMessage({
     from: settings.from,
     to: 'student@student.hau.edu.ph',
@@ -188,17 +186,15 @@ test('verification raw builder validates required readable content before base64
     text,
     html,
     verificationCode,
-    verificationUrl,
   });
   const message = decodeBase64Url(raw);
   assert.ok(message.includes(verificationCode));
-  assert.ok(message.includes(verificationUrl));
+  assert.doesNotMatch(message, /href\s*=|https?:\/\/|\/verify-email/i);
   assert.doesNotMatch(raw, /[+/=]/);
   assert.throws(() => emailService.validateGmailApiVerificationMessage(
     message.replace('Content-Type: text/html; charset=UTF-8', 'Content-Type: application/octet-stream'),
     {
       verificationCode,
-      verificationUrl,
     },
   ), /plain-text and HTML alternatives/);
 });

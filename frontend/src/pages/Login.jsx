@@ -95,7 +95,17 @@ export default function Login() {
       else if (user.role === 'INSTRUCTOR') navigate('/instructor', { replace: true });
       else navigate('/student', { replace: true });
     } catch (err) {
-      if (isInstructorAccessCode(err.code)) setApprovalCode(err.code);
+      if (['STUDENT_EMAIL_UNVERIFIED', 'INSTRUCTOR_EMAIL_UNVERIFIED'].includes(err.code) && err.verificationSession) {
+        navigate('/verify-email', {
+          replace: true,
+          state: {
+            email: form.email.trim().toLowerCase(),
+            verificationSession: err.verificationSession,
+            role: selectedRole.toUpperCase(),
+            source: 'login',
+          },
+        });
+      } else if (isInstructorAccessCode(err.code)) setApprovalCode(err.code);
       else {
         setError(err.message);
         setLoginErrorCode(err.code || null);

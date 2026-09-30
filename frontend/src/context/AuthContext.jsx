@@ -11,6 +11,16 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
 
+  const establishSession = useCallback(({ user: authenticatedUser, token }) => {
+    if (!authenticatedUser || !token) throw new Error('The authenticated session response is incomplete.');
+    clearStudentDashboardGreetingSession(authenticatedUser.id);
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(authenticatedUser));
+    setUser(authenticatedUser);
+    setValidatingSession(false);
+    return authenticatedUser;
+  }, []);
+
   const login = useCallback(async (email, password, expectedRole) => {
     setLoading(true);
     setError('');
@@ -22,12 +32,7 @@ export function AuthProvider({ children }) {
         denied.code = instructorAccessCodeForStatus(u.status) || 'INSTRUCTOR_SUSPENDED';
         throw denied;
       }
-      clearStudentDashboardGreetingSession(u.id);
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(u));
-      setUser(u);
-      setValidatingSession(false);
-      return u;   // caller uses this to redirect by role
+      return establishSession({ user: u, token });
     } catch (err) {
       const msg = err.response?.data?.error || err.message || 'Login failed.';
       const code = err.response?.data?.code || err.code;
@@ -39,11 +44,12 @@ export function AuthProvider({ children }) {
       setError(msg);
       const failure = new Error(msg);
       failure.code = code;
+      failure.verificationSession = err.response?.data?.details?.verificationSession;
       throw failure;
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [establishSession]);
 
   const logout = useCallback(() => {
     clearStudentDashboardGreetingSession(user?.id);
@@ -83,7 +89,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, validatingSession, loading, error, setError, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, validatingSession, loading, error, setError, login, logout, refreshUser, establishSession }}>
       {children}
     </AuthContext.Provider>
   );

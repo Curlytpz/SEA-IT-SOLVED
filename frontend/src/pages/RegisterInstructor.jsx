@@ -19,10 +19,15 @@ export default function RegisterInstructor() {
     if (form.password.length < 8) { setError('Password must be at least 8 characters.'); return; }
     setLoading(true);
     try {
-      await api.post('/auth/register/instructor', { firstName: form.firstName, lastName: form.lastName, email: form.email, password: form.password });
+      const response = await api.post('/auth/register/instructor', { firstName: form.firstName, lastName: form.lastName, email: form.email, password: form.password });
       navigate('/verify-email', {
         replace: true,
-        state: { email: form.email.trim().toLowerCase() },
+        state: {
+          email: form.email.trim().toLowerCase(),
+          verificationSession: response.data?.data?.verificationSession,
+          role: 'INSTRUCTOR',
+          source: 'registration',
+        },
       });
     } catch (err) { setError(err.response?.data?.error || 'Registration failed.'); }
     finally { setLoading(false); }
@@ -33,7 +38,7 @@ export default function RegisterInstructor() {
     {error && <Alert type="error" onClose={() => setError('')}>{error}</Alert>}
     <form onSubmit={handleSubmit} className={authFormClassName}>
       <div className={authNameGridClassName}><FormField label="First name"><Input required value={form.firstName} onChange={set('firstName')} placeholder="Maria" autoComplete="given-name"/></FormField><FormField label="Last name"><Input required value={form.lastName} onChange={set('lastName')} placeholder="Santos" autoComplete="family-name"/></FormField></div>
-      <FormField label="Faculty Email"><Input type="email" required value={form.email} onChange={set('email')} placeholder="santos@hau.edu.ph" autoComplete="email"/></FormField>
+      <FormField label="Faculty Email"><Input type="email" required value={form.email} onChange={set('email')} placeholder="sampleemail@hau.edu.ph" autoComplete="email"/></FormField>
       <FormField label="Password"><AuthPasswordInput required value={form.password} onChange={set('password')} placeholder="Minimum 8 characters" autoComplete="new-password"/></FormField>
       <FormField label="Confirm Password"><AuthPasswordInput required value={form.confirm} onChange={set('confirm')} placeholder="Re-enter password" autoComplete="new-password"/></FormField>
       <Btn type="submit" variant="primary" loading={loading} className="mt-1 w-full">Submit Registration</Btn>

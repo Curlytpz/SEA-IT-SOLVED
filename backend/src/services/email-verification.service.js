@@ -2,12 +2,14 @@ const crypto = require('crypto');
 const pool = require('../db/pool');
 const config = require('../config/env');
 const emailService = require('./email.service');
+const { completeActiveLogin } = require('./auth-session.service');
 const AppError = require('../utils/AppError');
+const { verifyVerificationSession } = require('../utils/jwt');
 
 const PUBLIC_RESEND_MESSAGE = 'If an unverified account exists for that email, a verification code has been sent.';
 const INVALID_TOKEN_MESSAGE = 'The verification code is invalid or has expired.';
 const VERIFIED_MESSAGE = 'Your student email has been verified. You can now sign in.';
-const INSTRUCTOR_VERIFIED_MESSAGE = 'Your instructor email has been verified. Your account is now awaiting admin approval.';
+const INSTRUCTOR_VERIFIED_MESSAGE = 'Email verified. Your instructor account is awaiting administrator approval.';
 const ACTIVE_INSTRUCTOR_VERIFIED_MESSAGE = 'Your instructor email has been verified. You can now sign in.';
 
 function normalizeEmail(value) {
@@ -70,10 +72,8 @@ function buildVerificationUrl({
 }
 
 async function deliverVerification({ email, rawCode, role = 'STUDENT', status }) {
-  const verificationUrl = buildVerificationUrl();
   return emailService.sendStudentVerificationEmail({
     email,
-    verificationUrl,
     verificationCode: rawCode,
     expiresInMinutes: config.EMAIL_VERIFICATION_TTL_MINUTES,
     role,
@@ -137,17 +137,47 @@ async function resendVerification({ email }) {
   return { message: PUBLIC_RESEND_MESSAGE };
 }
 
-async function verifyEmail({ email, code }) {
+function readVerificationSession(value) {
+  if (!value) return null;
+  try {
+    return verifyVerificationSession(String(value));
+  } catch {
+    throw new AppError(INVALID_TOKEN_MESSAGE, 400);
+  }
+}
+
+async function verifyEmail({ email, code, verificationSession }) {
   const normalizedEmail = normalizeEmail(email);
   const normalizedCode = normalizeVerificationCode(code);
-  if (!normalizedEmail || !normalizedEmail.includes('@') || !validCodeShape(normalizedCode)) {
+  const session = readVerificationSession(verificationSession);
+  if ((!session && (!normalizedEmail || !normalizedEmail.includes('@'))) || !validCodeShape(normalizedCode)) {
     throw new AppError(INVALID_TOKEN_MESSAGE, 400);
   }
   const client = await pool.connect();
+  let verifiedAccount;
   try {
     await client.query('BEGIN');
-    const result = await client.query(
-      `SELECT verification.user_id, account.role, account.status
+    const result = session
+      ? await client.query(
+        `SELECT verification.user_id, account.role, account.status
+         FROM email_verification_tokens verification
+         JOIN users account ON account.id=verification.user_id
+         WHERE verification.token_hash=$1
+           AND account.id=$2
+           AND account.role=$3
+           AND account.auth_version=$4
+           AND verification.used_at IS NULL
+           AND verification.expires_at>NOW()
+           AND (
+             (account.role='STUDENT' AND account.status='PENDING')
+             OR (account.role='INSTRUCTOR' AND account.status IN ('PENDING', 'ACTIVE'))
+           )
+           AND account.email_verified_at IS NULL
+         FOR UPDATE OF verification, account`,
+        [hashVerificationToken(normalizedCode), session.sub, session.role, Number(session.authVersion) || 0]
+      )
+      : await client.query(
+        `SELECT verification.user_id, account.role, account.status
        FROM email_verification_tokens verification
        JOIN users account ON account.id=verification.user_id
        WHERE verification.token_hash=$1
@@ -160,8 +190,8 @@ async function verifyEmail({ email, code }) {
          )
          AND account.email_verified_at IS NULL
        FOR UPDATE OF verification, account`,
-      [hashVerificationToken(normalizedCode), normalizedEmail]
-    );
+        [hashVerificationToken(normalizedCode), normalizedEmail]
+      );
     if (!result.rows[0]) throw new AppError(INVALID_TOKEN_MESSAGE, 400);
     const userId = result.rows[0].user_id;
     const role = result.rows[0].role;
@@ -186,7 +216,9 @@ async function verifyEmail({ email, code }) {
       [userId]
     );
     await client.query('COMMIT');
-    return {
+    verifiedAccount = {
+      userId,
+      accountStatus,
       message: role === 'INSTRUCTOR'
         ? (accountStatus === 'ACTIVE' ? ACTIVE_INSTRUCTOR_VERIFIED_MESSAGE : INSTRUCTOR_VERIFIED_MESSAGE)
         : VERIFIED_MESSAGE,
@@ -198,6 +230,15 @@ async function verifyEmail({ email, code }) {
   } finally {
     client.release();
   }
+
+  if (session && (verifiedAccount.role === 'STUDENT' || verifiedAccount.accountStatus === 'ACTIVE')) {
+    const authenticated = await completeActiveLogin({
+      userId: verifiedAccount.userId,
+      role: verifiedAccount.role,
+    });
+    return { message: verifiedAccount.message, role: verifiedAccount.role, ...authenticated };
+  }
+  return { message: verifiedAccount.message, role: verifiedAccount.role };
 }
 
 module.exports = {
@@ -209,6 +250,7 @@ module.exports = {
   hashVerificationToken,
   generateVerificationCode,
   normalizeVerificationCode,
+  readVerificationSession,
   buildVerificationUrl,
   replaceUnusedTokens,
   PUBLIC_RESEND_MESSAGE,

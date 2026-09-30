@@ -1,10 +1,10 @@
 const bcrypt = require('bcryptjs');
 const pool   = require('../db/pool');
-const { signToken } = require('../utils/jwt');
 const AppError = require('../utils/AppError');
 const config   = require('../config/env');
 const { validatePassword } = require('./password-reset.service');
 const emailVerification = require('./email-verification.service');
+const { buildSafeUser, createVerificationSession, completeActiveLogin } = require('./auth-session.service');
 const { isAllowedInstructorEmail, normalizeEmail } = require('../utils/instructorEmailPolicy');
 
 const SALT_ROUNDS = 12;
@@ -14,21 +14,6 @@ const ROLE_ACCOUNT_LABELS = { STUDENT: 'a Student', INSTRUCTOR: 'an Instructor',
 const ROLE_SIGN_IN_LABELS = { STUDENT: 'Student', INSTRUCTOR: 'Instructor', ADMIN: 'Admin' };
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
-
-function buildSafeUser(row) {
-  // NEVER return password_hash to the client
-  return {
-    id:            row.id,
-    firstName:     row.first_name,
-    lastName:      row.last_name,
-    email:         row.email,
-    studentNumber: row.student_number || undefined,
-    role:          row.role,
-    status:        row.status,
-    successfulLoginCount: Number(row.successful_login_count) || 0,
-    createdAt:     row.created_at,
-  };
-}
 
 /**
  * Validate that an email ends with the expected institutional domain.
@@ -83,6 +68,7 @@ async function registerStudent({ firstName, lastName, email, studentNumber, pass
   return {
     user: buildSafeUser(user),
     verificationRequired: true,
+    verificationSession: createVerificationSession(user),
     message: 'Check your institutional email to verify your student account before signing in.',
   };
 }
@@ -144,6 +130,7 @@ async function registerInstructor({ firstName, lastName, email, password }) {
   return {
     user: buildSafeUser(user),
     verificationRequired: true,
+    verificationSession: createVerificationSession(user),
     message: 'Check your institutional email and verify it before an administrator can approve your account.',
   };
 }
@@ -195,32 +182,25 @@ async function login({ email, password, expectedRole }) {
     });
   }
   if (user.role === 'INSTRUCTOR' && !user.email_verified_at) {
-    throw new AppError('Verify your institutional email before continuing.', 403, { code: 'INSTRUCTOR_EMAIL_UNVERIFIED' });
+    throw new AppError('Verify your institutional email before continuing.', 403, {
+      code: 'INSTRUCTOR_EMAIL_UNVERIFIED',
+      details: { verificationSession: createVerificationSession(user) },
+    });
   }
   if (user.role === 'INSTRUCTOR' && user.status === 'PENDING') {
     throw new AppError('Your instructor account is awaiting admin approval.', 403, { code: 'INSTRUCTOR_PENDING' });
   }
   if (user.role === 'STUDENT' && user.status === 'PENDING') {
-    throw new AppError('Verify your student email before signing in.', 403, { code: 'STUDENT_EMAIL_UNVERIFIED' });
+    throw new AppError('Verify your student email before signing in.', 403, {
+      code: 'STUDENT_EMAIL_UNVERIFIED',
+      details: { verificationSession: createVerificationSession(user) },
+    });
   }
 
   // Record only a genuinely successful login. This happens after password,
   // role, and account-state validation, and the atomic increment prevents
   // concurrent login requests from observing the same sequence number.
-  const successfulLogin = await pool.query(
-    `UPDATE users
-     SET successful_login_count = successful_login_count + 1
-     WHERE id = $1 AND role = $2 AND status = 'ACTIVE'
-     RETURNING *`,
-    [user.id, user.role]
-  );
-  const authenticatedUser = successfulLogin.rows[0];
-  if (!authenticatedUser) {
-    throw new AppError('Your account access changed. Please try signing in again.', 403);
-  }
-
-  const token = signToken({ id: authenticatedUser.id, role: authenticatedUser.role, authVersion: Number(authenticatedUser.auth_version) || 0 });
-  return { user: buildSafeUser(authenticatedUser), token };
+  return completeActiveLogin({ userId: user.id, role: user.role });
 }
 
 // ─── Get me ───────────────────────────────────────────────────────────────

@@ -151,7 +151,7 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-function verificationEmail({ verificationUrl, verificationCode, expiresInMinutes, role = 'STUDENT', accountStatus }) {
+function verificationEmail({ verificationCode, expiresInMinutes, role = 'STUDENT', accountStatus }) {
   if (!/^\d{8}$/.test(String(verificationCode || ''))) {
     throw new Error('A valid email verification code is required.');
   }
@@ -162,14 +162,11 @@ function verificationEmail({ verificationUrl, verificationCode, expiresInMinutes
     'SEA-IT-SOLVED', '',
     'Your email verification code is:', '',
     verificationCode, '',
-    'Open SEA-IT-SOLVED and enter this code to verify your email.', '',
-    'Verification page:',
-    verificationUrl, '',
+    'Return to SEA-IT-SOLVED and enter this code to verify your email.', '',
     `This code expires in ${expiry}.`, '',
     'If you did not create this account, you can ignore this email.',
     ...(instructorPending ? ['', 'After verification, your instructor account will remain pending until administrator approval.'] : []),
   ].join('\n');
-  const safeVerificationUrl = escapeHtml(verificationUrl);
   const safeVerificationCode = escapeHtml(verificationCode);
   const safeExpiry = escapeHtml(expiry);
   const html = [
@@ -183,10 +180,7 @@ function verificationEmail({ verificationUrl, verificationCode, expiresInMinutes
     '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td align="center">',
     `<div style="display:inline-block;min-width:250px;padding:18px 22px;background:#e8f7f5;border:1px solid #0f9d94;border-radius:10px;color:#0f766e;font-size:32px;line-height:1.2;font-weight:700;letter-spacing:8px;text-align:center;">${safeVerificationCode}</div>`,
     '</td></tr></table>',
-    '<p style="margin:24px 0 18px;color:#111827;font-size:14px;line-height:1.6;">Open the verification page and enter this code.</p>',
-    `<p style="margin:0 0 24px;"><a href="${safeVerificationUrl}" style="display:inline-block;padding:13px 26px;background:#0f9d94;color:#ffffff;text-decoration:none;border-radius:8px;font-size:15px;font-weight:700;">Verify Email</a></p>`,
-    '<p style="margin:0 0 6px;color:#6b7280;font-size:12px;line-height:1.6;">If the button does not work, copy and paste this address:</p>',
-    `<p style="margin:0 0 22px;font-size:12px;line-height:1.6;word-break:break-all;"><a href="${safeVerificationUrl}" style="color:#0f766e;text-decoration:underline;">${safeVerificationUrl}</a></p>`,
+    '<p style="margin:24px 0 22px;color:#111827;font-size:14px;line-height:1.6;">Return to SEA-IT-SOLVED and enter this code to verify your email.</p>',
     `<p style="margin:0 0 12px;color:#6b7280;font-size:13px;line-height:1.6;">This verification code expires in ${safeExpiry}.</p>`,
     '<p style="margin:0;color:#6b7280;font-size:13px;line-height:1.6;">If you did not create a SEA-IT-SOLVED account, you can safely ignore this email.</p>',
     ...(instructorPending ? ['<p style="margin:16px 0 0;color:#6b7280;font-size:13px;line-height:1.6;">After verification, your instructor account will remain pending until administrator approval.</p>'] : []),
@@ -200,7 +194,7 @@ function verificationEmail({ verificationUrl, verificationCode, expiresInMinutes
 }
 
 function messageContent(payload) {
-  if (payload.verificationUrl) {
+  if (payload.verificationCode) {
     return {
       subject: payload.role === 'INSTRUCTOR' ? INSTRUCTOR_VERIFICATION_SUBJECT : VERIFICATION_SUBJECT,
       content: verificationEmail(payload),
@@ -448,7 +442,7 @@ function sevenBitMimeBody(value) {
   return normalized;
 }
 
-function validateGmailApiVerificationMessage(message, { verificationCode, verificationUrl }) {
+function validateGmailApiVerificationMessage(message, { verificationCode }) {
   if (message.replace(/\r\n/g, '').includes('\n') || message.replace(/\r\n/g, '').includes('\r')) {
     throw new Error('Gmail API verification message must use CRLF line endings.');
   }
@@ -465,8 +459,11 @@ function validateGmailApiVerificationMessage(message, { verificationCode, verifi
       || !headers.some(line => /^Content-Type: multipart\/alternative; boundary="[^"]+"$/.test(line))) {
     throw new Error('Gmail API verification message requires multipart/alternative MIME headers.');
   }
-  if (!message.includes(verificationCode) || !message.includes(verificationUrl)) {
+  if (!message.includes(verificationCode)) {
     throw new Error('Gmail API verification message is missing required content.');
+  }
+  if (/href\s*=|https?:\/\/|\/verify-email/i.test(message)) {
+    throw new Error('Gmail API verification message must not contain links.');
   }
   if (!/Content-Type: text\/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 7bit/i.test(message)
       || !/Content-Type: text\/html; charset=UTF-8\r\nContent-Transfer-Encoding: 7bit/i.test(message)
@@ -476,7 +473,7 @@ function validateGmailApiVerificationMessage(message, { verificationCode, verifi
 }
 
 function buildGmailApiVerificationRawMessage({
-  from, to, subject, text, html, verificationCode, verificationUrl,
+  from, to, subject, text, html, verificationCode,
 }) {
   const boundary = `sea-it-solved-verification-${crypto.randomBytes(16).toString('hex')}`;
   const message = [
@@ -499,7 +496,7 @@ function buildGmailApiVerificationRawMessage({
     `--${boundary}--`,
     '',
   ].join('\r\n');
-  validateGmailApiVerificationMessage(message, { verificationCode, verificationUrl });
+  validateGmailApiVerificationMessage(message, { verificationCode });
   return encodeBase64Url(message);
 }
 
@@ -528,7 +525,7 @@ async function sendWithGmailApi(
   const validated = validateGmailApiSettings(settings);
   const client = gmailClient || createGmailApiClient(validated, googleApi);
   const { subject, content } = messageContent(payload);
-  const verification = Boolean(payload.verificationUrl);
+  const verification = Boolean(payload.verificationCode);
   const raw = verification
     ? buildGmailApiVerificationRawMessage({
       from: gmailFromHeader(validated),
@@ -537,7 +534,6 @@ async function sendWithGmailApi(
       text: content.text,
       html: content.html,
       verificationCode: payload.verificationCode,
-      verificationUrl: payload.verificationUrl,
     })
     : buildGmailApiRawMessage({
       from: gmailFromHeader(validated),
@@ -623,13 +619,13 @@ async function sendPasswordResetEmail({ email, resetUrl, expiresInMinutes }, opt
   }
 }
 
-async function sendStudentVerificationEmail({ email, verificationUrl, verificationCode, expiresInMinutes, role = 'STUDENT', accountStatus }, options = {}) {
+async function sendStudentVerificationEmail({ email, verificationCode, expiresInMinutes, role = 'STUDENT', accountStatus }, options = {}) {
   const provider = validateEmailConfiguration();
   if (provider === DEVELOPMENT_PROVIDER) {
     // Verification codes establish account ownership and must never be written to logs.
     throw new Error('Email verification requires a configured email provider.');
   }
-  const payload = { email, verificationUrl, verificationCode, expiresInMinutes, role, accountStatus };
+  const payload = { email, verificationCode, expiresInMinutes, role, accountStatus };
   if (provider === MICROSOFT_GRAPH_PROVIDER) return sendWithMicrosoftGraph(payload);
   if (provider === RESEND_PROVIDER) return sendWithResend(payload);
   if (provider === GMAIL_SMTP_PROVIDER) return sendWithGmailSmtp(payload);

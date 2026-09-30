@@ -35,8 +35,10 @@ const verificationAccountLimiter = createRateLimiter({
   max: 10,
   message: 'Too many email verification attempts. Try again later.',
   keyGenerator(req) {
-    const normalizedEmail = String(req.body?.email || '').trim().toLowerCase().slice(0, 255);
-    return crypto.createHash('sha256').update(normalizedEmail || 'missing-email').digest('hex');
+    const email = String(req.body?.email || '').trim().toLowerCase().slice(0, 255);
+    const session = String(req.body?.verificationSession || '').trim().slice(0, 4096);
+    const accountKey = email || session;
+    return crypto.createHash('sha256').update(accountKey || 'missing-account').digest('hex');
   },
 });
 const verificationResendLimiter = createRateLimiter({

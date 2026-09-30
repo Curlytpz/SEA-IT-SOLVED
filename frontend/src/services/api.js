@@ -19,9 +19,10 @@ api.interceptors.response.use(
   (err) => {
     const requestUrl = String(err.config?.url || '');
     const isLoginRequest = /(?:^|\/)auth\/login(?:\?|$)/.test(requestUrl);
+    const isVerificationRequest = /(?:^|\/)auth\/verify-email(?:\?|$)/.test(requestUrl);
     const accessCode = err.response?.data?.code;
     const instructorAccessDenied = err.response?.status === 403 && isInstructorSessionBlockCode(accessCode);
-    if (!isLoginRequest && (err.response?.status === 401 || instructorAccessDenied)) {
+    if (!isLoginRequest && !isVerificationRequest && (err.response?.status === 401 || instructorAccessDenied)) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       if (isInstructorAccessCode(accessCode)) sessionStorage.setItem(INSTRUCTOR_ACCESS_NOTICE_KEY, accessCode);

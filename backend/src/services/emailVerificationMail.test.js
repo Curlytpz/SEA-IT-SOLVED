@@ -33,8 +33,11 @@ test('verification email contains a code and token-free verification page in bot
   assert.ok(sent.text.includes(verificationCode));
   assert.ok(sent.html.includes(verificationCode));
   assert.doesNotMatch(sent.text + sent.html, /\?token=/);
-  assert.match(sent.html, />Open Verification Page<\/a>/);
-  assert.match(sent.html, /This code expires in 1 hour\./);
+  assert.match(sent.html, />Verify Email<\/a>/);
+  assert.match(sent.html, /Automated Lecture Capturing &amp; Documentation System/);
+  assert.match(sent.html, /background:#f4f7f8/);
+  assert.match(sent.html, /This verification code expires in 1 hour\./);
+  assert.doesNotMatch(sent.html, /<img|<script|tracking|@import/i);
   assert.match(sent.text, /^SEA-IT-SOLVED\n\nYour email verification code is:/);
   assert.match(sent.text, /This code expires in 1 hour\./);
   assert.match(sent.text, /If you did not create this account, you can ignore this email\./);
@@ -93,7 +96,7 @@ test('instructor verification uses the same code template and preserves approval
   assert.match(sent.text, /Your email verification code is:/);
   assert.ok(sent.text.includes(verificationUrl));
   assert.ok(sent.html.includes(verificationUrl));
-  assert.match(sent.html, />Open Verification Page<\/a>/);
+  assert.match(sent.html, />Verify Email<\/a>/);
   assert.match(sent.html, /remain pending until administrator approval/);
   assert.equal(logs.some(line => line.includes('34567890')), false);
 });

@@ -162,9 +162,9 @@ function verificationEmail({ verificationUrl, verificationCode, expiresInMinutes
     'SEA-IT-SOLVED', '',
     'Your email verification code is:', '',
     verificationCode, '',
-    'Open:',
+    'Open SEA-IT-SOLVED and enter this code to verify your email.', '',
+    'Verification page:',
     verificationUrl, '',
-    'Enter the code to verify your account.', '',
     `This code expires in ${expiry}.`, '',
     'If you did not create this account, you can ignore this email.',
     ...(instructorPending ? ['', 'After verification, your instructor account will remain pending until administrator approval.'] : []),
@@ -173,18 +173,28 @@ function verificationEmail({ verificationUrl, verificationCode, expiresInMinutes
   const safeVerificationCode = escapeHtml(verificationCode);
   const safeExpiry = escapeHtml(expiry);
   const html = [
-    '<!doctype html><html><body style="margin:0;padding:24px;background:#ffffff;color:#17231f;font-family:Arial,Helvetica,sans-serif;">',
-    '<div style="max-width:600px;margin:0 auto;">',
-    '<h1 style="margin:0 0 20px;font-size:26px;line-height:1.3;color:#17231f;">SEA-IT-SOLVED</h1>',
-    '<p style="margin:0 0 12px;font-size:16px;line-height:1.5;">Your email verification code is:</p>',
-    `<p style="margin:0 0 24px;font-size:30px;line-height:1.2;font-weight:bold;letter-spacing:6px;color:#0d766e;">${safeVerificationCode}</p>`,
-    `<p style="margin:0 0 20px;"><a href="${safeVerificationUrl}" style="display:inline-block;padding:12px 20px;background:#0d9488;color:#ffffff;text-decoration:none;border-radius:4px;font-weight:bold;">Open Verification Page</a></p>`,
-    '<p style="margin:0 0 8px;color:#42534d;font-size:14px;line-height:1.6;">Open this page and enter the code to verify your account:</p>',
-    `<p style="margin:0 0 20px;font-size:14px;line-height:1.5;word-break:break-all;"><a href="${safeVerificationUrl}" style="color:#0b766d;">${safeVerificationUrl}</a></p>`,
-    `<p style="margin:0 0 12px;font-size:14px;line-height:1.5;">This code expires in ${safeExpiry}.</p>`,
-    '<p style="margin:0;font-size:14px;line-height:1.5;color:#52615c;">If you did not create this account, you can ignore this email.</p>',
-    ...(instructorPending ? ['<p style="margin:16px 0 0;font-size:14px;line-height:1.5;color:#52615c;">After verification, your instructor account will remain pending until administrator approval.</p>'] : []),
-    '</div></body></html>',
+    '<!doctype html><html><body style="margin:0;padding:0;background:#f4f7f8;color:#111827;font-family:Arial,Helvetica,sans-serif;">',
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#f4f7f8;"><tr><td align="center" style="padding:32px 16px;">',
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:600px;background:#ffffff;border-radius:14px;"><tr><td style="padding:40px 36px;text-align:center;">',
+    '<h1 style="margin:0;color:#111827;font-size:28px;line-height:1.25;font-weight:700;">SEA-IT-SOLVED</h1>',
+    '<p style="margin:6px 0 30px;color:#6b7280;font-size:13px;line-height:1.5;">Automated Lecture Capturing &amp; Documentation System</p>',
+    '<h2 style="margin:0 0 14px;color:#111827;font-size:23px;line-height:1.3;font-weight:700;">Verify your email</h2>',
+    '<p style="margin:0 0 24px;color:#6b7280;font-size:15px;line-height:1.65;">Enter the verification code below to complete your<br>SEA-IT-SOLVED account verification.</p>',
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td align="center">',
+    `<div style="display:inline-block;min-width:250px;padding:18px 22px;background:#e8f7f5;border:1px solid #0f9d94;border-radius:10px;color:#0f766e;font-size:32px;line-height:1.2;font-weight:700;letter-spacing:8px;text-align:center;">${safeVerificationCode}</div>`,
+    '</td></tr></table>',
+    '<p style="margin:24px 0 18px;color:#111827;font-size:14px;line-height:1.6;">Open the verification page and enter this code.</p>',
+    `<p style="margin:0 0 24px;"><a href="${safeVerificationUrl}" style="display:inline-block;padding:13px 26px;background:#0f9d94;color:#ffffff;text-decoration:none;border-radius:8px;font-size:15px;font-weight:700;">Verify Email</a></p>`,
+    '<p style="margin:0 0 6px;color:#6b7280;font-size:12px;line-height:1.6;">If the button does not work, copy and paste this address:</p>',
+    `<p style="margin:0 0 22px;font-size:12px;line-height:1.6;word-break:break-all;"><a href="${safeVerificationUrl}" style="color:#0f766e;text-decoration:underline;">${safeVerificationUrl}</a></p>`,
+    `<p style="margin:0 0 12px;color:#6b7280;font-size:13px;line-height:1.6;">This verification code expires in ${safeExpiry}.</p>`,
+    '<p style="margin:0;color:#6b7280;font-size:13px;line-height:1.6;">If you did not create a SEA-IT-SOLVED account, you can safely ignore this email.</p>',
+    ...(instructorPending ? ['<p style="margin:16px 0 0;color:#6b7280;font-size:13px;line-height:1.6;">After verification, your instructor account will remain pending until administrator approval.</p>'] : []),
+    '</td></tr><tr><td style="padding:20px 24px;border-top:1px solid #e5e7eb;text-align:center;">',
+    '<p style="margin:0;color:#111827;font-size:13px;font-weight:700;">SEA-IT-SOLVED</p>',
+    '<p style="margin:4px 0 0;color:#6b7280;font-size:11px;line-height:1.5;">Automated Lecture Capturing &amp; Documentation System</p>',
+    '</td></tr></table>',
+    '</td></tr></table></body></html>',
   ].join('');
   return { text, html };
 }
@@ -430,29 +440,12 @@ function buildGmailApiRawMessage({ from, to, subject, text, html }) {
   return encodeBase64Url(message);
 }
 
-function gmailApiVerificationText({ verificationCode, verificationUrl, expiresInMinutes }) {
-  if (!/^\d{8}$/.test(String(verificationCode || ''))) {
-    throw new Error('A valid email verification code is required.');
+function sevenBitMimeBody(value) {
+  const normalized = String(value || '').replace(/\r?\n/g, '\r\n');
+  if (!/^[\x00-\x7f]*$/.test(normalized)) {
+    throw new Error('Gmail API verification MIME parts must contain 7-bit content.');
   }
-  if (Number(expiresInMinutes) !== 60) {
-    throw new Error('Gmail API verification codes must use the configured 1-hour expiry.');
-  }
-  return [
-    'SEA-IT-SOLVED',
-    '',
-    'Your verification code is:',
-    '',
-    verificationCode,
-    '',
-    'Open SEA-IT-SOLVED and enter this code to verify your email.',
-    '',
-    'Verification page:',
-    verificationUrl,
-    '',
-    'This code expires in 1 hour.',
-    '',
-    'If you did not create this account, you can ignore this email.',
-  ].join('\r\n');
+  return normalized;
 }
 
 function validateGmailApiVerificationMessage(message, { verificationCode, verificationUrl }) {
@@ -469,29 +462,41 @@ function validateGmailApiVerificationMessage(message, { verificationCode, verifi
     }
   }
   if (!headers.includes('MIME-Version: 1.0')
-      || !headers.includes('Content-Type: text/plain; charset=UTF-8')
-      || !headers.includes('Content-Transfer-Encoding: 7bit')) {
-    throw new Error('Gmail API verification message requires plain-text 7-bit MIME headers.');
+      || !headers.some(line => /^Content-Type: multipart\/alternative; boundary="[^"]+"$/.test(line))) {
+    throw new Error('Gmail API verification message requires multipart/alternative MIME headers.');
   }
   if (!message.includes(verificationCode) || !message.includes(verificationUrl)) {
     throw new Error('Gmail API verification message is missing required content.');
   }
-  if (/multipart\/|text\/html|boundary=|Content-Transfer-Encoding:\s*(?:base64|quoted-printable)/i.test(message)) {
-    throw new Error('Gmail API verification message must be single-part readable text.');
+  if (!/Content-Type: text\/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 7bit/i.test(message)
+      || !/Content-Type: text\/html; charset=UTF-8\r\nContent-Transfer-Encoding: 7bit/i.test(message)
+      || /Content-Transfer-Encoding:\s*(?:base64|quoted-printable)/i.test(message)) {
+    throw new Error('Gmail API verification message requires readable plain-text and HTML alternatives.');
   }
 }
 
-function buildGmailApiVerificationRawMessage({ from, to, subject, verificationCode, verificationUrl, expiresInMinutes }) {
-  const body = gmailApiVerificationText({ verificationCode, verificationUrl, expiresInMinutes });
+function buildGmailApiVerificationRawMessage({
+  from, to, subject, text, html, verificationCode, verificationUrl,
+}) {
+  const boundary = `sea-it-solved-verification-${crypto.randomBytes(16).toString('hex')}`;
   const message = [
     `From: ${sanitizeMailHeader(from)}`,
     `To: ${sanitizeMailHeader(to)}`,
     `Subject: ${encodeMailHeader(subject)}`,
     'MIME-Version: 1.0',
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    '',
+    `--${boundary}`,
     'Content-Type: text/plain; charset=UTF-8',
     'Content-Transfer-Encoding: 7bit',
     '',
-    body,
+    sevenBitMimeBody(text),
+    `--${boundary}`,
+    'Content-Type: text/html; charset=UTF-8',
+    'Content-Transfer-Encoding: 7bit',
+    '',
+    sevenBitMimeBody(html),
+    `--${boundary}--`,
     '',
   ].join('\r\n');
   validateGmailApiVerificationMessage(message, { verificationCode, verificationUrl });
@@ -529,9 +534,10 @@ async function sendWithGmailApi(
       from: gmailFromHeader(validated),
       to: payload.email,
       subject,
+      text: content.text,
+      html: content.html,
       verificationCode: payload.verificationCode,
       verificationUrl: payload.verificationUrl,
-      expiresInMinutes: payload.expiresInMinutes,
     })
     : buildGmailApiRawMessage({
       from: gmailFromHeader(validated),

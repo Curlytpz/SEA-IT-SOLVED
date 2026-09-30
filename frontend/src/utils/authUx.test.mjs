@@ -72,6 +72,8 @@ assert.match(loginSource, /shouldShowVerificationResend\(selectedRole, loginErro
 assert.match(loginSource, /navigate\('\/verify-email'/);
 assert.match(loginSource, /verificationSession: err\.verificationSession/);
 assert.doesNotMatch(loginSource, /password: form\.password[^,}]*[},]\s*state:/);
+assert.match(loginSource, /<Link to="\/verify-email"[^>]*>\s*Go to Verification Code Page\s*<\/Link>/);
+assert.doesNotMatch(loginSource, /to=\{?['"]\/verify-email\?[^'"]+/);
 const requestsSource = fs.readFileSync(new URL('../pages/admin/InstructorRequests.jsx', import.meta.url), 'utf8');
 assert.match(requestsSource, /disabled=\{!r\.emailVerifiedAt\}/);
 assert.match(requestsSource, /Instructor must verify their institutional email before approval\./);

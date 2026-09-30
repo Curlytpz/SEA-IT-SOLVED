@@ -216,6 +216,9 @@ export default function Login() {
               </div>
             </div>}
             <Btn type="submit" variant="primary" disabled={loading} aria-busy={loading || undefined} className="w-full mt-1">{loading ? 'Signing in...' : 'Sign In'}</Btn>
+            {selectedRole !== 'admin' && <Link to="/verify-email" className={`${authSecondaryActionClassName} w-full`}>
+              Go to Verification Code Page
+            </Link>}
           </form>
 
           {selectedRole === 'student' && <>

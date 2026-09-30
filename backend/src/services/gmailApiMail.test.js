@@ -99,7 +99,7 @@ test('Gmail API sends a UTF-8 multipart plain-text and HTML message as base64url
   assert.ok(decodeMimePart(message, 'text/html').includes(resetUrl));
 });
 
-test('Gmail API verification message has deliverability-friendly headers and both MIME alternatives', async () => {
+test('Gmail API verification message is one readable 7-bit plain-text RFC message', async () => {
   let request;
   const gmailClient = { users: { messages: { send: async value => {
     request = value;
@@ -119,22 +119,44 @@ test('Gmail API verification message has deliverability-friendly headers and bot
   }
 
   const message = decodeBase64Url(request.requestBody.raw);
-  assert.match(message, /^From: SEA-IT-SOLVED <seaitsolved\.project@gmail\.com>\r\n/);
-  assert.match(message, /\r\nTo: student@student\.hau\.edu\.ph\r\n/);
-  assert.match(message, /\r\nSubject: Verify your SEA-IT-SOLVED email\r\n/);
-  assert.match(message, /\r\nMIME-Version: 1\.0\r\n/);
-  assert.match(message, /Content-Type: multipart\/alternative; boundary="[^"]+"\r\n/);
-  const text = decodeMimePart(message, 'text/plain');
-  const html = decodeMimePart(message, 'text/html');
-  assert.match(text, /^SEA-IT-SOLVED\r\n\r\nYour email verification code is:/);
-  assert.ok(text.includes(verificationUrl));
-  assert.ok(text.includes(verificationCode));
-  assert.match(text, /This code expires in 1 hour\./);
-  assert.ok(html.includes(verificationUrl));
-  assert.ok(html.includes(verificationCode));
-  assert.match(html, />Open Verification Page<\/a>/);
-  assert.doesNotMatch(text + html, /\?token=/);
-  assert.doesNotMatch(html, /<img|<script|@import|tracking/i);
+  const expected = [
+    'From: SEA-IT-SOLVED <seaitsolved.project@gmail.com>',
+    'To: student@student.hau.edu.ph',
+    'Subject: Verify your SEA-IT-SOLVED email',
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: 7bit',
+    '',
+    'SEA-IT-SOLVED',
+    '',
+    'Your verification code is:',
+    '',
+    verificationCode,
+    '',
+    'Open SEA-IT-SOLVED and enter this code to verify your email.',
+    '',
+    'Verification page:',
+    verificationUrl,
+    '',
+    'This code expires in 1 hour.',
+    '',
+    'If you did not create this account, you can ignore this email.',
+    '',
+  ].join('\r\n');
+  assert.equal(message, expected);
+  assert.equal(message.replace(/\r\n/g, '').includes('\n'), false);
+  assert.equal((message.match(/^From:/gm) || []).length, 1);
+  assert.equal((message.match(/^To:/gm) || []).length, 1);
+  assert.equal((message.match(/^Subject:/gm) || []).length, 1);
+  assert.match(message, /Content-Type: text\/plain; charset=UTF-8\r\n/);
+  assert.match(message, /Content-Transfer-Encoding: 7bit\r\n/);
+  assert.doesNotMatch(message, /multipart\/|text\/html|boundary=|quoted-printable/i);
+  assert.doesNotMatch(message, /Content-Transfer-Encoding: base64/i);
+  assert.doesNotMatch(message, /\?token=/);
+  assert.ok(message.includes('\r\n\r\n' + 'SEA-IT-SOLVED'));
+  assert.ok(message.includes(verificationCode));
+  assert.ok(message.includes(verificationUrl));
+  assert.equal(decodeBase64Url(Buffer.from(message, 'utf8').toString('base64url')), message);
 
   const logs = entries.join('\n');
   assert.match(logs, /\[Mail\] Verification send started/);
@@ -144,6 +166,28 @@ test('Gmail API verification message has deliverability-friendly headers and bot
   assert.equal(logs.includes('student@student.hau.edu.ph'), false);
   assert.equal(logs.includes(verificationUrl), false);
   assert.equal(logs.includes(verificationCode), false);
+});
+
+test('verification raw builder validates required readable content before base64url encoding', () => {
+  const raw = emailService.buildGmailApiVerificationRawMessage({
+    from: settings.from,
+    to: 'student@student.hau.edu.ph',
+    subject: emailService.VERIFICATION_SUBJECT,
+    verificationCode: '87654321',
+    verificationUrl: 'https://sea-it-solved.vercel.app/verify-email',
+    expiresInMinutes: 60,
+  });
+  const message = decodeBase64Url(raw);
+  assert.ok(message.includes('87654321'));
+  assert.ok(message.includes('https://sea-it-solved.vercel.app/verify-email'));
+  assert.doesNotMatch(raw, /[+/=]/);
+  assert.throws(() => emailService.validateGmailApiVerificationMessage(
+    message.replace('Content-Type: text/plain; charset=UTF-8', 'Content-Type: multipart/alternative; boundary="bad"'),
+    {
+      verificationCode: '87654321',
+      verificationUrl: 'https://sea-it-solved.vercel.app/verify-email',
+    },
+  ), /plain-text 7-bit MIME headers|single-part readable text/);
 });
 
 test('shared provider selection routes password reset and verification through Gmail API', async () => {

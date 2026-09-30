@@ -430,6 +430,74 @@ function buildGmailApiRawMessage({ from, to, subject, text, html }) {
   return encodeBase64Url(message);
 }
 
+function gmailApiVerificationText({ verificationCode, verificationUrl, expiresInMinutes }) {
+  if (!/^\d{8}$/.test(String(verificationCode || ''))) {
+    throw new Error('A valid email verification code is required.');
+  }
+  if (Number(expiresInMinutes) !== 60) {
+    throw new Error('Gmail API verification codes must use the configured 1-hour expiry.');
+  }
+  return [
+    'SEA-IT-SOLVED',
+    '',
+    'Your verification code is:',
+    '',
+    verificationCode,
+    '',
+    'Open SEA-IT-SOLVED and enter this code to verify your email.',
+    '',
+    'Verification page:',
+    verificationUrl,
+    '',
+    'This code expires in 1 hour.',
+    '',
+    'If you did not create this account, you can ignore this email.',
+  ].join('\r\n');
+}
+
+function validateGmailApiVerificationMessage(message, { verificationCode, verificationUrl }) {
+  if (message.replace(/\r\n/g, '').includes('\n') || message.replace(/\r\n/g, '').includes('\r')) {
+    throw new Error('Gmail API verification message must use CRLF line endings.');
+  }
+  const separator = '\r\n\r\n';
+  const headerEnd = message.indexOf(separator);
+  if (headerEnd <= 0) throw new Error('Gmail API verification message requires one header section.');
+  const headers = message.slice(0, headerEnd).split('\r\n');
+  for (const name of ['From', 'To', 'Subject']) {
+    if (headers.filter(line => line.startsWith(`${name}:`)).length !== 1) {
+      throw new Error(`Gmail API verification message requires exactly one ${name} header.`);
+    }
+  }
+  if (!headers.includes('MIME-Version: 1.0')
+      || !headers.includes('Content-Type: text/plain; charset=UTF-8')
+      || !headers.includes('Content-Transfer-Encoding: 7bit')) {
+    throw new Error('Gmail API verification message requires plain-text 7-bit MIME headers.');
+  }
+  if (!message.includes(verificationCode) || !message.includes(verificationUrl)) {
+    throw new Error('Gmail API verification message is missing required content.');
+  }
+  if (/multipart\/|text\/html|boundary=|Content-Transfer-Encoding:\s*(?:base64|quoted-printable)/i.test(message)) {
+    throw new Error('Gmail API verification message must be single-part readable text.');
+  }
+}
+
+function buildGmailApiVerificationRawMessage({ from, to, subject, verificationCode, verificationUrl, expiresInMinutes }) {
+  const body = gmailApiVerificationText({ verificationCode, verificationUrl, expiresInMinutes });
+  const message = [
+    `From: ${sanitizeMailHeader(from)}`,
+    `To: ${sanitizeMailHeader(to)}`,
+    `Subject: ${encodeMailHeader(subject)}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: 7bit',
+    '',
+    body,
+    '',
+  ].join('\r\n');
+  validateGmailApiVerificationMessage(message, { verificationCode, verificationUrl });
+  return encodeBase64Url(message);
+}
+
 function recipientDomain(email) {
   const domain = String(email || '').trim().toLowerCase().split('@').pop();
   return /^[a-z0-9.-]+$/.test(domain || '') ? domain : 'UNKNOWN';
@@ -455,16 +523,25 @@ async function sendWithGmailApi(
   const validated = validateGmailApiSettings(settings);
   const client = gmailClient || createGmailApiClient(validated, googleApi);
   const { subject, content } = messageContent(payload);
-  const raw = buildGmailApiRawMessage({
-    from: gmailFromHeader(validated),
-    to: payload.email,
-    subject,
-    text: content.text,
-    html: content.html,
-  });
+  const verification = Boolean(payload.verificationUrl);
+  const raw = verification
+    ? buildGmailApiVerificationRawMessage({
+      from: gmailFromHeader(validated),
+      to: payload.email,
+      subject,
+      verificationCode: payload.verificationCode,
+      verificationUrl: payload.verificationUrl,
+      expiresInMinutes: payload.expiresInMinutes,
+    })
+    : buildGmailApiRawMessage({
+      from: gmailFromHeader(validated),
+      to: payload.email,
+      subject,
+      text: content.text,
+      html: content.html,
+    });
 
   let response;
-  const verification = Boolean(payload.verificationUrl);
   console.info(verification ? '[Mail] Verification send started' : '[Mail] Gmail API send started');
   try {
     response = await client.users.messages.send({
@@ -566,6 +643,8 @@ module.exports = {
   createGmailSmtpTransport,
   createGmailApiClient,
   buildGmailApiRawMessage,
+  buildGmailApiVerificationRawMessage,
+  validateGmailApiVerificationMessage,
   gmailFromHeader,
   smtpResponseCategory,
   validateEmailConfiguration,

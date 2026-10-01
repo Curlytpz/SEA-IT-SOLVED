@@ -1,3 +1,5 @@
+import { bestFitQuadFromPolygon } from './perspectiveGeometry';
+
 export const CORNER_ORDER = ['topLeft', 'topRight', 'bottomRight', 'bottomLeft'];
 export const ADVANCED_POINT_ORDER = ['topLeft', 'topCenter', 'topRight', 'middleLeft', 'middleRight', 'bottomLeft', 'bottomCenter', 'bottomRight'];
 export const CALIBRATION_MODES = { SIMPLE: 'SIMPLE', ADVANCED: 'ADVANCED' };
@@ -120,22 +122,20 @@ function legacyCorners(value) {
     : null;
 }
 
-function orderCornerPoints(points) {
-  const byVerticalPosition = [...points].sort((a, b) => a.y - b.y || a.x - b.x);
-  const top = byVerticalPosition.slice(0, 2).sort((a, b) => a.x - b.x);
-  const bottom = byVerticalPosition.slice(2, 4).sort((a, b) => a.x - b.x);
-  return [top[0], top[1], bottom[1], bottom[0]];
-}
-
 export function preparePlaneForPerspective(plane) {
   if (!plane) return null;
   const existingCorners = legacyCorners(plane.perspectiveAnchors) || legacyCorners(plane.corners) || cloneCorners(DEFAULT_CORNERS);
   const trace = normalizedTrace(plane, existingCorners);
-  const anchors = CORNER_ORDER.map(name => trace.points.find(point => point.anchorName === name));
-  if (anchors.some(point => !point)) return null;
-  const ordered = orderCornerPoints(anchors);
-  const canonicalCorners = Object.fromEntries(CORNER_ORDER.map((name, index) => [name, { x: ordered[index].x, y: ordered[index].y }]));
-  const anchorRoles = new Map(ordered.map((point, index) => [point.id, CORNER_ORDER[index]]));
+  let fitted;
+  try {
+    // The editable trace may have many points. It is never passed to OpenCV as
+    // a crop mask: derive only its four outer board corners for the homography.
+    fitted = bestFitQuadFromPolygon(trace.points);
+  } catch (error) {
+    return { ...plane, ...trace, perspectiveError: error.message || 'The board boundary is invalid.' };
+  }
+  const canonicalCorners = Object.fromEntries(CORNER_ORDER.map(name => [name, { x: fitted[name].x, y: fitted[name].y }]));
+  const anchorRoles = new Map(CORNER_ORDER.map(name => [fitted[name].id, name]));
   const points = trace.points.map(point => {
     const { anchorName: _anchorName, ...plainPoint } = point;
     const anchorName = anchorRoles.get(point.id);

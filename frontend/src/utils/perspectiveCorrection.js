@@ -142,7 +142,7 @@ export async function correctPerspectivePlanes(sourceCanvas, planes) {
   const results = [];
   for (const plane of [...planes].sort((a, b) => a.order - b.order)) {
     const prepared = preparePlaneForPerspective(plane);
-    const error = prepared ? validatePlane(prepared) : 'Four perspective anchors are required.';
+    const error = prepared?.perspectiveError || (prepared ? validatePlane(prepared) : 'Four perspective anchors are required.');
     if (error) throw new Error(error);
     const corrected = await correctPerspective(sourceCanvas, prepared.perspectiveAnchors || prepared.corners);
     results.push({ ...corrected, planeId: prepared.id, label: prepared.label, order: prepared.order, corners: prepared.corners });

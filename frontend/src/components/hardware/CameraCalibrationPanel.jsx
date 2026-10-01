@@ -145,7 +145,7 @@ export default function CameraCalibrationPanel() {
       if (!latestCalibration) throw new Error('Save calibration before previewing the corrected board.');
       const calibrationSnapshot = cloneCalibration(latestCalibration);
       const previewPlane = preparePlaneForPerspective(calibrationPlanes(calibrationSnapshot)[0]);
-      const previewError = previewPlane ? validatePlane(previewPlane) : 'Four perspective anchors are required.';
+      const previewError = previewPlane?.perspectiveError || (previewPlane ? validatePlane(previewPlane) : 'Four perspective anchors are required.');
       if (previewError) throw new Error(previewError);
       calibrationSnapshot.planes = [previewPlane];
       const calibrationVersionSnapshot = calibrationVersion(calibrationSnapshot);
@@ -171,7 +171,7 @@ export default function CameraCalibrationPanel() {
     const height = mode === 'BROWSER' ? source?.videoHeight : source?.height;
     if (!width || !height) return setMessage({ text: 'Start the camera before saving calibration.', type: 'error' });
     const preparedPlane = preparePlaneForPerspective(selectedPlane);
-    const calibrationError = preparedPlane ? validatePlane(preparedPlane) : 'Four perspective anchors are required.';
+    const calibrationError = preparedPlane?.perspectiveError || (preparedPlane ? validatePlane(preparedPlane) : 'Four perspective anchors are required.');
     if (!calibrationValid || calibrationError) return setMessage({ text: calibrationError || 'Add at least one calibration plane.', type: 'error' });
     invalidatePreview();
     setSaving(true);

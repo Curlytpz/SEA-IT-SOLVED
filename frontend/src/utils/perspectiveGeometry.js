@@ -28,6 +28,62 @@ function asPointArray(input) {
   return QUAD_ORDER.map(name => input?.[name]);
 }
 
+function onSegment(start, point, end) {
+  return point.x >= Math.min(start.x, end.x) && point.x <= Math.max(start.x, end.x)
+    && point.y >= Math.min(start.y, end.y) && point.y <= Math.max(start.y, end.y);
+}
+
+function segmentsIntersect(firstStart, firstEnd, secondStart, secondEnd) {
+  const first = cross(firstStart, firstEnd, secondStart);
+  const second = cross(firstStart, firstEnd, secondEnd);
+  const third = cross(secondStart, secondEnd, firstStart);
+  const fourth = cross(secondStart, secondEnd, firstEnd);
+  if (first * second < 0 && third * fourth < 0) return true;
+  return (first === 0 && onSegment(firstStart, secondStart, firstEnd))
+    || (second === 0 && onSegment(firstStart, secondEnd, firstEnd))
+    || (third === 0 && onSegment(secondStart, firstStart, secondEnd))
+    || (fourth === 0 && onSegment(secondStart, firstEnd, secondEnd));
+}
+
+export function validateTracePolygon(input) {
+  if (!Array.isArray(input) || input.length < 4 || !input.every(finitePoint)) {
+    return { valid: false, error: 'The board boundary needs at least four finite points.' };
+  }
+  const points = input.map(normalizedPoint);
+  for (let first = 0; first < points.length; first += 1) {
+    const firstEnd = (first + 1) % points.length;
+    for (let second = first + 1; second < points.length; second += 1) {
+      const secondEnd = (second + 1) % points.length;
+      if (first === second || firstEnd === second || secondEnd === first) continue;
+      if (segmentsIntersect(points[first], points[firstEnd], points[second], points[secondEnd])) {
+        return { valid: false, error: 'The board boundary cannot cross itself.' };
+      }
+    }
+  }
+  return { valid: true, points };
+}
+
+export function bestFitQuadFromPolygon(input) {
+  const trace = validateTracePolygon(input);
+  if (!trace.valid) throw new Error(trace.error);
+  const points = input.map(point => ({ ...point, ...normalizedPoint(point) }));
+  const choose = (score, direction) => points.reduce((best, point) => (
+    best === null || direction * score(point) < direction * score(best) ? point : best
+  ), null);
+  const candidate = {
+    topLeft: choose(point => point.x + point.y, 1),
+    topRight: choose(point => point.x - point.y, -1),
+    bottomRight: choose(point => point.x + point.y, -1),
+    bottomLeft: choose(point => point.x - point.y, 1),
+  };
+  if (new Set(Object.values(candidate).map(point => point.id || `${point.x}:${point.y}`)).size !== 4) {
+    throw new Error('The board boundary does not describe four distinct outer corners.');
+  }
+  const checked = validatePerspectiveQuad(candidate);
+  if (!checked.valid) throw new Error(checked.error);
+  return Object.fromEntries(QUAD_ORDER.map(name => [name, candidate[name]]));
+}
+
 export function orderQuadPoints(input) {
   const points = asPointArray(input);
   if (points.length !== 4 || !points.every(finitePoint)) throw new Error('Four finite calibration corners are required.');

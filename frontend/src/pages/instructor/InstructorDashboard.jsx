@@ -53,8 +53,8 @@ export default function InstructorDashboard() {
               ...(pending > 0 ? [{ key: 'requests', label: pending + (pending === 1 ? ' pending join request' : ' pending join requests'), to: '/instructor/sections' }] : []),
             ]}
             slots={[
-              { key: 'sections', label: 'Active sections', value: sections.length, status: 'View sections', icon: <BookOpen size={15} aria-hidden="true" />, to: '/instructor/sections' },
-              { key: 'students', label: 'Enrolled students', value: enrolled, status: 'View sections', icon: <Users size={15} aria-hidden="true" />, to: '/instructor/sections' },
+              { key: 'sections', label: 'Active sections', value: sections.length, icon: <BookOpen size={15} aria-hidden="true" />, to: '/instructor/sections', hideStatus: true, chevron: true, ariaLabel: 'Open sections' },
+              { key: 'students', label: 'Enrolled students', value: enrolled, icon: <Users size={15} aria-hidden="true" />, to: '/instructor/sections', hideStatus: true, chevron: true, ariaLabel: 'Open sections' },
             ]}
           />
 
@@ -71,9 +71,9 @@ export default function InstructorDashboard() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {sections.slice(0,6).map(sec=>(
-                    <article key={sec.id} className="relative min-w-0 max-w-full overflow-hidden rounded-[1.25rem] border border-white/60 bg-surface shadow-[var(--neu-shadow-raised-sm)] transition-[border-color,box-shadow,transform,background-color] duration-200 ease-[var(--ease-apple)] hover:-translate-y-px hover:border-primary/40 hover:bg-surface-elevated hover:shadow-[var(--neu-shadow-raised)] dark:border-border/80 motion-reduce:transform-none motion-reduce:transition-none">
-                      <Link to={`/instructor/sections/${sec.id}`} aria-label="Open section details" className="absolute inset-0 z-0 rounded-[1.25rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" />
-                      <div className="relative z-[1] pointer-events-none p-4 pb-3">
+                    <article key={sec.id} className="tactile-raised-card relative min-w-0 max-w-full overflow-hidden transition-transform duration-200 ease-[var(--ease-apple)] hover:-translate-y-px motion-reduce:transform-none motion-reduce:transition-none">
+                      <Link to={`/instructor/sections/${sec.id}`} aria-label="Open section details" className="absolute inset-0 z-0 rounded-[28px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" />
+                      <div className="relative z-[1] pointer-events-none p-6 pb-4 sm:px-7">
                         <div className="flex justify-end items-start mb-2">
                           {sec.pendingCount > 0 && (
                             <StatusChip status="PENDING" label={`${sec.pendingCount} pending`}/>

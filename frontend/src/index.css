@@ -9,15 +9,18 @@
   --sidebar-w: 220px;
   --motion-spring: cubic-bezier(.2, .8, .2, 1);
   --motion-soft: cubic-bezier(.2, .7, .2, 1);
-  --canvas: #eef1ef;
-  --surface-soft: #f6f8f7;
+  --canvas: #e9eeec;
+  /* --surface remains HSL for existing Tailwind utilities. This alias carries
+     the exact tactile surface color for gradients and vanilla CSS. */
+  --surface-color: #f5f8f7;
+  --surface-soft: var(--surface-color);
   --surface-2: #eaf0ee;
   --ink: #14211e;
   --ink-muted: #4a5d58;
   --accent-hex: #14b8a6;
   --accent-ink: #0b6b60;
   --on-accent: #04332d;
-  --background: 150 9% 94%;
+  --background: 156 13% 92%;
   --foreground: 164 25% 11%;
   --card: 150 11% 97%;
   --card-foreground: 164 25% 11%;
@@ -42,7 +45,7 @@
   --input: 38 13% 82%;
   --input-surface: 45 19% 95%;
   --ring: 171 70% 46%;
-  --surface: 150 11% 97%;
+  --surface: 160 17.65% 96.67%;
   --surface-subtle: 150 9% 94%;
   --surface-elevated: 150 11% 97%;
   --sidebar: 40 21% 95%;
@@ -71,11 +74,14 @@
   --skeleton: 38 13% 88%;
   --skeleton-highlight: 45 19% 96%;
   --radius: 1rem;
-  --shadow-highlight: rgb(255 255 255 / .95);
-  --shadow-low: rgb(38 72 64 / .18);
-  --sh-raised: -6px -6px 14px var(--shadow-highlight), 8px 8px 20px var(--shadow-low), inset 0 1px 0 rgb(255 255 255 / .7);
-  --sh-inset: inset 3px 3px 7px var(--shadow-low), inset -3px -3px 7px var(--shadow-highlight);
-  --sh-press: inset 2px 2px 5px var(--shadow-low), inset -2px -2px 5px var(--shadow-highlight);
+  --hi: rgba(255,255,255,.95);
+  --lo: rgba(38,72,64,.18);
+  --edge: rgba(255,255,255,.75);
+  --shadow-highlight: var(--hi);
+  --shadow-low: var(--lo);
+  --sh-raised: -6px -6px 14px var(--hi), 8px 8px 20px var(--lo), inset 0 1px 0 rgba(255,255,255,.7);
+  --sh-inset: inset 3px 3px 7px var(--lo), inset -3px -3px 7px var(--hi);
+  --sh-press: inset 2px 2px 5px var(--lo), inset -2px -2px 5px var(--hi);
   --glow: 0 6px 18px rgb(20 184 166 / .38);
   --neu-shadow-raised: var(--sh-raised);
   --neu-shadow-raised-sm: -3px -3px 8px var(--shadow-highlight), 4px 4px 10px var(--shadow-low);
@@ -85,14 +91,15 @@
 
 .dark {
   --canvas: #0e1413;
-  --surface-soft: #151d1b;
+  --surface-color: #151d1b;
+  --surface-soft: var(--surface-color);
   --surface-2: #101716;
   --ink: #e8f0ee;
   --ink-muted: #9db2ac;
   --accent-hex: #14b8a6;
   --accent-ink: #5eead4;
   --on-accent: #032a25;
-  --background: 165 17% 7%;
+  --background: 164 18% 7%;
   --foreground: 158 26% 93%;
   --card: 160 16% 12%;
   --card-foreground: 158 31% 95%;
@@ -117,7 +124,7 @@
   --input: 160 12% 23%;
   --input-surface: 160 16% 11%;
   --ring: 171 66% 50%;
-  --surface: 160 14% 11%;
+  --surface: 165 16% 9.8%;
   --surface-subtle: 160 14% 14%;
   --surface-elevated: 160 16% 14%;
   --sidebar: 164 17% 9%;
@@ -145,11 +152,14 @@
   --disabled-foreground: 151 6% 47%;
   --skeleton: 160 13% 16%;
   --skeleton-highlight: 160 13% 20%;
-  --shadow-highlight: rgb(255 255 255 / .04);
-  --shadow-low: rgb(0 0 0 / .55);
-  --sh-raised: -6px -6px 14px var(--shadow-highlight), 8px 8px 20px var(--shadow-low), inset 0 1px 0 rgb(255 255 255 / .04);
-  --sh-inset: inset 3px 3px 7px var(--shadow-low), inset -3px -3px 7px var(--shadow-highlight);
-  --sh-press: inset 2px 2px 5px var(--shadow-low), inset -2px -2px 5px var(--shadow-highlight);
+  --hi: rgba(255,255,255,.04);
+  --lo: rgba(0,0,0,.55);
+  --edge: rgba(255,255,255,.07);
+  --shadow-highlight: var(--hi);
+  --shadow-low: var(--lo);
+  --sh-raised: -6px -6px 14px var(--hi), 8px 8px 20px var(--lo), inset 0 1px 0 rgba(255,255,255,.04);
+  --sh-inset: inset 3px 3px 7px var(--lo), inset -3px -3px 7px var(--hi);
+  --sh-press: inset 2px 2px 5px var(--lo), inset -2px -2px 5px var(--hi);
   --glow: 0 6px 18px rgb(20 184 166 / .25);
   --neu-shadow-raised: var(--sh-raised);
   --neu-shadow-raised-sm: -3px -3px 8px var(--shadow-highlight), 4px 4px 10px var(--shadow-low);
@@ -189,6 +199,21 @@ h1, h2, h3, h4, [data-slot="card-title"] {
 
 .soft-neu-inset { box-shadow: var(--neu-shadow-inset); }
 .soft-neu-raised { box-shadow: var(--neu-shadow-raised); }
+
+/* Dashboard-only tactile surfaces deliberately override the generic Card
+   background, border, and shadow utilities. */
+.tactile-raised-card {
+  border: 1px solid var(--edge);
+  border-radius: 28px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--surface-color) 100%, #fff 40%), var(--surface-2));
+  box-shadow: var(--sh-raised);
+}
+
+.tactile-inset-well {
+  border-radius: 20px;
+  background: var(--surface-2);
+  box-shadow: var(--sh-inset);
+}
 
 @media (max-width: 639px) {
   .soft-neu-raised { box-shadow: var(--neu-shadow-raised-sm); }

@@ -82,7 +82,7 @@ export default function StudentDashboard() {
       {loading ? <DashboardLoadingState/> : <>
         <DashboardStatusPanel
           className="mx-auto max-w-[1100px]"
-          indicator={<CircularGauge value={quizProgress} label="Quiz progress" ariaLabel={countLabel(completedQuizCount, 'quiz') + ' completed out of ' + totalQuizzes} strokeWidth={12} bare className="h-32 w-32" center={<strong className="text-lg leading-none tabular-nums text-foreground">{completedQuizCount}/{totalQuizzes}</strong>} />}
+          indicator={<CircularGauge value={quizProgress} label="Quiz progress" ariaLabel={countLabel(completedQuizCount, 'quiz') + ' completed out of ' + totalQuizzes} strokeWidth={12} bare className="h-[132px] w-[132px]" center={<><strong className="text-[26px] font-[650] leading-none tabular-nums text-foreground">{completedQuizCount}/{totalQuizzes}</strong><span className="mt-1 text-[12px] leading-none text-muted-foreground">completed</span></>} />}
           title={studentStory.title}
           description={studentStory.description}
           chip={totalQuizzes === 0
@@ -116,7 +116,7 @@ export default function StudentDashboard() {
               aria-label={`View ${studentClass.subjectName}, ${studentClass.sectionName}`}
               className="group block h-full rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
-              <Card className="flex h-full min-h-64 flex-col p-5 transition-[transform,border-color,background-color,box-shadow] duration-300 ease-[cubic-bezier(.16,1,.3,1)] group-hover:-translate-y-1 group-hover:border-primary/45 group-hover:bg-surface-elevated group-hover:shadow-[0_18px_38px_-24px_hsl(var(--foreground)/.42)] group-active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none">
+              <Card className="tactile-raised-card flex h-full min-h-64 flex-col p-6 sm:px-7 transition-transform duration-300 ease-[cubic-bezier(.16,1,.3,1)] group-hover:-translate-y-1 group-active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none">
                 <h3 className="text-lg font-bold text-foreground transition-colors duration-300 group-hover:text-primary-subtle-foreground">{studentClass.subjectName}</h3>
                 <p className="mt-1 text-sm text-muted-foreground">{studentClass.sectionName} <span aria-hidden="true">·</span> {studentClass.instructorName}</p>
                 <div className="mt-4 grid grid-cols-2 gap-3 border-y border-border py-4 text-sm">

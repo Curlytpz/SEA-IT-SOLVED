@@ -6,7 +6,7 @@ import { Input as ShadInput } from './ui/input';
 import { Label } from './ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { ContentSkeleton, PageSkeleton, Skeleton } from './ui/skeleton';
-import { AlertCircle, ArrowLeft, CheckCircle2, Info, TriangleAlert } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CheckCircle2, ChevronRight, Info, TriangleAlert } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import { cn } from '../lib/utils';
@@ -124,12 +124,12 @@ export function Card({ children, className = '', interactive = false, ...props }
 export function DashboardStatusPanel({ indicator, title, description, chip, attentionItems = [], slots = [], className = '' }) {
   const reducedMotion = useReducedMotion();
   return <motion.div initial={reducedMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={reducedMotion ? { duration: 0 } : TACTILE_SPRING}>
-    <Card className={cn('rounded-[1.75rem] border-white/60 bg-[linear-gradient(145deg,hsl(var(--surface-elevated)),hsl(var(--surface)))] p-5 shadow-[var(--sh-raised)] dark:border-border/80 sm:p-6', className)}>
+    <Card className={cn('tactile-raised-card p-6 sm:px-7', className)}>
       <div className="grid items-center gap-6 min-[820px]:grid-cols-[auto_minmax(0,1fr)_minmax(17rem,.72fr)]">
       <div className="flex justify-center min-[820px]:justify-start">{indicator}</div>
       <div className="min-w-0 text-center min-[820px]:text-left">
-        <h2 className="text-[1.375rem] font-semibold leading-tight tracking-[-.025em] text-foreground">{title}</h2>
-        <p className="mt-2 max-w-[38ch] text-sm leading-6 text-muted-foreground min-[820px]:mx-0">{description}</p>
+        <h2 className="text-[22px] font-[650] leading-[1.2] tracking-[-.02em] text-foreground">{title}</h2>
+        <p className="mt-2 max-w-[38ch] text-[13px] leading-6 text-muted-foreground min-[820px]:mx-0">{description}</p>
         {chip && <div className="mt-4 flex justify-center min-[820px]:justify-start">{chip}</div>}
         {attentionItems.length > 0 && <div className="mt-3 flex flex-wrap justify-center gap-2 min-[820px]:justify-start">{attentionItems.map(({ key, label, to, href }) => {
           const itemClass = 'inline-flex min-h-10 items-center gap-2 rounded-xl px-2.5 text-[13px] font-semibold text-primary-subtle-foreground transition-colors hover:bg-primary-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
@@ -138,15 +138,15 @@ export function DashboardStatusPanel({ indicator, title, description, chip, atte
         })}</div>}
       </div>
       <div className="grid grid-cols-2 gap-3 max-[420px]:grid-cols-1">
-        {slots.map(({ key, label, value, status, icon, to, emphasized = false, ariaLabel }) => {
+        {slots.map(({ key, label, value, status, icon, to, emphasized = false, ariaLabel, hideStatus = false, chevron = false }) => {
           const surfaceClass = cn(
-            'flex min-h-32 min-w-0 flex-col justify-between rounded-2xl bg-[var(--surface-2)] p-3.5 text-left shadow-[var(--sh-inset)]',
-            emphasized && 'ring-1 ring-primary/30 shadow-[var(--sh-inset),0_0_24px_hsl(var(--primary)/.12)]',
+            'tactile-inset-well flex min-h-24 min-w-0 flex-col justify-between p-4 px-[18px] text-left',
+            emphasized && 'ring-1 ring-primary/30',
             to && 'transition-transform duration-200 ease-[var(--ease-apple)] hover:-translate-y-px active:scale-[.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transform-none motion-reduce:transition-none',
           );
-          const content = <><span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground">{icon}{label}</span><strong className="mt-2 text-[1.875rem] font-semibold leading-none tabular-nums text-foreground">{value}</strong><span className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground"><i aria-hidden="true" className={cn('h-1.5 w-1.5 rounded-full bg-muted-foreground/60', emphasized && 'bg-primary')}/>{status}</span></>;
+          const content = <><span className="inline-flex items-center justify-between gap-2 text-[13px] font-semibold text-muted-foreground"><span className="inline-flex items-center gap-1.5">{icon}{label}</span>{chevron && <ChevronRight size={15} aria-hidden="true" />}</span><strong className="mt-2 text-[30px] font-[650] leading-none tracking-[-.03em] tabular-nums text-foreground">{value}</strong>{!hideStatus && <span className="mt-2 inline-flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground"><i aria-hidden="true" className={cn('h-1.5 w-1.5 rounded-full bg-muted-foreground opacity-50', emphasized && 'bg-[#14b8a6] opacity-100 shadow-[0_0_10px_rgba(20,184,166,.7)]')}/>{status}</span>}</>;
           return to
-            ? <Link key={key} to={to} aria-label={ariaLabel || `${label}: ${value}. ${status}`} className={surfaceClass}>{content}</Link>
+            ? <Link key={key} to={to} aria-label={ariaLabel || [label, value, status].filter(Boolean).join(': ')} className={surfaceClass}>{content}</Link>
             : <div key={key} className={surfaceClass}>{content}</div>;
         })}
       </div>

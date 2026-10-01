@@ -43,13 +43,14 @@ export function Meter({ value = 0, label, className = '' }) {
 
 export function CircularGauge({ value = 0, label, detail, center, ariaLabel, strokeWidth = 7, bare = false, className = '' }) {
   const clamped = Math.max(0, Math.min(100, Number(value) || 0));
-  const radius = 42;
+  const radius = 52;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (clamped / 100) * circumference;
-  return <div className={cn('relative grid h-28 w-28 shrink-0 place-items-center', !bare && 'rounded-full bg-[var(--surface-2)] shadow-[var(--sh-inset)]', className)} role="img" aria-label={ariaLabel || `${label || 'Value'}: ${Math.round(clamped)}%`}>
-    <svg viewBox="0 0 100 100" className="h-[5.3rem] w-[5.3rem] -rotate-90" aria-hidden="true">
-      <circle cx="50" cy="50" r={radius} fill="none" stroke="hsl(var(--border))" strokeWidth={strokeWidth} />
-      <circle cx="50" cy="50" r={radius} fill="none" stroke="hsl(var(--primary))" strokeLinecap="round" strokeWidth={strokeWidth} strokeDasharray={circumference} strokeDashoffset={offset} className="transition-[stroke-dashoffset] duration-[900ms] ease-[cubic-bezier(.32,.72,0,1)] motion-reduce:transition-none" />
+  return <div className={cn('relative grid h-28 w-28 shrink-0 place-items-center', !bare && 'rounded-full bg-[var(--surface-2)] shadow-[var(--sh-inset)]', className)} role="img" aria-label={ariaLabel || ((label || 'Value') + ': ' + Math.round(clamped) + '%')}>
+    <svg viewBox="0 0 140 140" className="h-full w-full -rotate-90" aria-hidden="true">
+      <defs><linearGradient id="circular-gauge-teal" x1="18%" y1="12%" x2="82%" y2="88%"><stop stopColor="#2dd4bf" /><stop offset="1" stopColor="#14b8a6" /></linearGradient></defs>
+      <circle cx="70" cy="70" r={radius} fill="none" stroke="var(--lo)" strokeOpacity=".5" strokeWidth={strokeWidth} />
+      <circle cx="70" cy="70" r={radius} fill="none" stroke="url(#circular-gauge-teal)" strokeLinecap="round" strokeWidth={strokeWidth} strokeDasharray={circumference} strokeDashoffset={offset} className="transition-[stroke-dashoffset] duration-[900ms] ease-[cubic-bezier(.32,.72,0,1)] motion-reduce:transition-none" />
     </svg>
     <div className="absolute grid text-center">{center || <><strong className="text-lg leading-none tabular-nums text-foreground">{Math.round(clamped)}%</strong>{detail && <span className="mt-1 text-[12px] leading-none text-muted-foreground">{detail}</span>}</>}</div>
   </div>;

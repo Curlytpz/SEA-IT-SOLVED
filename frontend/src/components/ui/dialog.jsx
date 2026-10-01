@@ -10,13 +10,13 @@ const DialogPortal = props => <DialogPrimitive.Portal data-slot="dialog-portal" 
 const DialogClose = props => <DialogPrimitive.Close data-slot="dialog-close" {...props}/>;
 
 function DialogOverlay({ className, ...props }) {
-  return <DialogPrimitive.Backdrop data-slot="dialog-overlay" className={cn('fixed inset-0 z-50 bg-sidebar/65 opacity-100 transition-opacity duration-200 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 motion-reduce:transition-none', className)} {...props}/>;
+  return <DialogPrimitive.Backdrop data-slot="dialog-overlay" className={cn('fixed inset-0 z-50 bg-sidebar/55 opacity-100 backdrop-blur-[2px] transition-opacity duration-200 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 motion-reduce:transition-none', className)} {...props}/>;
 }
 
 function DialogContent({ className, children, showCloseButton = true, ...props }) {
   return <DialogPortal>
     <DialogOverlay/>
-    <DialogPrimitive.Popup data-slot="dialog-content" className={cn('fixed left-1/2 top-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 scale-100 gap-4 overflow-y-auto rounded-xl border border-border bg-popover p-5 text-sm text-popover-foreground opacity-100 shadow-[0_20px_55px_-28px_rgb(15_23_42/.48)] outline-none transition-[opacity,transform] duration-200 data-[ending-style]:scale-[.98] data-[ending-style]:opacity-0 data-[starting-style]:scale-[.98] data-[starting-style]:opacity-0 motion-reduce:transition-none sm:max-w-md sm:p-6', className)} {...props}>
+    <DialogPrimitive.Popup data-slot="dialog-content" className={cn('fixed left-1/2 top-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 scale-100 gap-4 overflow-y-auto rounded-[1.5rem] border border-white/65 bg-popover p-5 text-sm text-popover-foreground opacity-100 shadow-[0_24px_58px_-28px_rgb(15_23_42/.35),var(--neu-shadow-raised)] outline-none transition-[opacity,transform] duration-200 data-[ending-style]:scale-[.98] data-[ending-style]:opacity-0 data-[starting-style]:scale-[.98] data-[starting-style]:opacity-0 motion-reduce:transition-none dark:border-border/80 sm:max-w-md sm:p-6', className)} {...props}>
       {children}
       {showCloseButton && <DialogPrimitive.Close render={<Button variant="ghost" size="icon-sm" className="absolute right-2 top-2"/>}><XIcon/><span className="sr-only">Close</span></DialogPrimitive.Close>}
     </DialogPrimitive.Popup>

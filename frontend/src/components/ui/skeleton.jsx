@@ -8,7 +8,7 @@ function Skeleton({
     <div
       data-slot="skeleton"
       aria-hidden="true"
-      className={cn("animate-pulse rounded-md bg-skeleton motion-reduce:animate-none", className)}
+      className={cn("animate-pulse rounded-xl bg-skeleton shadow-[inset_1px_1px_3px_hsl(var(--foreground)/.04),inset_-1px_-1px_3px_hsl(var(--surface-elevated)/.45)] motion-reduce:animate-none", className)}
       {...props} />
   );
 }

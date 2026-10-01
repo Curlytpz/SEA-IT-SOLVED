@@ -4,7 +4,7 @@ import { cva } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 import { getStatusPresentation } from '../../utils/statusPresentation.js';
 
-const badgeVariants = cva('inline-flex min-h-6 w-fit shrink-0 items-center justify-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium whitespace-nowrap', {
+const badgeVariants = cva('inline-flex min-h-6 w-fit shrink-0 items-center justify-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap shadow-[var(--neu-shadow-raised-sm)]', {
   variants: { variant: {
     default: 'border-primary/20 bg-primary-subtle text-primary-subtle-foreground',
     secondary: 'border-border bg-secondary text-secondary-foreground',

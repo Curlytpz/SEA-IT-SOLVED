@@ -38,8 +38,8 @@ export default function AuthLayout({ title, subtitle, panelTitle, panelBody, chi
       animate={{ opacity: 1, scale: 1, y: 0 }}
       transition={{ duration: reducedMotion ? 0 : 0.5, ease: AUTH_EASE }}
       className={loginExperience
-        ? 'relative z-[1] mx-auto grid min-h-[min(710px,calc(100svh-3rem))] w-full max-w-[1240px] overflow-hidden rounded-2xl border border-border bg-card text-foreground shadow-[0_24px_64px_-42px_rgba(15,23,42,.36),0_8px_24px_-20px_rgba(30,41,59,.18)] max-md:min-h-svh max-md:rounded-none max-md:border-0 max-md:shadow-none md:grid-cols-[42%_58%] lg:grid-cols-[44%_56%]'
-        : 'mx-auto grid min-h-svh w-full max-w-[1680px] overflow-hidden bg-card text-foreground shadow-[0_24px_80px_-48px_rgba(15,23,42,.34)] md:grid-cols-[42%_58%] lg:grid-cols-[44%_56%] xl:my-6 xl:min-h-[calc(100svh-3rem)] xl:rounded-2xl'}
+        ? 'relative z-[1] mx-auto grid min-h-[min(710px,calc(100svh-3rem))] w-full max-w-[1240px] overflow-hidden rounded-[1.5rem] border border-white/65 bg-card text-foreground shadow-[var(--neu-shadow-raised)] max-md:min-h-svh max-md:rounded-none max-md:border-0 max-md:shadow-none dark:border-border/80 md:grid-cols-[42%_58%] lg:grid-cols-[44%_56%]'
+        : 'mx-auto grid min-h-svh w-full max-w-[1680px] overflow-hidden bg-card text-foreground shadow-[var(--neu-shadow-raised)] md:grid-cols-[42%_58%] lg:grid-cols-[44%_56%] xl:my-6 xl:min-h-[calc(100svh-3rem)] xl:rounded-[1.5rem]'}
     >
       <section className={`relative isolate hidden min-h-0 flex-col overflow-hidden p-8 text-sidebar-foreground md:flex lg:p-10 xl:p-12 ${loginExperience ? "bg-[linear-gradient(145deg,hsl(var(--sidebar))_0%,hsl(var(--surface))_100%)] after:pointer-events-none after:absolute after:inset-0 after:z-[1] after:bg-[linear-gradient(110deg,transparent_48%,hsl(var(--primary)/.025)_100%)] after:content-['']" : 'bg-sidebar'}`} aria-labelledby={visualTitleId}>
         <AmbientMathScene compact restrained={loginExperience} interactive={!loginExperience} />

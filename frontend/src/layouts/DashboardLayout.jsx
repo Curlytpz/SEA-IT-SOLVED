@@ -76,7 +76,7 @@ export default function DashboardLayout({ children }) {
 
   return (
     <div className="dashboard-shell min-h-dvh">
-      <header className="sticky top-0 z-30 flex min-h-[calc(4rem+env(safe-area-inset-top))] items-center justify-between border-b border-border bg-surface/95 px-3 pb-0 pl-[max(.75rem,env(safe-area-inset-left))] pr-[max(.75rem,env(safe-area-inset-right))] pt-[env(safe-area-inset-top)] shadow-sm sm:px-4 lg:hidden">
+      <header className="sticky top-0 z-30 mx-2 mt-2 flex min-h-[calc(4rem+env(safe-area-inset-top))] items-center justify-between rounded-2xl border border-white/65 bg-surface/95 px-3 pb-0 pl-[max(.75rem,env(safe-area-inset-left))] pr-[max(.75rem,env(safe-area-inset-right))] pt-[env(safe-area-inset-top)] shadow-[var(--neu-shadow-raised-sm)] sm:mx-4 sm:px-4 lg:hidden dark:border-border/80">
         <button ref={menuRef} type="button" onClick={()=>setOpen(true)} aria-label="Open navigation" aria-expanded={open}
           className="grid h-11 w-11 place-items-center rounded-lg text-foreground transition hover:bg-primary-subtle hover:text-primary-subtle-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <Menu size={21}/>
@@ -87,13 +87,13 @@ export default function DashboardLayout({ children }) {
 
       <div aria-hidden="true" className={`fixed inset-0 z-40 bg-slate-950/45 transition-opacity [transition-duration:260ms] [transition-timing-function:cubic-bezier(.22,1,.36,1)] lg:hidden ${open?'opacity-100':'pointer-events-none opacity-0'}`} onClick={()=>setOpen(false)} />
 
-      <aside ref={drawerRef} role={!desktop ? "dialog" : undefined} aria-modal={!desktop && open ? "true" : undefined} aria-label={!desktop ? "Main navigation" : undefined} aria-hidden={!desktop && !open ? "true" : undefined} inert={!desktop && !open ? true : undefined} className={`fixed inset-y-0 left-0 z-50 flex h-dvh max-h-dvh w-[min(18rem,86vw,calc(100vw-2.75rem))] flex-col overflow-hidden overscroll-contain border-r border-border bg-sidebar pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)] text-sidebar-foreground shadow-[0_16px_42px_-28px_rgb(15_23_42/.55)] transition-transform [transition-duration:260ms] [transition-timing-function:cubic-bezier(.22,1,.36,1)] lg:z-30 lg:w-64 lg:translate-x-0 ${open?'translate-x-0':'-translate-x-full'}`}>
-        <div className="flex h-20 shrink-0 items-center justify-between border-b border-border px-5 landscape-compact:h-[3.75rem]">
+      <aside ref={drawerRef} role={!desktop ? "dialog" : undefined} aria-modal={!desktop && open ? "true" : undefined} aria-label={!desktop ? "Main navigation" : undefined} aria-hidden={!desktop && !open ? "true" : undefined} inert={!desktop && !open ? true : undefined} className={`fixed inset-y-0 left-0 z-50 flex h-dvh max-h-dvh w-[min(18rem,86vw,calc(100vw-2.75rem))] flex-col overflow-hidden overscroll-contain border-r border-white/65 bg-sidebar pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)] text-sidebar-foreground shadow-[var(--neu-shadow-raised)] transition-transform [transition-duration:260ms] [transition-timing-function:cubic-bezier(.22,1,.36,1)] dark:border-border/80 lg:inset-y-3 lg:left-3 lg:h-[calc(100dvh-1.5rem)] lg:rounded-[1.5rem] lg:border lg:w-[15.25rem] lg:translate-x-0 ${open?'translate-x-0':'-translate-x-full'}`}>
+        <div className="flex h-20 shrink-0 items-center justify-between border-b border-border/60 px-5 landscape-compact:h-[3.75rem]">
           <BrandLogo tagline />
           <button ref={closeRef} type="button" onClick={()=>{setOpen(false);menuRef.current?.focus();}} aria-label="Close navigation" className="grid h-11 w-11 place-items-center rounded-lg text-muted-foreground transition-colors duration-200 hover:bg-primary-subtle hover:text-primary-subtle-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"><X size={19}/></button>
         </div>
 
-        <div className="mx-3 mt-4 shrink-0 rounded-xl border border-border bg-surface p-3.5 shadow-surface landscape-compact:mt-2 landscape-compact:px-3.5 landscape-compact:py-2.5">
+        <div className="mx-3 mt-4 shrink-0 rounded-2xl border border-white/60 bg-surface p-3.5 shadow-[var(--neu-shadow-inset)] dark:border-border/70 landscape-compact:mt-2 landscape-compact:px-3.5 landscape-compact:py-2.5">
           <div className="flex items-center gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary ring-1 ring-inset ring-primary/20"><RoleIcon size={19}/></span>
             <div className="min-w-0">
@@ -107,8 +107,8 @@ export default function DashboardLayout({ children }) {
           <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[.2em] text-muted-foreground">Workspace</p>
           <div className="space-y-1">
             {links.map(({to,label,icon:NavIcon})=><NavLink key={to} to={to} end={to.split('/').length<=2}
-              className={({isActive})=>`group relative flex items-center gap-3 overflow-hidden rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 after:absolute after:left-0 after:top-1/2 after:h-5 after:w-0.5 after:-translate-y-1/2 after:rounded-full after:bg-primary after:transition-transform after:duration-200 active:scale-[.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none ${isActive?'bg-primary-subtle text-primary-subtle-foreground shadow-sm after:scale-y-100':'text-muted-foreground after:scale-y-0 hover:bg-accent hover:text-accent-foreground'}`}>
-              <NavIcon size={18} className="transition-transform duration-200 group-hover:scale-105"/><span>{label}</span>
+              className={({isActive})=>`group relative flex items-center gap-3 overflow-hidden rounded-2xl px-3 py-2.5 text-sm font-medium transition-all duration-200 after:absolute after:left-0 after:top-1/2 after:h-5 after:w-0.5 after:-translate-y-1/2 after:rounded-full after:bg-primary after:transition-transform after:duration-200 active:translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none ${isActive?'bg-primary-subtle text-primary-subtle-foreground shadow-[var(--neu-shadow-inset)] after:scale-y-100':'text-muted-foreground after:scale-y-0 hover:bg-accent/70 hover:text-accent-foreground'}`}>
+              <span className="grid h-8 w-8 place-items-center rounded-xl bg-surface-subtle text-muted-foreground transition-[background-color,transform] duration-200 group-hover:bg-card group-hover:text-primary"><NavIcon size={17}/></span><span>{label}</span>
             </NavLink>)}
           </div>
         </nav>
@@ -121,7 +121,7 @@ export default function DashboardLayout({ children }) {
         </div>
       </aside>
 
-      <main className="relative z-[1] min-h-dvh min-w-0 bg-transparent lg:pl-64">
+      <main className="relative z-[1] min-h-dvh min-w-0 bg-transparent lg:pl-[16.75rem]">
         <div className="mx-auto w-full max-w-[1920px] [container-type:inline-size] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(.75rem,env(safe-area-inset-left))] pr-[max(.75rem,env(safe-area-inset-right))] pt-4 sm:px-6 sm:py-7 lg:px-8 2xl:px-10"><PageTransition>{children}</PageTransition></div>
       </main>
     </div>

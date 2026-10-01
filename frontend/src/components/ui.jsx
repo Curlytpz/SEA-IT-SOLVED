@@ -128,7 +128,7 @@ export function BackButton({ to, onClick, children = 'Back', replace = false, st
 export function PageHeader({ title, subtitle, children }) {
   return (
     <div className="mb-6 flex min-w-0 flex-col items-start justify-between gap-3 max-[420px]:mb-[1.15rem] sm:flex-row">
-      <div className="min-w-0"><h1 className="max-w-[34ch] [overflow-wrap:anywhere] text-[clamp(1.35rem,1.1rem+.85vw,1.8rem)] font-bold leading-[1.18] tracking-tight text-foreground">{title}</h1>{subtitle && <p className="mt-1 max-w-[72ch] text-sm leading-[1.55] text-muted-foreground">{subtitle}</p>}</div>
+      <div className="min-w-0"><h1 className="max-w-[34ch] [overflow-wrap:anywhere] text-[clamp(1.5rem,1.18rem+1vw,2rem)] font-bold leading-[1.12] tracking-[-.035em] text-foreground">{title}</h1>{subtitle && <p className="mt-2 max-w-[72ch] text-sm leading-[1.6] text-muted-foreground">{subtitle}</p>}</div>
       {children && <div className="flex w-full min-w-0 flex-wrap items-center gap-2 [&>a]:inline-flex max-[420px]:[&>a>button]:w-full max-[420px]:[&>a]:flex-[1_1_100%] max-[420px]:[&>a]:w-full max-[420px]:[&>button]:flex-[1_1_100%] max-[420px]:[&>button]:w-full sm:w-auto sm:shrink-0">{children}</div>}
     </div>
   );
@@ -174,7 +174,7 @@ export function FormField({ label, children, hint, action }) {
   return <div className="mb-4">{action?<div className="mb-1.5 flex min-w-0 items-center justify-between gap-3"><Label htmlFor={controlId}>{label}</Label>{action}</div>:<Label htmlFor={controlId} className="mb-1.5">{label}</Label>}{control}{hint&&<p id={hintId} className="mt-1.5 text-xs text-muted-foreground">{hint}</p>}</div>;
 }
 
-const fieldClass = `min-h-11 min-w-0 w-full rounded-lg border border-input bg-input-surface px-3 py-2.5 text-sm text-foreground shadow-sm placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25 aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-2 aria-[invalid=true]:ring-destructive/15 disabled:cursor-not-allowed disabled:border-disabled disabled:bg-disabled disabled:text-disabled-foreground`;
+const fieldClass = `min-h-11 min-w-0 w-full rounded-2xl border border-white/60 bg-input-surface px-3.5 py-2.5 text-sm text-foreground shadow-[var(--neu-shadow-inset)] placeholder:text-muted-foreground transition-[border-color,box-shadow,background-color] duration-200 focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-ring/25 aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-2 aria-[invalid=true]:ring-destructive/15 disabled:cursor-not-allowed disabled:border-disabled disabled:bg-disabled disabled:text-disabled-foreground dark:border-border/80`;
 export function Input({ className = '', ...props }) { return <ShadInput {...props} className={className}/>; }
 export function Select({ children, className = '', ...props }) { return <select {...props} className={`${fieldClass} ${className}`}>{children}</select>; }
 export function Textarea({ className = '', ...props }) { return <textarea {...props} className={`${fieldClass} min-h-28 resize-y ${className}`}/>; }

@@ -3,18 +3,18 @@ import { cva } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex min-h-11 shrink-0 touch-manipulation items-center justify-center gap-2 whitespace-nowrap rounded-lg border text-sm font-semibold shadow-sm transition-[background-color,border-color,color,box-shadow,transform] duration-150 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-[.98] disabled:pointer-events-none disabled:border-disabled disabled:bg-disabled disabled:text-disabled-foreground disabled:shadow-none [&_svg]:pointer-events-none [&_svg]:shrink-0',
+  'inline-flex min-h-11 shrink-0 touch-manipulation items-center justify-center gap-2 whitespace-nowrap rounded-2xl border text-sm font-semibold shadow-[var(--neu-shadow-raised-sm)] transition-[background-color,border-color,color,box-shadow,transform] duration-200 ease-out outline-none hover:-translate-y-px focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-px active:shadow-[var(--neu-shadow-inset)] disabled:pointer-events-none disabled:border-disabled disabled:bg-disabled disabled:text-disabled-foreground disabled:shadow-none disabled:translate-y-0 [&_svg]:pointer-events-none [&_svg]:shrink-0 motion-reduce:transform-none motion-reduce:transition-none',
   {
     variants: {
       variant: {
-        default: 'border-primary bg-primary text-primary-foreground hover:border-primary-hover hover:bg-primary-hover hover:shadow-md',
-        outline: 'border-input bg-card text-card-foreground hover:border-primary/35 hover:bg-primary-subtle hover:text-primary-subtle-foreground',
-        secondary: 'border-border bg-secondary text-secondary-foreground hover:bg-surface-elevated',
+        default: 'border-primary/70 bg-primary text-primary-foreground hover:border-primary-hover hover:bg-primary-hover hover:shadow-[0_8px_16px_hsl(var(--primary)/.2)]',
+        outline: 'border-white/70 bg-card text-card-foreground hover:border-primary/35 hover:bg-primary-subtle hover:text-primary-subtle-foreground',
+        secondary: 'border-white/65 bg-secondary text-secondary-foreground hover:bg-surface-elevated',
         ghost: 'border-transparent bg-transparent text-muted-foreground shadow-none hover:bg-surface-elevated hover:text-foreground',
         destructive: 'border-destructive bg-destructive text-destructive-foreground hover:brightness-110',
         success: 'border-success bg-success text-success-foreground hover:brightness-95',
         warning: 'border-warning bg-warning text-warning-foreground hover:brightness-95',
-        link: 'min-h-0 border-transparent bg-transparent p-0 text-primary shadow-none underline-offset-4 hover:text-primary-hover hover:underline active:scale-100',
+        link: 'min-h-0 border-transparent bg-transparent p-0 text-primary shadow-none underline-offset-4 hover:text-primary-hover hover:underline active:translate-y-0',
       },
       size: {
         default: 'px-4 py-2',

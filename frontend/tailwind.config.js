@@ -8,7 +8,7 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+        sans: ['Avenir Next', 'Manrope', 'Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
       },
       colors: {
         border: 'hsl(var(--border))',
@@ -117,8 +117,9 @@ export default {
         sm: 'calc(var(--radius) - 4px)',
       },
       boxShadow: {
-        glass: '0 6px 20px -16px rgb(15 23 42 / 0.3)',
-        surface: '0 1px 2px rgb(15 23 42 / 0.04), 0 10px 30px -28px rgb(15 23 42 / 0.28)',
+        glass: 'var(--neu-shadow-raised-sm)',
+        surface: 'var(--neu-shadow-raised)',
+        inset: 'var(--neu-shadow-inset)',
       },
       keyframes: {
         'notice-in': {

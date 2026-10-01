@@ -9,21 +9,29 @@
   --sidebar-w: 220px;
   --motion-spring: cubic-bezier(.2, .8, .2, 1);
   --motion-soft: cubic-bezier(.2, .7, .2, 1);
-  --background: 40 16% 94%;
-  --foreground: 170 25% 11%;
-  --card: 45 23% 97%;
-  --card-foreground: 170 25% 11%;
+  --canvas: #eef1ef;
+  --surface-soft: #f6f8f7;
+  --surface-2: #eaf0ee;
+  --ink: #14211e;
+  --ink-muted: #4a5d58;
+  --accent-hex: #14b8a6;
+  --accent-ink: #0b6b60;
+  --on-accent: #04332d;
+  --background: 150 9% 94%;
+  --foreground: 164 25% 11%;
+  --card: 150 11% 97%;
+  --card-foreground: 164 25% 11%;
   --popover: 45 27% 98%;
   --popover-foreground: 170 25% 11%;
-  --primary: 171 70% 46%;
-  --primary-hover: 173 75% 36%;
-  --primary-foreground: 0 0% 100%;
+  --primary: 174 80% 40%;
+  --primary-hover: 174 81% 31%;
+  --primary-foreground: 173 85% 11%;
   --primary-subtle: 170 69% 88%;
   --primary-subtle-foreground: 173 67% 29%;
   --secondary: 38 16% 93%;
   --secondary-foreground: 168 10% 29%;
-  --muted: 40 16% 92%;
-  --muted-foreground: 166 7% 43%;
+  --muted: 150 10% 92%;
+  --muted-foreground: 160 11% 33%;
   --accent: 170 69% 88%;
   --accent-foreground: 173 67% 29%;
   --destructive: 0 72% 51%;
@@ -34,9 +42,9 @@
   --input: 38 13% 82%;
   --input-surface: 45 19% 95%;
   --ring: 171 70% 46%;
-  --surface: 40 14% 92%;
-  --surface-subtle: 45 18% 96%;
-  --surface-elevated: 45 23% 97%;
+  --surface: 150 11% 97%;
+  --surface-subtle: 150 9% 94%;
+  --surface-elevated: 150 11% 97%;
   --sidebar: 40 21% 95%;
   --sidebar-foreground: 170 25% 11%;
   --brand: 170 38% 17%;
@@ -63,27 +71,42 @@
   --skeleton: 38 13% 88%;
   --skeleton-highlight: 45 19% 96%;
   --radius: 1rem;
-  --neu-shadow-raised: 8px 8px 18px rgb(160 155 147 / .18), -8px -8px 18px rgb(255 255 255 / .82);
-  --neu-shadow-raised-sm: 4px 4px 10px rgb(160 155 147 / .15), -4px -4px 10px rgb(255 255 255 / .76);
-  --neu-shadow-inset: inset 3px 3px 8px rgb(160 155 147 / .14), inset -3px -3px 8px rgb(255 255 255 / .78);
+  --shadow-highlight: rgb(255 255 255 / .95);
+  --shadow-low: rgb(38 72 64 / .18);
+  --sh-raised: -6px -6px 14px var(--shadow-highlight), 8px 8px 20px var(--shadow-low), inset 0 1px 0 rgb(255 255 255 / .7);
+  --sh-inset: inset 3px 3px 7px var(--shadow-low), inset -3px -3px 7px var(--shadow-highlight);
+  --sh-press: inset 2px 2px 5px var(--shadow-low), inset -2px -2px 5px var(--shadow-highlight);
+  --glow: 0 6px 18px rgb(20 184 166 / .38);
+  --neu-shadow-raised: var(--sh-raised);
+  --neu-shadow-raised-sm: -3px -3px 8px var(--shadow-highlight), 4px 4px 10px var(--shadow-low);
+  --neu-shadow-inset: var(--sh-inset);
+  --ease-apple: cubic-bezier(.32, .72, 0, 1);
 }
 
 .dark {
-  --background: 164 15% 8%;
-  --foreground: 158 31% 95%;
+  --canvas: #0e1413;
+  --surface-soft: #151d1b;
+  --surface-2: #101716;
+  --ink: #e8f0ee;
+  --ink-muted: #9db2ac;
+  --accent-hex: #14b8a6;
+  --accent-ink: #5eead4;
+  --on-accent: #032a25;
+  --background: 165 17% 7%;
+  --foreground: 158 26% 93%;
   --card: 160 16% 12%;
   --card-foreground: 158 31% 95%;
   --popover: 160 16% 14%;
   --popover-foreground: 158 31% 95%;
-  --primary: 171 66% 50%;
-  --primary-hover: 171 66% 56%;
-  --primary-foreground: 164 15% 8%;
+  --primary: 174 80% 40%;
+  --primary-hover: 171 78% 50%;
+  --primary-foreground: 165 86% 9%;
   --primary-subtle: 168 31% 17%;
   --primary-subtle-foreground: 169 67% 76%;
   --secondary: 160 14% 15%;
   --secondary-foreground: 152 9% 70%;
   --muted: 160 14% 14%;
-  --muted-foreground: 155 8% 61%;
+  --muted-foreground: 154 13% 65%;
   --accent: 168 31% 17%;
   --accent-foreground: 169 67% 76%;
   --destructive: 0 63% 50%;
@@ -122,9 +145,15 @@
   --disabled-foreground: 151 6% 47%;
   --skeleton: 160 13% 16%;
   --skeleton-highlight: 160 13% 20%;
-  --neu-shadow-raised: 8px 8px 18px rgb(0 0 0 / .25), -5px -5px 16px rgb(73 95 89 / .1);
-  --neu-shadow-raised-sm: 4px 4px 10px rgb(0 0 0 / .22), -3px -3px 9px rgb(73 95 89 / .09);
-  --neu-shadow-inset: inset 3px 3px 8px rgb(0 0 0 / .22), inset -3px -3px 8px rgb(73 95 89 / .08);
+  --shadow-highlight: rgb(255 255 255 / .04);
+  --shadow-low: rgb(0 0 0 / .55);
+  --sh-raised: -6px -6px 14px var(--shadow-highlight), 8px 8px 20px var(--shadow-low), inset 0 1px 0 rgb(255 255 255 / .04);
+  --sh-inset: inset 3px 3px 7px var(--shadow-low), inset -3px -3px 7px var(--shadow-highlight);
+  --sh-press: inset 2px 2px 5px var(--shadow-low), inset -2px -2px 5px var(--shadow-highlight);
+  --glow: 0 6px 18px rgb(20 184 166 / .25);
+  --neu-shadow-raised: var(--sh-raised);
+  --neu-shadow-raised-sm: -3px -3px 8px var(--shadow-highlight), 4px 4px 10px var(--shadow-low);
+  --neu-shadow-inset: var(--sh-inset);
 }
 
 
@@ -146,6 +175,12 @@ body {
 h1, h2, h3, h4, [data-slot="card-title"] {
   font-family: "Avenir Next", Manrope, Inter, ui-sans-serif, system-ui, sans-serif;
   letter-spacing: -0.025em;
+}
+
+/* The marketing landing page deliberately keeps its existing editorial identity. */
+.landing-page h1, .landing-page h2, .landing-page h3, .landing-page h4 {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: inherit;
 }
 
 .dashboard-shell {

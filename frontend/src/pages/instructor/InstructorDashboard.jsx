@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import { DashboardLoadingState, EmptyState, PageHeader, StatCard, Badge, Btn } from '../../components/ui';
+import { DashboardLoadingState, EmptyState, PageHeader, StatCard, Badge, Btn, StatusChip } from '../../components/ui';
 import api from '../../services/api';
 import { BookOpen, Plus, Users } from '../../components/icons';
 import InstructorReviewQueue from '../../components/reasoning/InstructorReviewQueue';
@@ -20,12 +20,13 @@ export default function InstructorDashboard() {
 
   return (
     <DashboardLayout>
-      <PageHeader title="Teaching Overview" subtitle={loading ? 'Sections, enrollment, and work awaiting your attention.' : `${sections.length} active ${sections.length === 1 ? 'section' : 'sections'} • ${enrolled} enrolled ${enrolled === 1 ? 'student' : 'students'}${pending ? ` • ${pending} pending ${pending === 1 ? 'request' : 'requests'}` : ''}`}>
-        <Link to="/instructor/sections"><Btn variant="primary"><Plus size={16}/> New Section</Btn></Link>
-      </PageHeader>
+      <div className="mx-auto w-full max-w-[75rem]">
+        <PageHeader title="Teaching Overview" subtitle={loading ? 'Sections, enrollment, and work awaiting your attention.' : `${sections.length} active ${sections.length === 1 ? 'section' : 'sections'} • ${enrolled} enrolled ${enrolled === 1 ? 'student' : 'students'}${pending ? ` • ${pending} pending ${pending === 1 ? 'request' : 'requests'}` : ''}`}>
+          <Link to="/instructor/sections"><Btn variant="primary"><Plus size={16}/> New Section</Btn></Link>
+        </PageHeader>
 
-      {loading ? <DashboardLoadingState /> : (
-        <>
+        {loading ? <DashboardLoadingState /> : (
+          <>
           <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <StatCard value={sections.length} label="Active Sections" />
             <StatCard value={enrolled} label="Enrolled Students" />
@@ -45,15 +46,17 @@ export default function InstructorDashboard() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {sections.slice(0,6).map(sec=>(
-                    <article key={sec.id} className="min-w-0 max-w-full overflow-hidden rounded-xl border border-border bg-surface shadow-surface transition-[border-color,box-shadow,transform,background-color] duration-300 ease-[cubic-bezier(.16,1,.3,1)] hover:-translate-y-1 hover:border-primary/40 hover:bg-surface-elevated hover:shadow-glass motion-reduce:transform-none motion-reduce:transition-none">
+                    <article key={sec.id} className="min-w-0 max-w-full overflow-hidden rounded-[1.25rem] border border-white/60 bg-surface shadow-[var(--neu-shadow-raised-sm)] transition-[border-color,box-shadow,transform,background-color] duration-200 ease-[var(--ease-apple)] hover:-translate-y-px hover:border-primary/40 hover:bg-surface-elevated hover:shadow-[var(--neu-shadow-raised)] dark:border-border/80 motion-reduce:transform-none motion-reduce:transition-none">
                       <Link to={`/instructor/sections/${sec.id}`} className="block p-4 pb-3">
                         <div className="flex justify-between items-start mb-2">
                           <Badge status={sec.subjectCode||'SECTION'} />
-                          {sec.pendingCount>0 && <span className="rounded-full bg-warning-subtle px-2 py-0.5 text-xs font-bold text-warning-subtle-foreground dark:bg-warning-subtle dark:text-warning-subtle-foreground">{sec.pendingCount} pending</span>}
+                          {sec.pendingCount > 0 && (
+                            <StatusChip status="PENDING" label={`${sec.pendingCount} pending`}/>
+                          )}
                         </div>
-                        <h3 className="font-semibold text-foreground text-sm">{sec.sectionName}</h3>
-                        <p className="text-xs text-muted-foreground mt-0.5">{sec.subjectName}</p>
-                        <div className="mt-3 flex items-center gap-1 text-xs text-muted-foreground"><Users size={13}/> {sec.enrolledCount} enrolled</div>
+                        <h3 className="font-semibold text-foreground text-base">{sec.subjectName}</h3>
+                        <p className="mt-0.5 text-sm text-muted-foreground">{sec.sectionName}</p>
+                        <div className="mt-3 flex items-center gap-1.5 text-sm text-muted-foreground"><Users size={14}/> {sec.enrolledCount} enrolled</div>
                       </Link>
                       <ClassCode compact sectionId={sec.id} code={sec.joinCode} subjectCode={sec.subjectCode} sectionName={sec.sectionName} />
                     </article>
@@ -62,8 +65,9 @@ export default function InstructorDashboard() {
               </>
             )
           }
-        </>
-      )}
+          </>
+        )}
+      </div>
     </DashboardLayout>
   );
 }

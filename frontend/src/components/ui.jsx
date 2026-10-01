@@ -9,6 +9,7 @@ import { ContentSkeleton, PageSkeleton, Skeleton } from './ui/skeleton';
 import { AlertCircle, ArrowLeft, CheckCircle2, Info, TriangleAlert } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { cn } from '../lib/utils';
+export { CircularGauge, Meter, StatusChip, Toggle, Tooltip } from './ui/tactile';
 
 // Shared visual primitives for the light/dark dashboard design system.
 
@@ -163,7 +164,7 @@ export function TabBar({ tabs, active, onChange, label = 'View options' }) {
 
 export function Table({ columns, rows, emptyIcon, emptyTitle, emptyBody }) {
   if (!rows.length) return <EmptyState icon={emptyIcon} title={emptyTitle} body={emptyBody}/>;
-  return <div className="scrollbar-hidden -mx-1 w-[calc(100%+.5rem)] max-w-full overflow-x-auto overscroll-x-contain rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(15,23,42,.035)] [-webkit-overflow-scrolling:touch] sm:mx-0 sm:w-full"><table className="w-full min-w-[680px] text-sm"><thead><tr className="border-b border-border bg-surface-subtle">{columns.map(c=><th key={c.key} className="whitespace-nowrap px-4 py-3.5 text-left text-xs font-semibold text-muted-foreground">{c.label}</th>)}</tr></thead><tbody className="divide-y divide-border">{rows.map((row,i)=><tr key={row.id || row.enrollmentId || i} className="transition-colors hover:bg-surface-subtle">{columns.map(c=><td key={c.key} className="px-4 py-3.5 text-foreground">{c.render?c.render(row):row[c.key]}</td>)}</tr>)}</tbody></table></div>;
+  return <div className="scrollbar-hidden -mx-1 w-[calc(100%+.5rem)] max-w-full overflow-x-auto overscroll-x-contain rounded-[1.25rem] border border-white/60 bg-surface shadow-[var(--neu-shadow-raised-sm)] [-webkit-overflow-scrolling:touch] dark:border-border/80 sm:mx-0 sm:w-full"><table className="w-full min-w-[680px] text-sm"><thead><tr className="border-b border-border bg-surface-subtle">{columns.map(c=><th key={c.key} className="whitespace-nowrap px-4 py-3.5 text-left text-xs font-semibold text-muted-foreground">{c.label}</th>)}</tr></thead><tbody className="divide-y divide-border">{rows.map((row,i)=><tr key={row.id || row.enrollmentId || i} className="transition-colors hover:bg-surface-subtle/70">{columns.map(c=><td key={c.key} className="px-4 py-3.5 text-foreground">{c.render?c.render(row):row[c.key]}</td>)}</tr>)}</tbody></table></div>;
 }
 
 export function FormField({ label, children, hint, action }) {

@@ -5,6 +5,8 @@ import ThemeToggle from '../components/ThemeToggle';
 import { BookOpen, Chart, Clock, GraduationCap, LayoutDashboard, LogOut, Menu, Search, Settings, Shield, Users, X } from '../components/icons';
 import { PageTransition } from '../components/PageTransition';
 import { BrandLogo } from '../components/brand/BrandLogo';
+import { motion, useReducedMotion } from 'framer-motion';
+import { TACTILE_SPRING } from '../lib/motionVariants';
 
 const NAV = {
   ADMIN: [
@@ -39,6 +41,7 @@ export default function DashboardLayout({ children }) {
   const closeRef = useRef(null);
   const links = NAV[user?.role] || [];
   const RoleIcon = ROLE_ICON[user?.role] || Users;
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => { setOpen(false); }, [location.pathname]);
   useEffect(() => {
@@ -108,7 +111,10 @@ export default function DashboardLayout({ children }) {
           <div className="space-y-1">
             {links.map(({to,label,icon:NavIcon})=><NavLink key={to} to={to} end={to.split('/').length<=2}
               className={({isActive})=>`group relative flex items-center gap-3 overflow-hidden rounded-2xl px-3 py-2.5 text-sm font-medium transition-all duration-200 after:absolute after:left-0 after:top-1/2 after:h-5 after:w-0.5 after:-translate-y-1/2 after:rounded-full after:bg-primary after:transition-transform after:duration-200 active:translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none ${isActive?'bg-primary-subtle text-primary-subtle-foreground shadow-[var(--neu-shadow-inset)] after:scale-y-100':'text-muted-foreground after:scale-y-0 hover:bg-accent/70 hover:text-accent-foreground'}`}>
-              <span className="grid h-8 w-8 place-items-center rounded-xl bg-surface-subtle text-muted-foreground transition-[background-color,transform] duration-200 group-hover:bg-card group-hover:text-primary"><NavIcon size={17}/></span><span>{label}</span>
+              {({ isActive }) => <>
+                {isActive && !reducedMotion && <motion.span layoutId="sidebar-active-nav" aria-hidden="true" className="absolute inset-0 rounded-2xl bg-primary-subtle shadow-[var(--glow)]" transition={TACTILE_SPRING}/>}
+                <span className="relative z-10 grid h-8 w-8 place-items-center rounded-xl bg-surface-subtle text-muted-foreground transition-[background-color,transform] duration-200 group-hover:bg-card group-hover:text-primary"><NavIcon size={17}/></span><span className="relative z-10">{label}</span>
+              </>}
             </NavLink>)}
           </div>
         </nav>

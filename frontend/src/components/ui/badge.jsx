@@ -3,6 +3,7 @@ import { useRender } from '@base-ui/react/use-render';
 import { cva } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 import { getStatusPresentation } from '../../utils/statusPresentation.js';
+import { StatusChip } from './tactile';
 
 const badgeVariants = cva('inline-flex min-h-6 w-fit shrink-0 items-center justify-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap shadow-[var(--neu-shadow-raised-sm)]', {
   variants: { variant: {
@@ -24,18 +25,7 @@ function Badge({ className, variant = 'secondary', render, ...props }) {
 
 function StatusBadge({ status, label, className, pulse, ...props }) {
   const presentation = getStatusPresentation(status, label);
-  const showPulse = pulse ?? presentation.animated;
-  return (
-    <Badge
-      variant={presentation.variant}
-      className={cn('rounded-full font-bold', className)}
-      data-status={presentation.status || undefined}
-      {...props}
-    >
-      {showPulse && <span aria-hidden="true" className="h-1.5 w-1.5 animate-pulse-dot rounded-full bg-current motion-reduce:animate-none"/>}
-      {presentation.label}
-    </Badge>
-  );
+  return <StatusChip status={presentation.status} label={presentation.label} className={className} pulse={pulse} data-status={presentation.status || undefined} {...props}/>;
 }
 
 export { Badge, StatusBadge, badgeVariants };

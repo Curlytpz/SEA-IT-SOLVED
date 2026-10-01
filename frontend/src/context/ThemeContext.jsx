@@ -3,7 +3,7 @@ import { flushSync } from 'react-dom';
 
 const ThemeContext = createContext(null);
 const STORAGE_KEY = 'sea-it-solved-theme';
-const THEME_TRANSITION_EASING = 'cubic-bezier(0.16, 1, 0.3, 1)';
+const THEME_TRANSITION_EASING = 'cubic-bezier(0.32, 0.72, 0, 1)';
 
 function applyDocumentTheme(theme) {
   const dark = theme === 'dark';
@@ -11,7 +11,7 @@ function applyDocumentTheme(theme) {
   document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
   localStorage.setItem(STORAGE_KEY, theme);
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', dark ? '#121A17' : '#F5F3EC');
+  if (meta) meta.setAttribute('content', dark ? '#0E1413' : '#EEF1EF');
 }
 
 function initialTheme() {

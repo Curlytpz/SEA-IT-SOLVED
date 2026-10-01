@@ -57,7 +57,7 @@ function PublicRoute({ children }) {
 }
 
 function RouteLoadingFallback({ landing = false }) {
-  if (landing) return <main className="min-h-screen bg-[#0a1612]" aria-busy="true" aria-label="Loading SEA-IT-SOLVED" />;
+  if (landing) return <main className="min-h-screen bg-[#07100e]" aria-busy="true" aria-label="Loading SEA-IT-SOLVED" />;
   return <main className="min-h-screen bg-background px-6 py-12 text-foreground" aria-busy="true" aria-label="Loading page">
     <div className="mx-auto grid w-full max-w-4xl gap-4 rounded-2xl border border-border bg-card p-6 shadow-sm">
       <div className="h-3 w-24 animate-pulse rounded-full bg-muted motion-reduce:animate-none" aria-hidden="true" />

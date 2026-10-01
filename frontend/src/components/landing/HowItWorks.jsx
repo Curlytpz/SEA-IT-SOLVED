@@ -67,7 +67,7 @@ function LectureVisual() {
     <WindowFrame label="Lecture in progress">
       <div className="grid min-h-[360px] bg-background md:grid-cols-[minmax(0,1fr)_190px]">
         <div className="relative grid min-w-0 overflow-hidden place-items-center">
-         <img src={landingLectureWhiteboard}alt="Active calculus lecture on the classroom whiteboard"width="720"height="360"loading="lazy"decoding="async"className="object-cover w-full h-full"/>
+         <img src={landingLectureWhiteboard}alt="Active calculus lecture on the classroom whiteboard"width="1672"height="941"loading="lazy"decoding="async"className="object-cover w-full h-full"/>
           <span className="absolute left-3 top-3 rounded-full border border-border bg-background/90 px-3 py-1.5 text-[10px] font-semibold text-foreground">Lesson active · 42:18</span>
         </div>
         <aside className="hidden p-4 border-l border-border md:block">
@@ -126,7 +126,7 @@ function GenerateVisual() {
     <WindowFrame label="Generated Lesson Material" light>
       <article className="mx-auto min-h-[360px] max-w-3xl p-7 sm:p-10">
         <p className="text-xs font-semibold text-primary-subtle-foreground">Built from approved lesson context</p>
-        <h3 className="mt-4 font-serif text-3xl tracking-tight sm:text-4xl">Indefinite Integration</h3>
+        <h3 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">Indefinite Integration</h3>
         <p className="max-w-2xl mt-5 text-sm leading-7 text-muted-foreground">
           An antiderivative reverses differentiation and represents a family of functions with the same derivative.
         </p>
@@ -198,6 +198,7 @@ function ContextualAiVisual() {
 }
 
 const VISUALS = [LectureVisual, CaptureVisual, ReviewVisual, ContextualAiVisual, GenerateVisual, LearnVisual];
+// TODO: Rebuild landing-page product mock cards using screenshots/components from the new SEA-IT-SOLVED Soft Tactile app UI.
 const WORKFLOW_NOTICES = [
   'Lecture active',
   'Camera connected',
@@ -267,7 +268,7 @@ export default function HowItWorks() {
         scrollTrigger: {
           trigger: section,
           start: 'top top',
-          end: '+=500%',
+          end: '+=420%',
           pin: pinRef.current,
           scrub: 0.75,
           anticipatePin: 1,
@@ -315,25 +316,6 @@ export default function HowItWorks() {
       return () => {
         timelineRef.current = null;
       };
-    }
-
-    if (mobile) {
-      gsap.utils.toArray('.landing-workflow-mobile-step', section).forEach(step => {
-        const visual = step.querySelector('.landing-workflow-mobile-visual');
-        const notice = step.querySelector('.landing-workflow-notice');
-        gsap.timeline({
-          scrollTrigger: {
-            trigger: step,
-            start: 'top 88%',
-            end: 'bottom 35%',
-            scrub: 0.55,
-          },
-        })
-          .fromTo(step, { autoAlpha: 0.35, y: 24 }, { autoAlpha: 1, y: 0, duration: 0.4 })
-          .fromTo(visual, { clipPath: 'inset(9% 4% 9% 4% round 18px)', scale: 0.975 }, { clipPath: 'inset(0% 0% 0% 0% round 18px)', scale: 1, duration: 0.6 }, 0)
-          .fromTo(notice, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.18 }, 0.22)
-          .to(notice, { autoAlpha: 0, duration: 0.18 }, 0.72);
-      });
     }
 
     if (reduce) {
@@ -385,7 +367,7 @@ export default function HowItWorks() {
                   onClick={() => goToStage(index)}
                   aria-label={`Show step ${stage.number}: ${stage.title}`}
                   aria-current={activeStage === index ? 'step' : undefined}
-                  className={`grid h-8 w-8 place-items-center rounded-full border text-[11px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${activeStage === index ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background/60 text-muted-foreground hover:border-primary hover:text-foreground'}`}
+                  className={`grid h-10 w-10 place-items-center rounded-full border text-xs font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${activeStage === index ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background/60 text-muted-foreground hover:border-primary hover:text-foreground'}`}
                 >
                   {stage.number}
                 </button>

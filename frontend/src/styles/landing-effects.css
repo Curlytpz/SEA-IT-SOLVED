@@ -182,7 +182,7 @@
   height: 450svh;
   margin-top: -72px;
   overflow: clip;
-  background: #0a1612;
+  background: #07100e;
 }
 
 .landing-scroll-hero-sticky {
@@ -191,7 +191,7 @@
   height: 100svh;
   overflow: hidden;
   isolation: isolate;
-  background: #0a1612;
+  background: #07100e;
 }
 
 .landing-scroll-hero-media,
@@ -220,8 +220,8 @@
   z-index: 1;
   background: linear-gradient(
     90deg,
-    rgba(5, 15, 12, .52) 0%,
-    rgba(5, 15, 12, .20) 32%,
+    rgba(7, 16, 14, .50) 0%,
+    rgba(7, 16, 14, .18) 32%,
     transparent 66%
   );
 }
@@ -261,10 +261,9 @@
 
 .landing-scroll-hero-eyebrow {
   color: hsl(var(--primary));
-  font-size: .75rem;
+  font-size: .8125rem;
   font-weight: 700;
-  letter-spacing: .1em;
-  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 .landing-scroll-hero-prompt {
@@ -282,11 +281,10 @@
   align-items: center;
   gap: .55rem;
   margin-top: 1.65rem;
-  color: hsl(var(--foreground) / .7);
-  font-size: .7rem;
+  color: hsl(var(--secondary-foreground));
+  font-size: .8125rem;
   font-weight: 600;
-  letter-spacing: .11em;
-  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 .landing-scroll-hero-end {
@@ -306,6 +304,18 @@
 
   .landing-scroll-hero-tint {
     background: linear-gradient(0deg, rgba(5, 15, 12, .52), rgba(5, 15, 12, .18) 42%, transparent 75%);
+  }
+}
+
+/* Tablet and narrow laptop layouts use the readable linear workflow rather
+   than a pinned/scrubbed section. */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .landing-workflow-mobile {
+    display: block !important;
+  }
+
+  .landing-workflow-desktop {
+    display: none !important;
   }
 }
 
@@ -487,25 +497,13 @@
 }
 
 .landing-statement-copy {
-  display: flex;
   max-width: 15ch;
-  flex-wrap: wrap;
-  gap: .03em .2em;
   margin-top: 1.6rem;
   font-size: clamp(3.1rem, 8.1vw, 8.8rem);
   font-weight: 650;
   letter-spacing: -.065em;
   line-height: .9;
   text-wrap: balance;
-}
-
-.landing-scroll-word {
-  display: inline-block;
-  will-change: transform, opacity, filter;
-}
-
-.landing-scroll-word.is-accent {
-  color: hsl(var(--primary));
 }
 
 .landing-workflow-desktop {
@@ -775,14 +773,6 @@ mask-position:
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .landing-scroll-word {
-    opacity: 1 !important;
-    visibility: visible !important;
-    filter: none !important;
-    transform: none !important;
-    will-change: auto;
-  }
-
   .landing-statement {
     min-height: auto;
   }

@@ -231,22 +231,24 @@ html[data-theme-transition] *::after {
 }
 
 .landing-page {
-  --background: 158 18% 9%;
-  --foreground: 43 37% 93%;
-  --card: 153 19% 12%;
-  --card-foreground: 43 37% 93%;
-  --surface: 153 19% 12%;
-  --surface-subtle: 150 17% 14%;
-  --surface-elevated: 150 17% 16%;
-  --sidebar: 146 18% 8%;
-  --sidebar-foreground: 43 37% 93%;
-  --muted-foreground: 45 12% 70%;
-  --primary: 173 64% 48%;
-  --primary-hover: 173 64% 56%;
-  --primary-foreground: 158 24% 8%;
-  --primary-subtle: 150 20% 16%;
-  --primary-subtle-foreground: 172 57% 72%;
-  --ring: 173 64% 48%;
+  --background: 167 39% 4.5%;
+  --foreground: 0 0% 92%;
+  --card: 165 33% 7%;
+  --card-foreground: 0 0% 92%;
+  --surface: 165 33% 7%;
+  --surface-subtle: 166 29% 9%;
+  --surface-elevated: 166 29% 11%;
+  --sidebar: 167 39% 4.5%;
+  --sidebar-foreground: 0 0% 92%;
+  --secondary-foreground: 162 11% 66%;
+  --muted-foreground: 162 11% 66%;
+  --primary: 171 64% 50%;
+  --primary-hover: 173 80% 40%;
+  --primary-foreground: 172 86% 9%;
+  --primary-subtle: 166 29% 13%;
+  --primary-subtle-foreground: 171 64% 72%;
+  --border: 164 14% 12%;
+  --ring: 171 64% 50%;
 }
 
 .landing-section-light {
@@ -288,39 +290,39 @@ html[data-theme-transition] *::after {
 
 .landing-section-dark {
   color-scheme: dark;
-  --background: 158 18% 9%;
-  --foreground: 43 37% 93%;
-  --card: 153 19% 12%;
-  --card-foreground: 43 37% 93%;
-  --popover: 150 17% 16%;
-  --popover-foreground: 43 37% 93%;
-  --primary: 173 64% 48%;
-  --primary-hover: 173 64% 56%;
-  --primary-foreground: 158 24% 8%;
-  --primary-subtle: 150 20% 16%;
-  --primary-subtle-foreground: 172 57% 72%;
-  --secondary: 150 17% 14%;
-  --secondary-foreground: 47 11% 76%;
-  --muted: 150 17% 14%;
-  --muted-foreground: 120 3% 64%;
-  --accent: 150 20% 16%;
-  --accent-foreground: 172 57% 72%;
-  --border: 148 15% 23%;
-  --input: 144 15% 19%;
-  --input-surface: 153 19% 11%;
-  --ring: 173 64% 48%;
-  --surface: 153 19% 12%;
-  --surface-subtle: 150 17% 14%;
-  --surface-elevated: 150 17% 16%;
-  --sidebar: 146 18% 8%;
-  --sidebar-foreground: 43 37% 93%;
-  --brand: 173 64% 48%;
-  --brand-foreground: 43 37% 93%;
-  --ambient-1: 151 43% 30%;
-  --ambient-2: 176 54% 34%;
-  --success: 158 60% 49%;
-  --success-foreground: 160 30% 8%;
-  --success-subtle: 158 45% 15%;
+  --background: 167 39% 4.5%;
+  --foreground: 0 0% 92%;
+  --card: 165 33% 7%;
+  --card-foreground: 0 0% 92%;
+  --popover: 166 29% 11%;
+  --popover-foreground: 0 0% 92%;
+  --primary: 171 64% 50%;
+  --primary-hover: 173 80% 40%;
+  --primary-foreground: 172 86% 9%;
+  --primary-subtle: 166 29% 13%;
+  --primary-subtle-foreground: 171 64% 72%;
+  --secondary: 166 29% 9%;
+  --secondary-foreground: 162 11% 66%;
+  --muted: 166 29% 9%;
+  --muted-foreground: 162 11% 66%;
+  --accent: 166 29% 13%;
+  --accent-foreground: 171 64% 72%;
+  --border: 164 14% 12%;
+  --input: 166 29% 12%;
+  --input-surface: 165 33% 7%;
+  --ring: 171 64% 50%;
+  --surface: 165 33% 7%;
+  --surface-subtle: 166 29% 9%;
+  --surface-elevated: 166 29% 11%;
+  --sidebar: 167 39% 4.5%;
+  --sidebar-foreground: 0 0% 92%;
+  --brand: 171 64% 50%;
+  --brand-foreground: 0 0% 92%;
+  --ambient-1: 171 48% 25%;
+  --ambient-2: 171 48% 29%;
+  --success: 171 64% 50%;
+  --success-foreground: 172 86% 9%;
+  --success-subtle: 166 29% 13%;
 }
 
 .dark body { color: hsl(var(--foreground)); background: hsl(var(--background)); }

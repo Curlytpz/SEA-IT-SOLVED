@@ -15,7 +15,7 @@ export default function LandingFooter() {
         </div>
 
         <nav aria-label="System links">
-          <h2 className="text-[11px] font-bold uppercase tracking-[0.12em] text-foreground">System</h2>
+          <h2 className="text-sm font-semibold text-foreground">System</h2>
           <div className="mt-4 grid">
             <a className={footerLink} href="#top">About</a>
             <a className={footerLink} href="#features">Features</a>
@@ -24,7 +24,7 @@ export default function LandingFooter() {
         </nav>
 
         <nav aria-label="Access links">
-          <h2 className="text-[11px] font-bold uppercase tracking-[0.12em] text-foreground">Access</h2>
+          <h2 className="text-sm font-semibold text-foreground">Access</h2>
           <div className="mt-4 grid">
             <Link className={footerLink} to="/login?role=student">Student Login</Link>
             <Link className={footerLink} to="/login?role=instructor">Instructor Login</Link>
@@ -34,7 +34,7 @@ export default function LandingFooter() {
         </nav>
 
         <nav aria-label="Project links">
-          <h2 className="text-[11px] font-bold uppercase tracking-[0.12em] text-foreground">Project</h2>
+          <h2 className="text-sm font-semibold text-foreground">Project</h2>
           <div className="mt-4 grid">
             <span className="inline-flex min-h-11 items-center text-sm text-foreground">SEA-IT-SOLVED</span>
             <span className="inline-flex min-h-11 items-center text-sm">Holy Angel University</span>

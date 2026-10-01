@@ -5,8 +5,8 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger';
 gsap.registerPlugin(ScrollTrigger);
 
 const CONDITIONS = {
-  desktop: '(min-width: 1024px) and (prefers-reduced-motion: no-preference)',
-  mobile: '(max-width: 1023px) and (prefers-reduced-motion: no-preference)',
+  desktop: '(min-width: 1280px) and (prefers-reduced-motion: no-preference)',
+  mobile: '(max-width: 1279px) and (prefers-reduced-motion: no-preference)',
   reduce: '(prefers-reduced-motion: reduce)',
 };
 

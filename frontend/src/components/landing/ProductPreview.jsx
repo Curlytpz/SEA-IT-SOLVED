@@ -33,7 +33,7 @@ function AssistantScene() {
     <div className="grid min-h-[500px] bg-surface-subtle lg:grid-cols-[minmax(0,1fr)_minmax(270px,0.72fr)]">
       <article className="relative m-3 min-w-0 rounded-xl border border-border bg-card p-5 sm:m-5 sm:p-7 lg:mr-3">
         <span className="text-[10px] font-semibold text-primary-subtle-foreground">SECTION 02 · POWER RULE</span>
-        <h3 className="mt-3 font-serif text-2xl text-foreground sm:text-3xl">Integrating polynomial terms</h3>
+        <h3 className="mt-3 text-2xl font-semibold text-foreground sm:text-3xl">Integrating polynomial terms</h3>
         <p className="mt-5 text-sm leading-7 text-muted-foreground">
           For any real exponent n except −1, increase the exponent by one and divide by the new exponent.
         </p>
@@ -83,6 +83,7 @@ function AssistantScene() {
 }
 
 const PANELS = { materials: LessonMaterials, assistant: AssistantScene, quiz: StudentQuiz };
+// TODO: Rebuild landing-page product mock cards using screenshots/components from the new SEA-IT-SOLVED Soft Tactile app UI.
 
 export default function ProductPreview() {
   const [activeTab, setActiveTab] = useState('assistant');
@@ -162,13 +163,15 @@ export default function ProductPreview() {
               </div>
             </div>
 
-            <AnimatePresence mode="wait" initial={false}>
+            <div className="grid">
+            <AnimatePresence initial={false}>
               <motion.div
                 key={activeTab}
                 id={`${id}-${activeTab}-panel`}
                 role="tabpanel"
                 aria-labelledby={`${id}-${activeTab}-tab`}
                 className="landing-section-light min-h-[500px] bg-card text-foreground"
+                style={{ gridArea: '1 / 1' }}
                 initial={reducedMotion ? false : { opacity: 0, x: 16 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={reducedMotion ? { opacity: 0 } : { opacity: 0, x: -12 }}
@@ -177,6 +180,7 @@ export default function ProductPreview() {
                 <ActivePanel />
               </motion.div>
             </AnimatePresence>
+            </div>
           </GlowCard>
 
           <div className="mt-4 flex items-center justify-between px-1 text-[11px] text-muted-foreground">

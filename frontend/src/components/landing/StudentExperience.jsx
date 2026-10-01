@@ -27,7 +27,7 @@ function StudentLessonPreview() {
       <div className="grid gap-3 p-3 sm:p-5 xl:grid-cols-[minmax(0,1fr)_260px]">
         <article className="min-w-0 rounded-xl border border-border bg-card p-5 sm:p-8">
           <p className="text-[10px] font-semibold text-primary-subtle-foreground">CORE CONCEPT</p>
-          <h3 className="mt-3 max-w-[14ch] font-serif text-3xl leading-tight text-foreground sm:text-4xl">Power Rule for Integration</h3>
+          <h3 className="mt-3 max-w-[14ch] text-3xl font-semibold leading-tight text-foreground sm:text-4xl">Power Rule for Integration</h3>
           <p className="mt-5 max-w-2xl text-sm leading-7 text-muted-foreground">
             Increase the exponent by one, then divide by the new exponent.
           </p>

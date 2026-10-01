@@ -121,7 +121,7 @@ export function Card({ children, className = '', interactive = false, ...props }
   return <ShadCard className={cn(interactive && 'transition-[border-color,box-shadow,transform,background-color] duration-200 hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-glass active:translate-y-0 active:scale-[.995] motion-reduce:transform-none motion-reduce:transition-none', className)} {...props}>{children}</ShadCard>;
 }
 
-export function DashboardStatusPanel({ indicator, title, description, chip, slots = [], className = '' }) {
+export function DashboardStatusPanel({ indicator, title, description, chip, attentionItems = [], slots = [], className = '' }) {
   const reducedMotion = useReducedMotion();
   return <motion.div initial={reducedMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={reducedMotion ? { duration: 0 } : TACTILE_SPRING}>
     <Card className={cn('rounded-[1.75rem] border-white/60 bg-[linear-gradient(145deg,hsl(var(--surface-elevated)),hsl(var(--surface)))] p-5 shadow-[var(--sh-raised)] dark:border-border/80 sm:p-6', className)}>
@@ -131,6 +131,11 @@ export function DashboardStatusPanel({ indicator, title, description, chip, slot
         <h2 className="text-[1.375rem] font-semibold leading-tight tracking-[-.025em] text-foreground">{title}</h2>
         <p className="mt-2 max-w-[38ch] text-sm leading-6 text-muted-foreground min-[820px]:mx-0">{description}</p>
         {chip && <div className="mt-4 flex justify-center min-[820px]:justify-start">{chip}</div>}
+        {attentionItems.length > 0 && <div className="mt-3 flex flex-wrap justify-center gap-2 min-[820px]:justify-start">{attentionItems.map(({ key, label, to, href }) => {
+          const itemClass = 'inline-flex min-h-10 items-center gap-2 rounded-xl px-2.5 text-[13px] font-semibold text-primary-subtle-foreground transition-colors hover:bg-primary-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+          const content = <><i aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-primary"/><span>{label}</span><span className="text-muted-foreground">Needs attention</span></>;
+          return to ? <Link key={key} to={to} className={itemClass}>{content}</Link> : <a key={key} href={href} className={itemClass}>{content}</a>;
+        })}</div>}
       </div>
       <div className="grid grid-cols-2 gap-3 max-[420px]:grid-cols-1">
         {slots.map(({ key, label, value, status, icon, to, emphasized = false, ariaLabel }) => {

@@ -41,12 +41,12 @@ export function Meter({ value = 0, label, className = '' }) {
   </div>;
 }
 
-export function CircularGauge({ value = 0, label, detail, center, ariaLabel, strokeWidth = 7, className = '' }) {
+export function CircularGauge({ value = 0, label, detail, center, ariaLabel, strokeWidth = 7, bare = false, className = '' }) {
   const clamped = Math.max(0, Math.min(100, Number(value) || 0));
   const radius = 42;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (clamped / 100) * circumference;
-  return <div className={cn('relative grid h-28 w-28 shrink-0 place-items-center rounded-full bg-[var(--surface-2)] shadow-[var(--sh-inset)]', className)} role="img" aria-label={ariaLabel || `${label || 'Value'}: ${Math.round(clamped)}%`}>
+  return <div className={cn('relative grid h-28 w-28 shrink-0 place-items-center', !bare && 'rounded-full bg-[var(--surface-2)] shadow-[var(--sh-inset)]', className)} role="img" aria-label={ariaLabel || `${label || 'Value'}: ${Math.round(clamped)}%`}>
     <svg viewBox="0 0 100 100" className="h-[5.3rem] w-[5.3rem] -rotate-90" aria-hidden="true">
       <circle cx="50" cy="50" r={radius} fill="none" stroke="hsl(var(--border))" strokeWidth={strokeWidth} />
       <circle cx="50" cy="50" r={radius} fill="none" stroke="hsl(var(--primary))" strokeLinecap="round" strokeWidth={strokeWidth} strokeDasharray={circumference} strokeDashoffset={offset} className="transition-[stroke-dashoffset] duration-[900ms] ease-[cubic-bezier(.32,.72,0,1)] motion-reduce:transition-none" />

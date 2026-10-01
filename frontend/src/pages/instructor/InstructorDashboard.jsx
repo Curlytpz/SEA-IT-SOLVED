@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import { DashboardLoadingState, DashboardStatusPanel, EmptyState, PageHeader, Badge, Btn, StatusChip } from '../../components/ui';
+import { DashboardLoadingState, DashboardStatusPanel, EmptyState, PageHeader, Btn, StatusChip } from '../../components/ui';
 import api from '../../services/api';
-import { BookOpen, Check, Plus, Users } from '../../components/icons';
+import { BookOpen, Check, Clock, Plus, Users } from '../../components/icons';
 import InstructorReviewQueue from '../../components/reasoning/InstructorReviewQueue';
 import ClassCode from '../../components/sections/ClassCode';
 
@@ -18,12 +18,14 @@ export default function InstructorDashboard() {
 
   const enrolled = sections.reduce((s,sec)=>s+(sec.enrolledCount||0),0);
   const pending  = sections.reduce((s,sec)=>s+(sec.pendingCount||0),0);
+  const reviewsKnown = ['pending', 'reviewed', 'empty'].includes(reviewSummary?.state);
   const reviewCount = reviewSummary?.state === 'pending' ? (Number(reviewSummary.count) || 0) : 0;
-  const instructorStory = reviewCount > 0
-    ? { title: reviewCount + (reviewCount === 1 ? ' solution needs review' : ' solutions need review'), description: 'Review the submitted student work when you’re ready.' }
-    : pending > 0
-      ? { title: pending + (pending === 1 ? ' request is waiting' : ' requests are waiting'), description: 'Review the pending section requests.' }
-      : { title: 'You’re ready to teach', description: 'Nothing currently needs your attention.' };
+  const attentionCount = pending + reviewCount;
+  const instructorStory = attentionCount > 0
+    ? { title: attentionCount + (attentionCount === 1 ? ' item needs your attention' : ' items need your attention'), description: 'Review the listed requests or student solutions.' }
+    : reviewsKnown
+      ? { title: 'Nothing needs review', description: 'There are no pending join requests or solutions awaiting review.' }
+      : { title: 'Review status loading', description: 'Checking student solutions awaiting review.' };
 
   return (
     <DashboardLayout>
@@ -36,17 +38,23 @@ export default function InstructorDashboard() {
           <>
           <DashboardStatusPanel
             className="mb-6"
-            indicator={<div role="img" aria-label={reviewCount > 0 ? reviewCount + ' student solutions awaiting review' : pending > 0 ? pending + ' requests awaiting action' : 'No teaching tasks currently need attention'} className="grid h-32 w-32 shrink-0 place-items-center rounded-full bg-[var(--surface-2)] shadow-[var(--sh-inset)]"><div className="grid text-center">{reviewCount > 0 || pending > 0 ? <strong className="text-3xl font-semibold leading-none tabular-nums text-foreground">{reviewCount || pending}</strong> : <Check size={28} className="mx-auto text-success" aria-hidden="true" />}<span className="mt-1 text-[12px] font-medium text-muted-foreground">{reviewCount > 0 ? 'to review' : pending > 0 ? 'pending' : 'ready'}</span></div></div>}
+            indicator={<div role="img" aria-label={attentionCount > 0 ? attentionCount + ' teaching items need attention' : reviewsKnown ? 'Nothing needs review' : 'Review status loading'} className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-primary-subtle text-primary-subtle-foreground shadow-[var(--sh-inset)]">{attentionCount > 0 ? <Clock size={25} aria-hidden="true" /> : <Check size={25} aria-hidden="true" />}</div>}
             title={instructorStory.title}
             description={instructorStory.description}
-            chip={reviewCount > 0
-              ? <StatusChip status="PENDING" label="Solutions waiting" />
-              : pending > 0
-                ? <Link to="/instructor/sections" className="inline-flex min-h-10 items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><StatusChip status="PENDING" label="Review requests" /></Link>
-                : <StatusChip status="READY" label="All caught up" />}
+            chip={attentionCount > 0
+              ? reviewCount > 0
+                ? <a href="#solutions-awaiting-review" className="inline-flex min-h-10 items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><StatusChip status="PENDING" label="Review solutions" /></a>
+                : <Link to="/instructor/sections" className="inline-flex min-h-10 items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><StatusChip status="PENDING" label="Review requests" /></Link>
+              : reviewsKnown
+                ? <StatusChip status="READY" label="Nothing waiting" />
+                : <StatusChip status="PROCESSING" label="Checking reviews" />}
+            attentionItems={[
+              ...(reviewCount > 0 ? [{ key: 'reviews', label: reviewCount + (reviewCount === 1 ? ' solution awaiting review' : ' solutions awaiting review'), href: '#solutions-awaiting-review' }] : []),
+              ...(pending > 0 ? [{ key: 'requests', label: pending + (pending === 1 ? ' pending join request' : ' pending join requests'), to: '/instructor/sections' }] : []),
+            ]}
             slots={[
-              { key: 'sections', label: 'Active sections', value: sections.length, status: 'Teaching', icon: <BookOpen size={15} aria-hidden="true" />, to: '/instructor/sections' },
-              { key: 'students', label: 'Enrolled students', value: enrolled, status: enrolled === 1 ? '1 student' : enrolled + ' students', icon: <Users size={15} aria-hidden="true" />, to: '/instructor/sections' },
+              { key: 'sections', label: 'Active sections', value: sections.length, status: 'View sections', icon: <BookOpen size={15} aria-hidden="true" />, to: '/instructor/sections' },
+              { key: 'students', label: 'Enrolled students', value: enrolled, status: 'View sections', icon: <Users size={15} aria-hidden="true" />, to: '/instructor/sections' },
             ]}
           />
 
@@ -63,10 +71,10 @@ export default function InstructorDashboard() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {sections.slice(0,6).map(sec=>(
-                    <article key={sec.id} className="min-w-0 max-w-full overflow-hidden rounded-[1.25rem] border border-white/60 bg-surface shadow-[var(--neu-shadow-raised-sm)] transition-[border-color,box-shadow,transform,background-color] duration-200 ease-[var(--ease-apple)] hover:-translate-y-px hover:border-primary/40 hover:bg-surface-elevated hover:shadow-[var(--neu-shadow-raised)] dark:border-border/80 motion-reduce:transform-none motion-reduce:transition-none">
-                      <Link to={`/instructor/sections/${sec.id}`} className="block p-4 pb-3">
-                        <div className="flex justify-between items-start mb-2">
-                          <Badge status={sec.subjectCode||'SECTION'} />
+                    <article key={sec.id} className="relative min-w-0 max-w-full overflow-hidden rounded-[1.25rem] border border-white/60 bg-surface shadow-[var(--neu-shadow-raised-sm)] transition-[border-color,box-shadow,transform,background-color] duration-200 ease-[var(--ease-apple)] hover:-translate-y-px hover:border-primary/40 hover:bg-surface-elevated hover:shadow-[var(--neu-shadow-raised)] dark:border-border/80 motion-reduce:transform-none motion-reduce:transition-none">
+                      <Link to={`/instructor/sections/${sec.id}`} aria-label="Open section details" className="absolute inset-0 z-0 rounded-[1.25rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" />
+                      <div className="relative z-[1] pointer-events-none p-4 pb-3">
+                        <div className="flex justify-end items-start mb-2">
                           {sec.pendingCount > 0 && (
                             <StatusChip status="PENDING" label={`${sec.pendingCount} pending`}/>
                           )}
@@ -74,8 +82,8 @@ export default function InstructorDashboard() {
                         <h3 className="font-semibold text-foreground text-base">{sec.subjectName}</h3>
                         <p className="mt-0.5 text-sm text-muted-foreground">{sec.sectionName}</p>
                         <div className="mt-3 flex items-center gap-1.5 text-sm text-muted-foreground"><Users size={14}/> {sec.enrolledCount} enrolled</div>
-                      </Link>
-                      <ClassCode compact sectionId={sec.id} code={sec.joinCode} subjectCode={sec.subjectCode} sectionName={sec.sectionName} />
+                      </div>
+                      <div className="relative z-[1]"><ClassCode compact sectionId={sec.id} code={sec.joinCode} subjectCode={sec.subjectCode} sectionName={sec.sectionName} /></div>
                     </article>
                   ))}
                 </div>

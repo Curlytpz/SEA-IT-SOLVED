@@ -75,13 +75,14 @@ export default function StudentDashboard() {
 
   return <DashboardLayout>
     <div className="mx-auto w-full max-w-[1440px]">
-      <PageHeader title="Learning Overview" subtitle={loading ? 'Classes, assessments, and recent performance.' : `${countLabel(availableClasses.length, 'class', 'classes')} • ${data.summary.availableLessons} published ${data.summary.availableLessons === 1 ? 'lesson' : 'lessons'} • ${data.summary.pendingQuizzes} ${data.summary.pendingQuizzes === 1 ? 'quiz' : 'quizzes'} to complete${data.summary.awaitingReviewQuizzes ? ` • ${data.summary.awaitingReviewQuizzes} awaiting review` : ''}`}>
+      <PageHeader title="Learning Overview" subtitle={loading ? 'Classes, assessments, and recent performance.' : 'Published lessons and quiz activity from your classes.'}>
         <Link to="/student/join-section"><Btn><Plus size={16}/>Join a Section</Btn></Link>
       </PageHeader>
       {error && <Alert type="error" onClose={() => setError('')}>{error}</Alert>}
       {loading ? <DashboardLoadingState/> : <>
         <DashboardStatusPanel
-          indicator={<CircularGauge value={quizProgress} label="Quiz progress" ariaLabel={countLabel(completedQuizCount, 'quiz') + ' completed out of ' + totalQuizzes} strokeWidth={10} className="h-32 w-32" center={<><strong className="text-lg leading-none tabular-nums text-foreground">{completedQuizCount}/{totalQuizzes}</strong><span className="mt-1 text-[12px] leading-none text-muted-foreground">completed</span></>} />}
+          className="mx-auto max-w-[1100px]"
+          indicator={<CircularGauge value={quizProgress} label="Quiz progress" ariaLabel={countLabel(completedQuizCount, 'quiz') + ' completed out of ' + totalQuizzes} strokeWidth={12} bare className="h-32 w-32" center={<strong className="text-lg leading-none tabular-nums text-foreground">{completedQuizCount}/{totalQuizzes}</strong>} />}
           title={studentStory.title}
           description={studentStory.description}
           chip={totalQuizzes === 0
@@ -97,7 +98,7 @@ export default function StudentDashboard() {
           ]}
         />
 
-        <section className="mt-8">
+        <section className={pendingQuizzes.length ? 'mt-8' : 'hidden'} aria-hidden={pendingQuizzes.length ? undefined : true}>
           <SectionHeading title="Pending Quizzes" description="Assessments that still need your answer."/>
           {pendingQuizzes.length ? <div className="grid gap-2.5">{pendingQuizzes.map(quiz => <Card key={quiz.id} className="flex min-w-0 flex-col items-stretch justify-between gap-4 px-[1.1rem] py-4 md:flex-row md:items-center [&>button]:w-full md:[&>button]:w-auto">
             <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><Badge status={quiz.studentStatus}/><span className="inline-flex min-h-7 items-center rounded-[.45rem] border border-primary/20 bg-primary-subtle px-[.55rem] py-[.2rem] text-[.68rem] font-extrabold tracking-[.04em] text-primary-subtle-foreground dark:border-primary/35 dark:bg-primary/15">{quiz.section.subjectCode}</span></div><h3 className="mt-[.55rem] text-[.95rem] font-bold text-foreground"><GeneratedContent markdown={studentQuizTitle(quiz.title, quiz.lessonTitle)} quizText audience="student" inline/></h3><p className="mt-[.2rem] text-xs text-muted-foreground">{quiz.section.name} <span aria-hidden="true">·</span> <GeneratedContent markdown={quiz.lessonTitle} audience="student" inline/> <span aria-hidden="true">·</span> {countLabel(quiz.questionCount, 'question')}</p></div>
@@ -116,15 +117,14 @@ export default function StudentDashboard() {
               className="group block h-full rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               <Card className="flex h-full min-h-64 flex-col p-5 transition-[transform,border-color,background-color,box-shadow] duration-300 ease-[cubic-bezier(.16,1,.3,1)] group-hover:-translate-y-1 group-hover:border-primary/45 group-hover:bg-surface-elevated group-hover:shadow-[0_18px_38px_-24px_hsl(var(--foreground)/.42)] group-active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none">
-                <span className="inline-flex min-h-7 w-fit items-center rounded-[.45rem] border border-primary/20 bg-primary-subtle px-[.55rem] py-[.2rem] text-[.68rem] font-extrabold tracking-[.04em] text-primary-subtle-foreground dark:border-primary/35 dark:bg-primary/15">{studentClass.subjectCode}</span>
-                <h3 className="mt-4 text-lg font-bold text-foreground transition-colors duration-300 group-hover:text-primary-subtle-foreground">{studentClass.subjectName}</h3>
+                <h3 className="text-lg font-bold text-foreground transition-colors duration-300 group-hover:text-primary-subtle-foreground">{studentClass.subjectName}</h3>
                 <p className="mt-1 text-sm text-muted-foreground">{studentClass.sectionName} <span aria-hidden="true">·</span> {studentClass.instructorName}</p>
                 <div className="mt-4 grid grid-cols-2 gap-3 border-y border-border py-4 text-sm">
-                  <div><p className="text-xs font-semibold uppercase tracking-[.04em] text-muted-foreground">Lessons</p><p className="mt-1 font-bold text-foreground">{summary.lessonCount}</p></div>
-                  <div><p className="text-xs font-semibold uppercase tracking-[.04em] text-muted-foreground">Quiz status</p><p className="mt-1 font-semibold text-foreground">{classQuizStatus(summary)}</p></div>
+                  <div><p className="text-[13px] font-semibold text-muted-foreground">Lessons</p><p className="mt-1 font-bold text-foreground">{summary.lessonCount}</p></div>
+                  <div><p className="text-[13px] font-semibold text-muted-foreground">Quiz status</p><p className="mt-1 font-semibold text-foreground">{classQuizStatus(summary)}</p></div>
                 </div>
                 <div className="mt-4 min-h-10 text-sm">
-                  <p className="text-xs font-semibold uppercase tracking-[.04em] text-muted-foreground">Latest lesson</p>
+                  <p className="text-[13px] font-semibold text-muted-foreground">Latest lesson</p>
                   {studentClass.latestLesson
                     ? <p className="mt-1 line-clamp-2 font-semibold text-foreground"><GeneratedContent markdown={studentClass.latestLesson.title} audience="student" inline/></p>
                     : <p className="mt-1 text-muted-foreground">No published lessons yet.</p>}

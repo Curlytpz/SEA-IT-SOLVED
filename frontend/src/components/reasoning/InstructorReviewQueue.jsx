@@ -34,7 +34,7 @@ export default function InstructorReviewQueue({ onSummaryChange, compactEmpty = 
   if (!error && state === 'reviewed') return <div className="mb-6 flex min-h-11 items-center gap-2 rounded-xl bg-success-subtle px-3 text-sm font-semibold text-success-subtle-foreground"><span aria-hidden="true">✓</span> No solutions waiting for review</div>;
   if (!error && state === 'empty') return <div className="mb-6 flex min-h-11 items-center gap-2 rounded-xl bg-surface-subtle px-3 text-sm font-medium text-muted-foreground">No student solutions yet.</div>;
 
-  return <Card className="mb-6 p-5">
+  return <Card id="solutions-awaiting-review" className="mb-6 p-5">
     <h2 className="font-bold">Solutions Awaiting Review</h2>
     {error ? <Alert type="error" label="Review queue" className="mb-0 mt-3" actions={<Btn variant="secondary" size="sm" onClick={load}>Retry</Btn>}>{error}</Alert>
       : state === 'loading' ? <p className="mt-2 text-sm text-muted-foreground">Loading reviews…</p>

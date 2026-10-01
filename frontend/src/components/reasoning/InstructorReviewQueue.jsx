@@ -25,12 +25,13 @@ export default function InstructorReviewQueue() {
   const state = review ? instructorReviewState(review) : 'loading';
   const sections = [...new Map(rows.map(row => [row.sectionId, row.sectionName])).entries()];
 
+  if (!error && state === 'reviewed') return <div className="mb-6 flex min-h-11 items-center gap-2 rounded-xl bg-success-subtle px-3 text-sm font-semibold text-success-subtle-foreground"><span aria-hidden="true">✓</span> No solutions waiting for review</div>;
+  if (!error && state === 'empty') return <div className="mb-6 flex min-h-11 items-center gap-2 rounded-xl bg-surface-subtle px-3 text-sm font-medium text-muted-foreground">No student solutions yet.</div>;
+
   return <Card className="mb-6 p-5">
     <h2 className="font-bold">Solutions Awaiting Review</h2>
     {error ? <Alert type="error" label="Review queue" className="mb-0 mt-3" actions={<Btn variant="secondary" size="sm" onClick={load}>Retry</Btn>}>{error}</Alert>
       : state === 'loading' ? <p className="mt-2 text-sm text-muted-foreground">Loading reviews…</p>
-      : state === 'empty' ? <Alert type="info" label="Review status" title="No student solutions yet." className="mb-0 mt-3">Submitted problem-solving responses will appear here when students begin sending their work.</Alert>
-      : state === 'reviewed' ? <Alert type="success" label="Review status" className="mb-0 mt-3">All submitted problem-solving responses have been reviewed.</Alert>
       : state === 'unavailable' ? <Alert type="error" label="Review status" className="mb-0 mt-3" actions={<Btn variant="secondary" size="sm" onClick={load}>Retry</Btn>}>Unable to determine the current review status.</Alert>
       : <>
         <p className="mt-2 text-sm text-muted-foreground">{rows.reduce((sum, row) => sum + row.pending, 0)} manual responses · {rows.length} quizzes · {sections.length} sections</p>

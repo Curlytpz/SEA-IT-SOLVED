@@ -30,7 +30,7 @@ export default function InstructorDashboard() {
           <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <StatCard value={sections.length} label="Active Sections" />
             <StatCard value={enrolled} label="Enrolled Students" />
-            <StatCard value={pending} label="Pending Requests" accent={pending>0?'#f59e0b':undefined} />
+            <StatCard value={pending} label={pending > 0 ? 'Pending requests' : 'All caught up'} accent={pending>0?'#f59e0b':undefined} className={pending === 0 ? 'opacity-80' : ''} />
           </div>
 
           <InstructorReviewQueue/>

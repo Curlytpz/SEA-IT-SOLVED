@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useLocation,useNavigate } from 'react-router-dom';
-import { Alert,Btn,Card } from '../ui';
+import { Alert,Btn,Card,StatusChip,Toggle } from '../ui';
 import { Mic,Settings } from '../icons';
 import AudioLevelMeter from './AudioLevelMeter';
 import ProtectedAudioPlayer from './ProtectedAudioPlayer';
@@ -11,9 +11,8 @@ export default function LessonAudioPanel({lesson,audio}){
   const navigate=useNavigate();const location=useLocation();
   const getLevel=useCallback(()=>audio.service.getAudioLevel(),[audio.service]);
   const connected=['RECORDING','PAUSED','READY','SAVED'].includes(audio.status);
-  const statusTone=audio.isUnavailable?'bg-destructive':audio.skipped?'bg-warning':connected?'bg-success':'bg-muted-foreground';
   const preparing=lesson.status==='CREATED';
-  const recordingLabel=audio.status==='RECORDING'?'● REC':audio.status==='PAUSED'?'PAUSED':audio.status==='READY'?'READY':audio.status==='LOADING'?'CHECKING':audio.savedRecording?'SAVED':audio.skipped?'NOT RECORDING':'IDLE';
+  const recordingLabel=audio.status==='RECORDING'?'Recording':audio.status==='PAUSED'?'Paused':audio.status==='READY'?'Ready':audio.status==='LOADING'?'Checking':audio.savedRecording?'Saved':audio.skipped?'Not recording':'Idle';
   const openSettings=()=>navigate('/instructor/settings#microphone-settings',{state:{returnTo:location.pathname+location.search,fromLesson:true}});
 
   async function toggleNoise(){
@@ -27,20 +26,20 @@ export default function LessonAudioPanel({lesson,audio}){
     <Card className="p-4 sm:p-5">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(190px,.9fr)_minmax(160px,.7fr)_minmax(240px,1.4fr)] lg:items-center">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Microphone</p>
-          <div className="mt-1.5 flex items-center gap-2 text-sm font-semibold text-foreground dark:text-foreground"><span className={`h-2.5 w-2.5 rounded-full ${statusTone}`}/>{audio.isUnavailable?'Unavailable':audio.skipped?'Audio skipped':connected?'Connected':audio.status}</div>
+          <p className="text-xs font-semibold text-muted-foreground">Microphone</p>
+          <div className="mt-1.5 flex items-center gap-2"><StatusChip status={audio.isUnavailable?'ERROR':audio.skipped?'PAUSED':connected?'READY':audio.status} label={audio.isUnavailable?'Unavailable':audio.skipped?'Audio skipped':connected?'Connected':recordingLabel}/></div>
           <p className="mt-1 truncate text-xs text-muted-foreground">{audio.sourceLabel||audio.sourceKey||'Configured microphone'}</p>
         </div>
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Recording</p>
+          <p className="text-xs font-semibold text-muted-foreground">Recording</p>
           <p className={`mt-1 font-mono text-xl font-bold ${audio.status==='RECORDING'?'text-destructive-subtle-foreground dark:text-destructive-subtle-foreground':audio.status==='PAUSED'?'text-warning-subtle-foreground dark:text-warning-subtle-foreground':'text-foreground dark:text-foreground'}`}>{recordingLabel} <span className="ml-1">{formatDuration(audio.savedRecording?.durationMs??audio.elapsedMs)}</span></p>
         </div>
-        <div><div className="mb-2 flex justify-between text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"><span>Audio Level</span><span>{audio.status==='RECORDING'?'Live':audio.status}</span></div><AudioLevelMeter getLevel={getLevel} active={['READY','RECORDING','PAUSED'].includes(audio.status)}/></div>
+        <div><div className="mb-2 flex justify-between text-xs font-semibold text-muted-foreground"><span>Audio level</span><span>{audio.status==='RECORDING'?'Live':recordingLabel}</span></div><AudioLevelMeter getLevel={getLevel} active={['READY','RECORDING','PAUSED'].includes(audio.status)}/></div>
       </div>
 
       <div className="mt-4 flex flex-col justify-between gap-3 border-t border-border/80 pt-4 sm:flex-row sm:items-center dark:border-border">
         <div><p className="text-sm font-semibold text-foreground dark:text-foreground">Noise Cancellation</p><p className="text-xs text-muted-foreground">{audio.noiseSuppression.simulated?'Simulated processing':audio.noiseSuppression.supported?(audio.noiseSuppression.applied?'Applied by this microphone':'Currently off'):'Unsupported by this browser or device'}</p></div>
-        <button type="button" aria-pressed={audio.noiseSuppression.applied} disabled={!audio.noiseSuppression.supported||audio.isUnavailable||audio.savedRecording} onClick={toggleNoise} className={`min-h-11 rounded-lg px-3 text-xs font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${audio.noiseSuppression.applied?'bg-primary text-primary-foreground':'bg-secondary text-muted-foreground'}`}>{audio.noiseSuppression.supported?(audio.noiseSuppression.applied?'ON':'OFF'):'UNSUPPORTED'}</button>
+        <div className="flex items-center gap-2"><span className="text-xs font-semibold text-muted-foreground">{audio.noiseSuppression.applied ? 'On' : audio.noiseSuppression.supported ? 'Off' : 'Unavailable'}</span><Toggle checked={audio.noiseSuppression.applied} label="Noise cancellation" disabled={!audio.noiseSuppression.supported||audio.isUnavailable||audio.savedRecording} onCheckedChange={toggleNoise}/></div>
       </div>
 
       {(audio.isUnavailable||audio.skipped)&&!audio.savedRecording&&<Alert

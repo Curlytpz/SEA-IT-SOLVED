@@ -94,7 +94,7 @@ export function StatusNotice({ type = 'error', label, title, children, actions, 
     >
       <span aria-hidden="true" className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[hsl(var(--status-notice-accent)/.1)] text-[hsl(var(--status-notice-accent))]"><NoticeIcon size={17}/></span>
       <div className="min-w-0 flex-1">
-        <p className="text-[.625rem] font-extrabold uppercase leading-tight tracking-[.16em] text-[hsl(var(--status-notice-accent))]">{label || semantics.label}</p>
+        <p className="text-xs font-semibold leading-tight text-[hsl(var(--status-notice-accent))]">{label || semantics.label}</p>
         {title
           ? <><p className="mt-1 text-sm font-semibold leading-[1.45] text-foreground">{title}</p>{children && <div className="mt-1 text-[.8125rem] font-normal leading-[1.55] text-muted-foreground">{children}</div>}</>
           : <div className="mt-1 text-sm font-semibold leading-[1.45] text-foreground">{children}</div>}
@@ -153,12 +153,12 @@ export function SectionHeading({ title, description, action, className = '' }) {
 }
 
 export function TabBar({ tabs, active, onChange, label = 'View options' }) {
-  return <div role="tablist" aria-label={label} className="scrollbar-hidden mb-5 flex gap-1 overflow-x-auto border-b border-border">{tabs.map(({key,label:tabLabel,badge}) => {
+  return <div role="tablist" aria-label={label} className="scrollbar-hidden mb-5 flex gap-1 overflow-x-auto rounded-2xl bg-[var(--surface-2)] p-1 shadow-[var(--sh-inset)]">{tabs.map(({key,label:tabLabel,badge}) => {
     const selected = active === key;
     const stateClass = selected
-      ? 'border-primary bg-primary-subtle text-primary-subtle-foreground'
-      : 'border-transparent text-muted-foreground hover:bg-surface-subtle hover:text-foreground';
-    return <button key={key} type="button" role="tab" aria-selected={selected} onClick={()=>onChange(key)} className={'relative -mb-px min-h-11 touch-manipulation whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors duration-150 ' + stateClass}>{tabLabel}{badge>0&&<span className="ml-1.5 inline-flex min-w-5 items-center justify-center rounded-md bg-warning-subtle px-1.5 py-0.5 text-xs font-bold text-warning-subtle-foreground dark:bg-warning-subtle dark:text-warning-subtle-foreground">{badge}</span>}</button>;
+      ? 'bg-surface-elevated text-primary-subtle-foreground shadow-[var(--neu-shadow-raised-sm)]'
+      : 'text-muted-foreground hover:bg-surface-subtle hover:text-foreground';
+    return <button key={key} type="button" role="tab" aria-selected={selected} onClick={()=>onChange(key)} className={'relative min-h-10 touch-manipulation whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold transition-[background-color,color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ' + stateClass}>{tabLabel}{badge>0&&<span className="ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-primary-subtle px-1.5 py-0.5 text-xs font-semibold text-primary-subtle-foreground">{badge}</span>}</button>;
   })}</div>;
 }
 

@@ -107,7 +107,6 @@ export default function DashboardLayout({ children }) {
         </div>
 
         <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain px-3 py-5 [-webkit-overflow-scrolling:touch] landscape-compact:py-3" aria-label="Main navigation">
-          <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[.2em] text-muted-foreground">Workspace</p>
           <div className="space-y-1">
             {links.map(({to,label,icon:NavIcon})=><NavLink key={to} to={to} end={to.split('/').length<=2}
               className={({isActive})=>`group relative flex items-center gap-3 overflow-hidden rounded-2xl px-3 py-2.5 text-sm font-medium transition-all duration-200 after:absolute after:left-0 after:top-1/2 after:h-5 after:w-0.5 after:-translate-y-1/2 after:rounded-full after:bg-primary after:transition-transform after:duration-200 active:translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none ${isActive?'bg-primary-subtle text-primary-subtle-foreground shadow-[var(--neu-shadow-inset)] after:scale-y-100':'text-muted-foreground after:scale-y-0 hover:bg-accent/70 hover:text-accent-foreground'}`}>

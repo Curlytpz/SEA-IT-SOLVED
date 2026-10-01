@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import { BackButton, LoadingState, EmptyState, PageHeader, Alert, Btn, Badge, ConfirmModal, TabBar, Card, FormField, Input } from '../../components/ui';
+import { BackButton, LoadingState, EmptyState, PageHeader, Alert, Btn, Badge, ConfirmModal, TabBar, Card, FormField, Input, StatusChip } from '../../components/ui';
 import LessonEditModal from '../../components/LessonEditModal';
 import api from '../../services/api';
 import { getSectionAudioRecordings } from '../../services/audioRecordingApi';
@@ -14,6 +14,7 @@ import SectionReviews from '../../components/reasoning/SectionReviews';
 import { getInstructorSectionReviews } from '../../services/phase6Api';
 import { sectionOriginState, sectionReturnPath } from '../../utils/instructorLessonNavigation';
 import { formatLessonDuration, lessonPrimaryAction } from '../../utils/lessonWorkflow';
+import { formatPersonName } from '../../utils/displayName';
 
 const MOBILE_RECORD_CARD = [
   'min-w-0 rounded-xl border border-border bg-surface p-[.9rem]',
@@ -25,6 +26,12 @@ const MOBILE_RECORD_CARD = [
   '[&_dt]:text-[.68rem] [&_dt]:font-[650] [&_dt]:text-muted-foreground',
   '[&_dd]:mt-[.12rem] [&_dd]:break-words [&_dd]:text-[.82rem] [&_dd]:leading-[1.45] [&_dd]:text-slate-700 dark:[&_dd]:text-slate-200',
 ].join(' ');
+
+const hasDistinctTopic = lesson => {
+  const title = String(lesson?.title || '').trim().toLowerCase();
+  const topic = String(lesson?.topic || '').trim().toLowerCase();
+  return Boolean(topic && topic !== title);
+};
 
 export default function InstructorSectionDetail() {
   const { id } = useParams();
@@ -66,8 +73,8 @@ export default function InstructorSectionDetail() {
   if (error)   return <DashboardLayout><Alert type="error">{error}</Alert></DashboardLayout>;
 
   const tabs = [
-    { key:'students', label:'Students', badge: section.enrolledCount },
-    { key:'pending',  label:'Pending Requests', badge: section.pendingCount },
+    { key:'students', label:'Students' },
+    { key:'pending',  label:'Pending requests', badge: section.pendingCount || undefined },
     { key:'lessons',  label:'Lessons' },
     { key:'reviews', label:'Reviews', badge: reviews?.summary.pendingResponses || undefined },
     { key:'analytics',label:'Analytics' },
@@ -77,24 +84,22 @@ export default function InstructorSectionDetail() {
     <DashboardLayout>
       <div className="mb-4">
         <BackButton to="/instructor/sections" className="mb-0 sm:hidden">My Teaching</BackButton>
-        <div className="hidden text-xs text-muted-foreground sm:block">
+        <div className="hidden text-xs font-medium text-muted-foreground sm:block">
           <Link to="/instructor/sections" className="text-primary-subtle-foreground hover:text-primary-hover hover:underline dark:text-primary">My Teaching</Link>
           {' / '}{section.sectionName}
         </div>
       </div>
 
-      <div className="mb-5 flex min-w-0 flex-col items-start justify-between gap-3 sm:flex-row">
+      <div className="mb-5 min-w-0">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <Badge status={section.subjectCode} />
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-xl font-bold text-foreground">{section.subjectName}</h1>
+            <Badge status={section.sectionName} />
+            {section.pendingCount > 0 && (
+              <StatusChip status="PENDING" label={`${section.pendingCount} pending request${section.pendingCount === 1 ? '' : 's'}`}/>
+            )}
           </div>
-          <h1 className="text-xl font-bold text-foreground">{section.sectionName}</h1>
-          <p className="text-sm text-muted-foreground">{section.subjectName}</p>
           <ClassCode sectionId={section.id} code={section.joinCode} subjectCode={section.subjectCode} sectionName={section.sectionName} />
-        </div>
-        <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground sm:justify-end">
-          <span>👥 {section.enrolledCount} enrolled</span>
-          {section.pendingCount>0 && <span className="text-warning-subtle-foreground font-semibold">⏳ {section.pendingCount} pending</span>}
         </div>
       </div>
 
@@ -103,7 +108,7 @@ export default function InstructorSectionDetail() {
       <TabBar tabs={tabs} active={tab} onChange={changeTab} />
 
       <ContentTransition transitionKey={tab}>
-        {tab==='students'  && <StudentsTab sectionId={id} onAction={loadSection} />}
+        {tab==='students'  && <StudentsTab section={section} onAction={loadSection} />}
         {tab==='pending'   && <PendingTab sectionId={id} onAction={loadSection} />}
         {tab==='lessons'   && <LessonsTab sectionId={id} section={section} />}
         {tab==='reviews' && <SectionReviews sectionId={id} data={reviews} loading={reviewsLoading} error={reviewsError} onRetry={loadReviews}/>}
@@ -114,7 +119,8 @@ export default function InstructorSectionDetail() {
 }
 
 // ── Students Tab ─────────────────────────────────────────────────────────────
-function StudentsTab({ sectionId, onAction }) {
+function StudentsTab({ section, onAction }) {
+  const sectionId = section.id;
   const [students, setStudents] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [confirm, setConfirm]   = useState(null);
@@ -123,6 +129,7 @@ function StudentsTab({ sectionId, onAction }) {
   const [addNum, setAddNum]     = useState('');
   const [addLoading, setAddL]   = useState(false);
   const [msg, setMsg]           = useState({ text:'', type:'success' });
+  const [query, setQuery]       = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -151,12 +158,15 @@ function StudentsTab({ sectionId, onAction }) {
   }
 
   if (loading) return <LoadingState />;
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleStudents = !normalizedQuery ? students : students.filter(student => [student.firstName, student.lastName, student.studentNumber, student.email].filter(Boolean).join(' ').toLowerCase().includes(normalizedQuery));
 
   return (
     <>
       {msg.text && <Alert type={msg.type} onClose={()=>setMsg({text:''})}>{msg.text}</Alert>}
-      <div className="flex justify-end mb-3">
-        <Btn variant="secondary" size="sm" onClick={()=>setShowAdd(v=>!v)}>{showAdd?<><CircleX size={14}/> Cancel</>:<><Plus size={14}/> Add Student</>}</Btn>
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <Input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Search students" aria-label="Search students" className="sm:max-w-xs" />
+        <Btn size="sm" onClick={()=>setShowAdd(v=>!v)}>{showAdd?<><CircleX size={14}/> Cancel</>:<><Plus size={14}/> Add Student</>}</Btn>
       </div>
       {showAdd && (
         <Card className="p-4 mb-4">
@@ -169,33 +179,35 @@ function StudentsTab({ sectionId, onAction }) {
         </Card>
       )}
       {students.length===0
-        ? <EmptyState icon={<Users size={23}/>} title="No enrolled students" body="Approve pending requests or add a student manually." />
+        ? <EmptyState icon={<Users size={23}/>} title="No students yet." body="Share the class code with your students to let them join."><ClassCode sectionId={section.id} code={section.joinCode} subjectCode={section.subjectCode} sectionName={section.sectionName}/></EmptyState>
+        : visibleStudents.length===0
+          ? <EmptyState icon={<Users size={23}/>} title="No matching students" body="Try a different name, student number, or email." />
         : (
           <>
           <div className="mobile-record-list grid gap-3 sm:hidden" aria-label="Enrolled students">
-            {students.map(s=><article key={s.id} className={MOBILE_RECORD_CARD}>
-              <header><div className="min-w-0"><p>Student</p><h3>{s.lastName}, {s.firstName}</h3></div><span>{s.studentNumber||'No student number'}</span></header>
+            {visibleStudents.map(s=><article key={s.id} className={MOBILE_RECORD_CARD}>
+              <header><div className="min-w-0"><p>Student</p><h3>{formatPersonName(s)}</h3></div><span>{s.studentNumber||'No student number'}</span></header>
               <dl>
                 <div><dt>Email</dt><dd>{s.email}</dd></div>
                 <div><dt>Enrolled</dt><dd>{new Date(s.approvedAt).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'})}</dd></div>
               </dl>
-              <Btn variant="danger" size="sm" loading={rl[s.id]} className="w-full" onClick={()=>setConfirm(s)}>Remove Student</Btn>
+              <Btn variant="ghost" size="sm" loading={rl[s.id]} className="w-full text-destructive hover:bg-destructive-subtle hover:text-destructive-subtle-foreground" onClick={()=>setConfirm(s)}>Remove student</Btn>
             </article>)}
           </div>
           <div className="scrollbar-hidden hidden max-w-full overflow-x-auto rounded-xl border border-border bg-surface shadow-sm [-webkit-overflow-scrolling:touch] sm:block">
             <table className="w-full text-sm">
               <thead><tr className="bg-surface-subtle border-b border-border">
-                {['#','Name','Student No.','Email','Enrolled',''].map(h=><th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>)}
+                {['#','Name','Student no.','Email','Enrolled','Actions'].map(h=><th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">{h}</th>)}
               </tr></thead>
               <tbody className="divide-y divide-border">
-                {students.map((s,i)=>(
+                {visibleStudents.map((s,i)=>(
                   <tr key={s.id} className="hover:bg-surface-subtle/60">
-                    <td className="px-4 py-3 text-muted-foreground font-semibold">{i+1}</td>
-                    <td className="px-4 py-3 font-semibold text-foreground">{s.lastName}, {s.firstName}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{s.studentNumber||'—'}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{s.email}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{new Date(s.approvedAt).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'})}</td>
-                    <td className="px-4 py-3"><Btn variant="danger" size="sm" loading={rl[s.id]} onClick={()=>setConfirm(s)}>Remove</Btn></td>
+                    <td className="w-10 px-4 py-3.5 text-muted-foreground font-semibold">{i+1}</td>
+                    <td className="whitespace-nowrap px-4 py-3.5 font-semibold text-foreground">{formatPersonName(s)}</td>
+                    <td className="w-32 whitespace-nowrap px-4 py-3.5 text-muted-foreground">{s.studentNumber||'—'}</td>
+                    <td className="max-w-[24rem] truncate px-4 py-3.5 text-muted-foreground">{s.email}</td>
+                    <td className="w-32 whitespace-nowrap px-4 py-3.5 text-muted-foreground">{new Date(s.approvedAt).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'})}</td>
+                    <td className="w-20 px-4 py-3.5 text-right"><Btn variant="ghost" size="sm" loading={rl[s.id]} aria-label={`Remove ${formatPersonName(s)}`} className="text-destructive hover:bg-destructive-subtle hover:text-destructive-subtle-foreground" onClick={()=>setConfirm(s)}><Trash size={15}/></Btn></td>
                   </tr>
                 ))}
               </tbody>
@@ -204,7 +216,7 @@ function StudentsTab({ sectionId, onAction }) {
           </>
         )
       }
-      {confirm && <ConfirmModal title="Remove this student from the section?" body={`This will remove ${confirm.firstName} ${confirm.lastName}'s access to this class, but their account will remain.`} confirmLabel="Remove Student" confirmVariant="danger" onConfirm={()=>handleRemove(confirm)} onCancel={()=>setConfirm(null)} />}
+      {confirm && <ConfirmModal title="Remove student?" body={`Remove ${formatPersonName(confirm)} from ${section.sectionName}? Their account will remain.`} confirmLabel="Remove" confirmVariant="danger" onConfirm={()=>handleRemove(confirm)} onCancel={()=>setConfirm(null)} />}
     </>
   );
 }
@@ -240,7 +252,7 @@ function PendingTab({ sectionId, onAction }) {
           <>
           <div className="mobile-record-list grid gap-3 sm:hidden" aria-label="Pending enrollment requests">
             {requests.map(r=><article key={r.enrollmentId} className={MOBILE_RECORD_CARD}>
-              <header><div className="min-w-0"><p>Pending student</p><h3>{r.student.lastName}, {r.student.firstName}</h3></div><span>{r.student.studentNumber||'No student number'}</span></header>
+              <header><div className="min-w-0"><p>Pending student</p><h3>{formatPersonName(r.student)}</h3></div><span>{r.student.studentNumber||'No student number'}</span></header>
               <dl>
                 <div><dt>Email</dt><dd>{r.student.email}</dd></div>
                 <div><dt>Requested</dt><dd>{new Date(r.requestedAt).toLocaleDateString('en-PH',{month:'short',day:'numeric'})}</dd></div>
@@ -254,12 +266,12 @@ function PendingTab({ sectionId, onAction }) {
           <div className="scrollbar-hidden hidden max-w-full overflow-x-auto rounded-xl border border-border bg-surface shadow-sm [-webkit-overflow-scrolling:touch] sm:block">
             <table className="w-full text-sm">
               <thead><tr className="bg-surface-subtle border-b border-border">
-                {['Name','Student No.','Email','Requested','Actions'].map(h=><th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>)}
+                {['Name','Student no.','Email','Requested','Actions'].map(h=><th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">{h}</th>)}
               </tr></thead>
               <tbody className="divide-y divide-border">
                 {requests.map(r=>(
                   <tr key={r.enrollmentId} className="hover:bg-surface-subtle/60">
-                    <td className="px-4 py-3 font-semibold text-foreground">{r.student.lastName}, {r.student.firstName}</td>
+                    <td className="px-4 py-3.5 font-semibold text-foreground">{formatPersonName(r.student)}</td>
                     <td className="px-4 py-3 text-muted-foreground">{r.student.studentNumber||'—'}</td>
                     <td className="px-4 py-3 text-muted-foreground">{r.student.email}</td>
                     <td className="px-4 py-3 text-muted-foreground">{new Date(r.requestedAt).toLocaleDateString('en-PH',{month:'short',day:'numeric'})}</td>
@@ -403,13 +415,13 @@ function LessonsTab({ sectionId }) {
           <div className="flex flex-col gap-2">
             {created.map(l=>(
               <Card key={l.id} className="p-3 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-                <div><strong className="text-foreground">{l.title}</strong>{l.topic&&<span className="text-muted-foreground text-sm ml-2">— {l.topic}</span>}
+                <div><strong className="text-foreground">{l.title}</strong>{hasDistinctTopic(l)&&<span className="text-muted-foreground text-sm ml-2">— {l.topic}</span>}
                   <div className="text-xs text-muted-foreground mt-0.5">Created {new Date(l.createdAt).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'})}</div>
                 </div>
                 <div className="flex shrink-0 flex-wrap justify-end gap-2">
                   <Btn variant="secondary" size="sm" onClick={()=>setEditing(l)}><Pencil size={14}/> Edit</Btn>
-                  <Btn variant="danger" size="sm" onClick={()=>setDeleteTarget(l)}><Trash size={14}/> Delete</Btn>
-                  <Btn variant="success" size="sm" disabled={hasOngoing}
+                  <Btn variant="ghost" size="sm" className="text-destructive hover:bg-destructive-subtle hover:text-destructive-subtle-foreground" onClick={()=>setDeleteTarget(l)}><Trash size={14}/> Delete</Btn>
+                  <Btn size="sm" disabled={hasOngoing}
                     title={hasOngoing?'End the active lesson first':'Check hardware before starting'} onClick={()=>handleStart(l)}>
                     <Play size={14}/> Prepare Session
                   </Btn>
@@ -432,7 +444,7 @@ function LessonsTab({ sectionId }) {
               const recording = recordings.find(item=>item.lessonId===l.id);
               return <article key={l.id} className={MOBILE_RECORD_CARD}>
                 <header><div className="min-w-0"><p>Completed lesson</p><h3>{l.title}</h3></div><Badge status="COMPLETED"/></header>
-                {l.topic&&<p className="mt-[.55rem] break-words text-[.8rem] leading-[1.45] text-muted-foreground">{l.topic}</p>}
+                {hasDistinctTopic(l)&&<p className="mt-[.55rem] break-words text-[.8rem] leading-[1.45] text-muted-foreground">{l.topic}</p>}
                 <dl>
                   <div><dt>Date</dt><dd>{l.startedAt?new Date(l.startedAt).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'}):'—'}</dd></div>
                   <div><dt>Duration</dt><dd>{fmtDuration(netMs)}</dd></div>
@@ -442,7 +454,7 @@ function LessonsTab({ sectionId }) {
                 <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2">
                   <Btn variant="secondary" size="sm" aria-label={`Edit ${l.title}`} onClick={()=>setEditing(l)}><Pencil size={14}/></Btn>
                   <Btn variant="primary" size="sm" onClick={()=>navigate(lessonPrimaryAction(l).to,{state:lessonsOriginState})}>{lessonPrimaryAction(l).label}</Btn>
-                  <Btn variant="danger" size="sm" aria-label={`Delete ${l.title}`} onClick={()=>setDeleteTarget(l)}><Trash size={14}/></Btn>
+                  <Btn variant="ghost" size="sm" aria-label={`Delete ${l.title}`} className="text-destructive hover:bg-destructive-subtle hover:text-destructive-subtle-foreground" onClick={()=>setDeleteTarget(l)}><Trash size={14}/></Btn>
                 </div>
               </article>;
             })}
@@ -450,7 +462,7 @@ function LessonsTab({ sectionId }) {
           <div className="scrollbar-hidden hidden max-w-full overflow-x-auto rounded-xl border border-border bg-surface shadow-sm [-webkit-overflow-scrolling:touch] sm:block">
             <table className="w-full text-sm">
               <thead><tr className="bg-surface-subtle border-b border-border">
-                {['Title','Topic','Date','Duration','Paused','Status','Audio','Actions'].map(h=><th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>)}
+                {['Title','Topic','Date','Duration','Paused','Status','Audio','Actions'].map(h=><th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">{h}</th>)}
               </tr></thead>
               <tbody className="divide-y divide-border">
                 {completed.map(l=>{
@@ -460,18 +472,18 @@ function LessonsTab({ sectionId }) {
                   const recording = recordings.find(item=>item.lessonId===l.id);
                   return (
                     <tr key={l.id} className="hover:bg-surface-subtle/60">
-                      <td className="px-4 py-3 font-semibold text-foreground">{l.title}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{l.topic||'—'}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{l.startedAt?new Date(l.startedAt).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'}):'—'}</td>
-                      <td className="px-4 py-3 text-foreground font-medium">{fmtDuration(netMs)}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{pausedMs>0?fmtDuration(pausedMs):'—'}</td>
-                      <td className="px-4 py-3"><Badge status="COMPLETED" /></td>
-                      <td className="px-4 py-3"><LessonRecordingControl recording={recording} onDeleted={handleRecordingDeleted} onError={text=>notify(text,'error')}/></td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3.5 font-semibold text-foreground">{l.title}</td>
+                      <td className="px-4 py-3.5 text-muted-foreground">{hasDistinctTopic(l)?l.topic:'—'}</td>
+                      <td className="px-4 py-3.5 text-muted-foreground">{l.startedAt?new Date(l.startedAt).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'}):'—'}</td>
+                      <td className="px-4 py-3.5 text-foreground font-medium">{fmtDuration(netMs)}</td>
+                      <td className="px-4 py-3.5 text-muted-foreground">{pausedMs>0?fmtDuration(pausedMs):'—'}</td>
+                      <td className="px-4 py-3.5"><Badge status="COMPLETED" /></td>
+                      <td className="px-4 py-3.5"><LessonRecordingControl recording={recording} onDeleted={handleRecordingDeleted} onError={text=>notify(text,'error')}/></td>
+                      <td className="px-4 py-3.5">
                         <div className="flex gap-1.5">
                           <Btn variant="secondary" size="sm" aria-label={`Edit ${l.title}`} onClick={()=>setEditing(l)}><Pencil size={14}/></Btn>
                           <Btn variant="primary" size="sm" onClick={()=>navigate(lessonPrimaryAction(l).to,{state:lessonsOriginState})}>{lessonPrimaryAction(l).label}</Btn>
-                          <Btn variant="danger" size="sm" aria-label={`Delete ${l.title}`} onClick={()=>setDeleteTarget(l)}><Trash size={14}/></Btn>
+                          <Btn variant="ghost" size="sm" aria-label={`Delete ${l.title}`} className="text-destructive hover:bg-destructive-subtle hover:text-destructive-subtle-foreground" onClick={()=>setDeleteTarget(l)}><Trash size={14}/></Btn>
                         </div>
                       </td>
                     </tr>
@@ -489,7 +501,7 @@ function LessonsTab({ sectionId }) {
         <ConfirmModal
           title="Delete this lesson?"
           body={`This will permanently delete “${deleteTarget.title}” and its pause history. This action cannot be undone.`}
-          confirmLabel="Delete Lesson"
+          confirmLabel="Delete lesson"
           confirmVariant="danger"
           loading={deleteLoading}
           onConfirm={handleDelete}

@@ -37,7 +37,7 @@ export function Toggle({ checked, onCheckedChange, disabled = false, label, clas
 export function Meter({ value = 0, label, className = '' }) {
   const clamped = Math.max(0, Math.min(100, Number(value) || 0));
   return <div role="meter" aria-label={label} aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(clamped)} className={cn('h-3 overflow-hidden rounded-full bg-[var(--surface-2)] shadow-[var(--sh-inset)]', className)}>
-    <div className="h-full rounded-full bg-gradient-to-r from-success via-primary to-warning transition-transform duration-150" style={{ width: `${clamped}%` }}/>
+    <div className="h-full rounded-full bg-primary transition-[width] duration-150" style={{ width: `${clamped}%` }}/>
   </div>;
 }
 

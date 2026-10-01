@@ -86,13 +86,13 @@ export default function ClassCode({ sectionId, code, subjectCode, sectionName, c
           className={compact
             ? 'group flex min-h-11 min-w-0 flex-1 items-center justify-between gap-3 rounded-lg px-2 text-left transition-colors hover:bg-primary-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-ring'
             : 'group flex min-h-14 min-w-[14rem] flex-1 items-center justify-between gap-4 rounded-xl border border-primary/20 bg-primary-subtle px-4 text-left transition-colors hover:border-primary/35 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring'}
-          aria-label={`View class code ${normalizedCode}`}
+          aria-label={`Show class code ${normalizedCode}`}
         >
           <span className="min-w-0">
-            <span className="block text-[11px] font-semibold text-muted-foreground dark:text-muted-foreground">Class Code</span>
+            <span className="block text-[12px] font-semibold text-muted-foreground dark:text-muted-foreground">Class code</span>
             <code className={`mt-0.5 block truncate font-mono font-bold tracking-[0.14em] text-primary-subtle-foreground dark:text-primary ${compact ? 'text-sm' : 'text-lg'}`}>{normalizedCode}</code>
           </span>
-          <span className="shrink-0 text-xs font-semibold text-primary-subtle-foreground group-hover:text-primary-hover dark:text-primary">View</span>
+          <span className="shrink-0 text-xs font-semibold text-primary-subtle-foreground group-hover:text-primary-hover dark:text-primary">Show code</span>
         </button>
         <Btn type="button" variant="outline" size="sm" onClick={copyCode} className={compact ? 'shrink-0' : 'min-h-14 shrink-0'}>
           <Copy size={15} aria-hidden="true" /> {compact ? 'Copy' : 'Copy Code'}

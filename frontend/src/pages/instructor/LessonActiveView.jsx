@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import { BackButton, LoadingState, Alert, Btn, Badge, ConfirmModal, Card } from '../../components/ui';
+import { BackButton, LoadingState, Alert, Btn, Badge, ConfirmModal, Card, StatusChip, Tooltip } from '../../components/ui';
 import LessonEditModal from '../../components/LessonEditModal';
 import GeneratedContent from '../../components/reasoning/GeneratedContent';
 import LessonCapturePanel from '../../components/hardware/LessonCapturePanel';
@@ -175,14 +175,14 @@ export default function LessonActiveView() {
 
   const preparingSession = lesson?.status === 'CREATED';
   const microphoneState = lessonAudio.status === 'READY'
-    ? { label: `Connected${lessonAudio.mode === 'SIMULATED' ? ' · SIMULATED' : ''}`, ready: true }
+    ? { label: `Connected${lessonAudio.mode === 'SIMULATED' ? ' · Simulated' : ''}`, ready: true }
     : ['LOADING', 'STARTING'].includes(lessonAudio.status)
       ? { label: 'Checking…', ready: false }
       : lessonAudio.status === 'SKIPPED'
         ? { label: 'Audio will be skipped', ready: false }
         : { label: 'Needs attention', ready: false };
   const cameraState = captureReadiness.cameraStatus === 'READY'
-    ? { label: `Preview ready${captureReadiness.cameraMode === 'SIMULATED' ? ' · SIMULATED' : ''}`, ready: true }
+    ? { label: `Preview ready${captureReadiness.cameraMode === 'SIMULATED' ? ' · Simulated' : ''}`, ready: true }
     : captureReadiness.cameraStatus === 'ERROR'
       ? { label: 'Needs attention', ready: false }
       : { label: 'Start preview below', ready: false };
@@ -192,7 +192,7 @@ export default function LessonActiveView() {
       ? { label: 'Checking…', ready: false }
       : { label: 'Needs attention', ready: false };
   const lightingState = captureReadiness.lighting?.status === 'READY'
-    ? { label: `Monitoring${captureReadiness.lighting.simulated ? ' · SIMULATED' : ''}`, ready: true }
+    ? { label: `Monitoring${captureReadiness.lighting.simulated ? ' · Simulated' : ''}`, ready: true }
     : captureReadiness.lighting?.status === 'ERROR'
       ? { label: 'Needs attention', ready: false }
       : { label: 'Checking…', ready: false };
@@ -219,7 +219,7 @@ export default function LessonActiveView() {
             <div className="min-w-0">
               <div className="mb-3 flex flex-wrap items-center gap-2.5">
                 {preparingSession
-                  ? <span className="rounded-full bg-primary-subtle px-2.5 py-1 text-xs font-bold text-primary-subtle-foreground">READY TO START</span>
+                  ? <StatusChip status="READY" label="Ready to start"/>
                   : <Badge status={lesson?.status} />}
                 {lesson?.status==='ACTIVE' && <span className="flex items-center gap-1.5 text-xs font-semibold text-success-subtle-foreground dark:text-success-subtle-foreground"><span className="inline-block h-2 w-2 animate-pulse-dot rounded-full bg-success motion-reduce:animate-none"/>LIVE</span>}
                 {lesson?.status==='PAUSED' && <span className="text-xs font-semibold text-warning-subtle-foreground dark:text-warning-subtle-foreground">Timer paused</span>}
@@ -229,7 +229,7 @@ export default function LessonActiveView() {
               {lesson?.topic&&<p className="mt-2 text-sm text-muted-foreground dark:text-muted-foreground"><GeneratedContent markdown={lesson.topic} inline/></p>}
             </div>
             <div className="shrink-0 sm:text-right">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{preparingSession?'Session Time':lesson?.status==='COMPLETED'?'Net Duration':'Elapsed'}</p>
+              <p className="text-xs font-semibold text-muted-foreground">{preparingSession?'Session time':lesson?.status==='COMPLETED'?'Net duration':'Elapsed'}</p>
               <p className={`mt-1 font-mono text-3xl font-bold ${lesson?.status==='PAUSED'?'text-warning-subtle-foreground dark:text-warning-subtle-foreground':lesson?.status==='ACTIVE'?'text-success-subtle-foreground dark:text-success-subtle-foreground':'text-foreground dark:text-foreground'}`}>{fmtDuration(elapsed)}</p>
               <p className="mt-1 text-xs text-muted-foreground">{preparingSession?'Recording has not started.':<>Started {lesson?.startedAt?new Date(lesson.startedAt).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}):'—'}{pausedElapsed>0?` • Paused ${fmtDuration(pausedElapsed)}`:''}</>}</p>
             </div>
@@ -237,16 +237,16 @@ export default function LessonActiveView() {
           {preparingSession&&<div className="mt-5 border-t border-border/80 pt-4 dark:border-border">
             <p className="mb-3 text-sm text-muted-foreground dark:text-muted-foreground">Verify the classroom hardware below. Monitoring and previews are available, but no lesson audio, timer, or whiteboard capture starts until you confirm.</p>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4" aria-label="Session readiness">
-              {readinessItems.map(({label,icon:Icon,state})=><div key={label} className="rounded-xl border border-border bg-surface-subtle/80 px-3 py-3 dark:border-border dark:bg-card/[.04]"><div className="flex items-center gap-2 text-sm font-semibold text-foreground dark:text-foreground"><Icon size={15}/>{label}</div><p className={`mt-1.5 text-xs font-medium ${state.ready?'text-success-subtle-foreground dark:text-success-subtle-foreground':'text-muted-foreground dark:text-muted-foreground'}`}>{state.label}</p></div>)}
+              {readinessItems.map(({label,icon:Icon,state})=><div key={label} className="rounded-xl border border-border bg-surface-subtle/80 px-3 py-3 dark:border-border dark:bg-card/[.04]"><div className="flex items-center gap-2 text-sm font-semibold text-foreground dark:text-foreground"><Icon size={15}/>{label}</div><div className="mt-1.5 flex items-center gap-2"><StatusChip status={state.ready?'READY':'PENDING'} label={state.label}/>{state.label.includes('Simulated')&&<Tooltip label="This readiness state is from a simulated device/source."><span aria-hidden="true" className="text-xs text-muted-foreground">ⓘ</span></Tooltip>}</div></div>)}
             </div>
             <div className="mt-4 flex flex-wrap items-center gap-3">
-              <Btn variant="success" loading={actionL==='start'} loadingText="Starting recording session" onClick={()=>startRecordingSession()}><Play size={15}/> Start Recording Session</Btn>
+              <Btn loading={actionL==='start'} loadingText="Starting recording session" onClick={()=>startRecordingSession()}><Play size={15}/> Start Recording Session</Btn>
               <span className="text-xs text-muted-foreground dark:text-muted-foreground">This action starts the authoritative lesson timer and audio recording together.</span>
             </div>
           </div>}
           {['ACTIVE','PAUSED'].includes(lesson?.status)&&<div className="mt-5 flex flex-wrap gap-3 border-t border-border/80 pt-4 dark:border-border">
             {lesson.status==='ACTIVE'?<Btn variant="warning" loading={actionL==='pause'} onClick={()=>doAction('pause')}><Pause size={15}/> Pause Lesson</Btn>:<Btn variant="success" loading={actionL==='resume'} onClick={()=>doAction('resume')}><Play size={15}/> Resume Lesson</Btn>}
-            <Btn variant="danger" onClick={()=>setConfirmEnd(true)}><Square size={14}/> End Lesson</Btn>
+            <Btn variant="ghost" className="text-destructive hover:bg-destructive-subtle hover:text-destructive-subtle-foreground" onClick={()=>setConfirmEnd(true)}><Square size={14}/> End Lesson</Btn>
           </div>}
         </Card>
       </div>

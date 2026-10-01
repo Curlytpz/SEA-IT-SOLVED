@@ -12,13 +12,17 @@ import AudioLevelMeter from './AudioLevelMeter';
 import HardwareStatus from './HardwareStatus';
 import { ConfiguredSummary,SettingsPanelHeader } from './HardwareSettingsState';
 
-export default function MicrophoneSettingsPanel(){
-  const [mode,setMode]=useState('BROWSER');
-  const [sourceKey,setSourceKey]=useState(defaultMicrophoneSourceKey('BROWSER'));
-  const [noisePreferred,setNoisePreferred]=useState(true);
-  const [savedSettings,setSavedSettings]=useState({mode:'BROWSER',sourceKey:defaultMicrophoneSourceKey('BROWSER'),noisePreferred:true});
+export default function MicrophoneSettingsPanel({initialHardwareSettings}){
+  const hasInitialSettings=initialHardwareSettings!==undefined;
+  const initialSettings=resolveMicrophoneSettings(initialHardwareSettings||{});
+  const initialMode=initialSettings.microphoneMode;
+  const initialSource=initialSettings.microphoneSourceKey||defaultMicrophoneSourceKey(initialMode);
+  const [mode,setMode]=useState(initialMode);
+  const [sourceKey,setSourceKey]=useState(initialSource);
+  const [noisePreferred,setNoisePreferred]=useState(initialSettings.microphoneNoiseSuppression);
+  const [savedSettings,setSavedSettings]=useState({mode:initialMode,sourceKey:initialSource,noisePreferred:initialSettings.microphoneNoiseSuppression});
   const [editing,setEditing]=useState(false);
-  const [loading,setLoading]=useState(true);
+  const [loading,setLoading]=useState(!hasInitialSettings);
   const [saving,setSaving]=useState(false);const [testing,setTesting]=useState(false);const [testUrl,setTestUrl]=useState('');
   const [message,setMessage]=useState({text:'',type:'success'});const testUrlRef=useRef('');
   const microphone=useMicrophone(mode);const getLevel=useCallback(()=>microphone.service.getAudioLevel(),[microphone.service]);
@@ -26,7 +30,7 @@ export default function MicrophoneSettingsPanel(){
   const active=['READY','RECORDING','PAUSED'].includes(microphone.status);
   const selectedDevice=microphone.devices.find(device=>device.id===sourceKey)?.label||(mode==='SIMULATED'?'Simulated Lapel Microphone':'Selected microphone');
 
-  useEffect(()=>{getHardwareSettings().then(settings=>{const resolved=resolveMicrophoneSettings(settings);const nextMode=resolved.microphoneMode;const nextSource=resolved.microphoneSourceKey||defaultMicrophoneSourceKey(nextMode);const nextNoise=resolved.microphoneNoiseSuppression;setMode(nextMode);setSourceKey(nextSource);setNoisePreferred(nextNoise);setSavedSettings({mode:nextMode,sourceKey:nextSource,noisePreferred:nextNoise});setEditing(false);}).catch(err=>setMessage({text:err.response?.data?.error||'Unable to load microphone settings.',type:'error'})).finally(()=>setLoading(false));},[]);
+  useEffect(()=>{const settingsRequest=hasInitialSettings?Promise.resolve(initialHardwareSettings):getHardwareSettings();settingsRequest.then(settings=>{const resolved=resolveMicrophoneSettings(settings);const nextMode=resolved.microphoneMode;const nextSource=resolved.microphoneSourceKey||defaultMicrophoneSourceKey(nextMode);const nextNoise=resolved.microphoneNoiseSuppression;setMode(nextMode);setSourceKey(nextSource);setNoisePreferred(nextNoise);setSavedSettings({mode:nextMode,sourceKey:nextSource,noisePreferred:nextNoise});setEditing(false);}).catch(err=>setMessage({text:err.response?.data?.error||'Unable to load microphone settings.',type:'error'})).finally(()=>setLoading(false));},[hasInitialSettings,initialHardwareSettings]);
   useEffect(()=>{if(!sourceKey&&microphone.devices.length)setSourceKey(microphone.devices[0].id);},[sourceKey,microphone.devices]);
   useEffect(()=>()=>{if(testUrlRef.current)URL.revokeObjectURL(testUrlRef.current);},[]);
 

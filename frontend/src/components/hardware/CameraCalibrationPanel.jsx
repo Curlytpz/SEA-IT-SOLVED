@@ -27,18 +27,24 @@ function calibrationVersion(value) {
   return `${value.updatedAt || value.version || value.id || 'calibration'}:${(hash >>> 0).toString(36)}`;
 }
 
-export default function CameraCalibrationPanel() {
-  const [mode, setMode] = useState('SIMULATED');
-  const [sourceKey, setSourceKey] = useState(defaultCameraSourceKey('SIMULATED'));
-  const [draftCalibration, setDraftCalibration] = useState(() => ({ calibrationMode: CALIBRATION_MODES.SIMPLE, planes: createDefaultPlanes({ demo: true }) }));
-  const [selectedPlaneId, setSelectedPlaneId] = useState('');
+export default function CameraCalibrationPanel({ initialHardwareSettings, initialCalibrations }) {
+  const hasInitialData = initialHardwareSettings !== undefined && initialCalibrations !== undefined;
+  const initialMode = initialHardwareSettings?.hardwareMode || 'SIMULATED';
+  const initialSourceKey = initialHardwareSettings?.cameraSourceKey || defaultCameraSourceKey(initialMode);
+  const initialCalibration = initialCalibrations?.find(item => item.sourceKey === initialSourceKey) || null;
+  const initialPlanes = calibrationPlanes(initialCalibration?.planes ? initialCalibration : initialCalibration?.points || initialCalibration).slice(0, 1);
+  const initialDraftPlanes = initialPlanes.length ? cloneCalibration(initialPlanes) : createDefaultPlanes({ demo: initialMode === 'SIMULATED' });
+  const [mode, setMode] = useState(initialMode);
+  const [sourceKey, setSourceKey] = useState(initialSourceKey);
+  const [draftCalibration, setDraftCalibration] = useState(() => ({ calibrationMode: CALIBRATION_MODES.SIMPLE, planes: initialDraftPlanes }));
+  const [selectedPlaneId, setSelectedPlaneId] = useState(() => initialDraftPlanes[0]?.id || '');
   const calibrationMode = CALIBRATION_MODES.SIMPLE;
-  const [calibrations, setCalibrations] = useState([]);
-  const [savedCalibration, setSavedCalibration] = useState(null);
-  const [savedSelection, setSavedSelection] = useState(null);
-  const [savedCalibrationVersion, setSavedCalibrationVersion] = useState(null);
+  const [calibrations, setCalibrations] = useState(() => initialCalibrations || []);
+  const [savedCalibration, setSavedCalibration] = useState(() => initialCalibration ? cloneCalibration(initialCalibration) : null);
+  const [savedSelection, setSavedSelection] = useState(() => hasInitialData ? { mode: initialMode, sourceKey: initialSourceKey } : null);
+  const [savedCalibrationVersion, setSavedCalibrationVersion] = useState(() => calibrationVersion(initialCalibration));
   const [previewCalibrationVersion, setPreviewCalibrationVersion] = useState(null);
-  const [editing, setEditing] = useState(true);
+  const [editing, setEditing] = useState(() => !initialCalibration);
   const [originalPreview, setOriginalPreview] = useState('');
   const [previewVersion, setPreviewVersion] = useState(0);
   const [processing, setProcessing] = useState(false);
@@ -59,12 +65,15 @@ export default function CameraCalibrationPanel() {
   useEffect(() => () => clearTimeout(previewTimerRef.current), []);
 
   useEffect(() => {
-    Promise.all([getHardwareSettings(), getCalibrations()]).then(([settings, saved]) => {
+    const settingsRequest = hasInitialData
+      ? Promise.resolve([initialHardwareSettings, initialCalibrations])
+      : Promise.all([getHardwareSettings(), getCalibrations()]);
+    settingsRequest.then(([settings, saved]) => {
       const nextMode = settings.hardwareMode || 'SIMULATED';
       const nextSource = settings.cameraSourceKey || defaultCameraSourceKey(nextMode);
       setMode(nextMode); setSourceKey(nextSource); setSavedSelection({ mode: nextMode, sourceKey: nextSource }); setCalibrations(saved);
     }).catch(err => setMessage({ text: err.response?.data?.error || 'Unable to load camera settings.', type: 'error' }));
-  }, []);
+  }, [hasInitialData, initialCalibrations, initialHardwareSettings]);
 
   useEffect(() => {
     const savedSnapshot = cloneCalibration(selectedCalibration);

@@ -17,11 +17,12 @@ const RANGE_CLASS = `!cursor-pointer !appearance-none !border-0 !bg-transparent 
   dark:[&::-webkit-slider-runnable-track]:bg-primary/30 dark:[&::-moz-range-track]:bg-primary/30`;
 function lightingSettings(input={}){return FIELDS.reduce((result,key)=>({...result,[key]:input[key]??DEFAULT_LIGHTING_SETTINGS[key]}),{});}
 
-export default function LightingSettingsPanel(){
-  const [settings,setSettings]=useState(DEFAULT_LIGHTING_SETTINGS);
-  const [savedSettings,setSavedSettings]=useState(DEFAULT_LIGHTING_SETTINGS);
+export default function LightingSettingsPanel({initialHardwareSettings}){
+  const hasInitialSettings=initialHardwareSettings!==undefined;
+  const [settings,setSettings]=useState(()=>hasInitialSettings?lightingSettings(initialHardwareSettings):DEFAULT_LIGHTING_SETTINGS);
+  const [savedSettings,setSavedSettings]=useState(()=>hasInitialSettings?lightingSettings(initialHardwareSettings):DEFAULT_LIGHTING_SETTINGS);
   const [editing,setEditing]=useState(false);
-  const [loading,setLoading]=useState(true);
+  const [loading,setLoading]=useState(!hasInitialSettings);
   const [saving,setSaving]=useState(false);
   const [testing,setTesting]=useState(false);
   const [message,setMessage]=useState({text:'',type:'success'});
@@ -29,9 +30,10 @@ export default function LightingSettingsPanel(){
 
   useEffect(()=>{
     let mounted=true;
-    getHardwareSettings().then(async stored=>{if(!mounted)return;const next=lightingSettings(stored);setSettings(next);setSavedSettings(next);setEditing(false);await lighting.startPreview(next);}).catch(error=>{if(mounted)setMessage({text:error.response?.data?.error||error.message||'Unable to load lighting settings.',type:'error'});}).finally(()=>{if(mounted)setLoading(false);});
+    const settingsRequest=hasInitialSettings?Promise.resolve(initialHardwareSettings):getHardwareSettings();
+    settingsRequest.then(async stored=>{if(!mounted)return;const next=lightingSettings(stored);setSettings(next);setSavedSettings(next);setEditing(false);await lighting.startPreview(next);}).catch(error=>{if(mounted)setMessage({text:error.response?.data?.error||error.message||'Unable to load lighting settings.',type:'error'});}).finally(()=>{if(mounted)setLoading(false);});
     return()=>{mounted=false;};
-  },[lighting.startPreview]);
+  },[hasInitialSettings,initialHardwareSettings,lighting.startPreview]);
 
   async function apply(changes){
     const next={...settings,...changes};

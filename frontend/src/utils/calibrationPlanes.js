@@ -1,6 +1,8 @@
-import { bestFitQuadFromPolygon } from './perspectiveGeometry';
+import { orderQuadPoints } from './perspectiveGeometry.js';
 
 export const CORNER_ORDER = ['topLeft', 'topRight', 'bottomRight', 'bottomLeft'];
+export const SINGLE_REGION_CORNER_COUNT = 4;
+export const CALIBRATION_FORMAT_CHANGED = 'Calibration format changed. Please recalibrate the board using four corners.';
 export const ADVANCED_POINT_ORDER = ['topLeft', 'topCenter', 'topRight', 'middleLeft', 'middleRight', 'bottomLeft', 'bottomCenter', 'bottomRight'];
 export const CALIBRATION_MODES = { SIMPLE: 'SIMPLE', ADVANCED: 'ADVANCED' };
 
@@ -126,11 +128,12 @@ export function preparePlaneForPerspective(plane) {
   if (!plane) return null;
   const existingCorners = legacyCorners(plane.perspectiveAnchors) || legacyCorners(plane.corners) || cloneCorners(DEFAULT_CORNERS);
   const trace = normalizedTrace(plane, existingCorners);
+  if (trace.points.length !== SINGLE_REGION_CORNER_COUNT) {
+    return { ...plane, ...trace, perspectiveError: CALIBRATION_FORMAT_CHANGED };
+  }
   let fitted;
   try {
-    // The editable trace may have many points. It is never passed to OpenCV as
-    // a crop mask: derive only its four outer board corners for the homography.
-    fitted = bestFitQuadFromPolygon(trace.points);
+    fitted = orderQuadPoints(trace.points);
   } catch (error) {
     return { ...plane, ...trace, perspectiveError: error.message || 'The board boundary is invalid.' };
   }
@@ -189,6 +192,9 @@ function intersects(a, b, c, d) {
 }
 
 export function validatePlane(plane) {
+  if (Array.isArray(plane?.points) && plane.points.length !== SINGLE_REGION_CORNER_COUNT) {
+    return CALIBRATION_FORMAT_CHANGED;
+  }
   const corners = legacyCorners(plane?.corners);
   if (!corners || CORNER_ORDER.some(name => corners[name].x < 0 || corners[name].x > 1 || corners[name].y < 0 || corners[name].y > 1)) {
     return 'All four corners must stay within the image.';

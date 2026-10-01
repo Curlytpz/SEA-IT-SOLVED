@@ -9,7 +9,7 @@ function finitePoint(point) {
 }
 
 function normalizedPoint(point) {
-  return { x: Number(point.x), y: Number(point.y) };
+  return { ...point, x: Number(point.x), y: Number(point.y) };
 }
 
 function cross(a, b, c) {
@@ -61,27 +61,6 @@ export function validateTracePolygon(input) {
     }
   }
   return { valid: true, points };
-}
-
-export function bestFitQuadFromPolygon(input) {
-  const trace = validateTracePolygon(input);
-  if (!trace.valid) throw new Error(trace.error);
-  const points = input.map(point => ({ ...point, ...normalizedPoint(point) }));
-  const choose = (score, direction) => points.reduce((best, point) => (
-    best === null || direction * score(point) < direction * score(best) ? point : best
-  ), null);
-  const candidate = {
-    topLeft: choose(point => point.x + point.y, 1),
-    topRight: choose(point => point.x - point.y, -1),
-    bottomRight: choose(point => point.x + point.y, -1),
-    bottomLeft: choose(point => point.x - point.y, 1),
-  };
-  if (new Set(Object.values(candidate).map(point => point.id || `${point.x}:${point.y}`)).size !== 4) {
-    throw new Error('The board boundary does not describe four distinct outer corners.');
-  }
-  const checked = validatePerspectiveQuad(candidate);
-  if (!checked.valid) throw new Error(checked.error);
-  return Object.fromEntries(QUAD_ORDER.map(name => [name, candidate[name]]));
 }
 
 export function orderQuadPoints(input) {

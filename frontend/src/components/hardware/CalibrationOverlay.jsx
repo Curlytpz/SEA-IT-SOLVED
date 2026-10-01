@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { SINGLE_REGION_CORNER_COUNT } from '../../utils/calibrationPlanes';
 
 const clamp = value => Math.min(1, Math.max(0, value));
-const makeId = () => globalThis.crypto?.randomUUID?.() || 'point-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
 const clone = value => JSON.parse(JSON.stringify(value));
 
 function validPoint(point) {
@@ -17,7 +17,7 @@ function straightSegments(points) {
 }
 
 function validSnapshot(plane) {
-  if (!plane || !Array.isArray(plane.points) || plane.points.length < 3 || !plane.points.every(validPoint)) return false;
+  if (!plane || !Array.isArray(plane.points) || plane.points.length !== SINGLE_REGION_CORNER_COUNT || !plane.points.every(validPoint)) return false;
   const ids = new Set(plane.points.map(point => point.id));
   return ids.size === plane.points.length;
 }
@@ -25,14 +25,6 @@ function validSnapshot(plane) {
 function pointsMoved(before, after) {
   if (!Array.isArray(before) || !Array.isArray(after) || before.length !== after.length) return true;
   return before.some((point, index) => point.x !== after[index]?.x || point.y !== after[index]?.y);
-}
-
-function distanceToSegment(point, from, to) {
-  const dx = to.x - from.x, dy = to.y - from.y;
-  const lengthSquared = dx * dx + dy * dy;
-  const ratio = lengthSquared ? clamp(((point.x - from.x) * dx + (point.y - from.y) * dy) / lengthSquared) : 0;
-  const projected = { x: from.x + ratio * dx, y: from.y + ratio * dy };
-  return Math.hypot(point.x - projected.x, point.y - projected.y);
 }
 
 export default function CalibrationOverlay({ planes = [], selectedId, onPlaneChange, onDragEnd }) {
@@ -60,7 +52,6 @@ export default function CalibrationOverlay({ planes = [], selectedId, onPlaneCha
 
   const pointsById = useMemo(() => Object.fromEntries(renderPoints.filter(validPoint).map(point => [point.id, point])), [renderPoints]); // renderPoints === points (fully controlled)
   const selectedPoint = selectedPointId ? pointsById[selectedPointId] : null;
-  const canDelete = Boolean(selectedPoint && points.length > 3);
 
   useEffect(() => {
     setSelectedPointId(null);
@@ -146,32 +137,6 @@ export default function CalibrationOverlay({ planes = [], selectedId, onPlaneCha
     onDragEndRef.current?.();
   }
 
-  function addNearestPoint(point) {
-    if (!selectedPlane || !point || points.length < 2) return;
-    let nearestIndex = 0, nearestDistance = Infinity;
-    points.forEach((from, index) => {
-      const to = points[(index + 1) % points.length];
-      const distance = distanceToSegment(
-        { x: point.x * mediaBox.width, y: point.y * mediaBox.height },
-        { x: from.x * mediaBox.width, y: from.y * mediaBox.height },
-        { x: to.x * mediaBox.width, y: to.y * mediaBox.height },
-      );
-      if (distance < nearestDistance) { nearestDistance = distance; nearestIndex = index; }
-    });
-    if (nearestDistance > 16) return;
-    const nextPoint = { id: makeId(), ...point };
-    const nextPoints = [...points.slice(0, nearestIndex + 1), nextPoint, ...points.slice(nearestIndex + 1)];
-    commit({ ...selectedPlane, points: nextPoints });
-    setSelectedPointId(nextPoint.id);
-    setTool('select');
-  }
-
-  function deletePoint() {
-    if (!selectedPlane || !canDelete) return;
-    commit({ ...selectedPlane, points: points.filter(point => point.id !== selectedPoint.id) });
-    setSelectedPointId(null);
-  }
-
   function undo() {
     if (!selectedPlane || !history.length) return;
     const previous = history.at(-1);
@@ -185,7 +150,7 @@ export default function CalibrationOverlay({ planes = [], selectedId, onPlaneCha
   function resetPlane() {
     if (!selectedPlane) return;
     const anchors = clone(selectedPlane.perspectiveAnchors || selectedPlane.corners);
-    const nextPoints = Object.entries(anchors).map(([anchorName, point]) => ({ id: makeId(), anchorName, ...point }));
+    const nextPoints = Object.entries(anchors).map(([anchorName, point]) => ({ id: globalThis.crypto?.randomUUID?.() || `corner-${anchorName}`, anchorName, ...point }));
     commit({
       ...selectedPlane,
       corners: anchors,
@@ -268,11 +233,6 @@ export default function CalibrationOverlay({ planes = [], selectedId, onPlaneCha
   useEffect(() => {
     function keyboard(event) {
       if (event.key === 'Escape') { setSelectedPointId(null); setTool('select'); return; }
-      if ((event.key === 'Delete' || event.key === 'Backspace') && canDelete) {
-        event.preventDefault();
-        deletePoint();
-        return;
-      }
       if (!selectedPlane || !selectedPoint || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
       event.preventDefault();
       const step = event.shiftKey ? .01 : .002;
@@ -290,8 +250,6 @@ export default function CalibrationOverlay({ planes = [], selectedId, onPlaneCha
 
   const toolbar = [
     ['select', 'Select', false],
-    ['add', 'Add Point', false],
-    ['delete', 'Delete', !canDelete],
     ['undo', 'Undo', !history.length],
     ['reset', 'Reset', false],
   ];
@@ -308,9 +266,6 @@ export default function CalibrationOverlay({ planes = [], selectedId, onPlaneCha
         event.preventDefault();
         event.stopPropagation();
       }
-      if (!isToolbarButton && tool === 'add') {
-        addNearestPoint(position(event));
-      }
     }}
     onClick={event => {
       if (!event.target.closest?.('button')) { event.preventDefault(); event.stopPropagation(); }
@@ -318,7 +273,6 @@ export default function CalibrationOverlay({ planes = [], selectedId, onPlaneCha
     <div className="absolute left-2 top-2 z-30 flex max-w-[calc(100%-1rem)] flex-wrap gap-1 rounded-lg bg-slate-950/85 p-1.5 shadow-lg">
       {toolbar.map(([name, label, disabled]) => <button key={name} type="button" disabled={disabled}
         onClick={() => {
-          if (name === 'delete') return deletePoint();
           if (name === 'undo') return undo();
           if (name === 'reset') return resetPlane();
           setTool(name);

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import useCamera from '../../hooks/useCamera';
 import { getCalibration, getCalibrations, getHardwareSettings, saveCalibration, saveHardwareSettings } from '../../services/hardwareApi';
 import { correctCalibration, detectBoardBoundary } from '../../utils/perspectiveCorrection';
-import { CALIBRATION_MODES, calibrationPlanes, createDefaultPlanes, preparePlaneForPerspective, validatePlane } from '../../utils/calibrationPlanes';
+import { CALIBRATION_FORMAT_CHANGED, CALIBRATION_MODES, calibrationPlanes, createDefaultPlanes, preparePlaneForPerspective, SINGLE_REGION_CORNER_COUNT, validatePlane } from '../../utils/calibrationPlanes';
 import { defaultCameraSourceKey } from '../../hardware/camera/cameraSources';
 import { Alert, Btn, Card, FormField, Select } from '../ui';
 import { Camera } from '../icons';
@@ -53,7 +53,7 @@ export default function CameraCalibrationPanel() {
   const planes = useMemo(() => calibrationPlanes(draftCalibration).slice(0, 1), [draftCalibration]);
   const selectedCalibration = useMemo(() => calibrations.find(item => item.sourceKey === sourceKey), [calibrations, sourceKey]);
   const selectedPlane = planes.find(plane => plane.id === selectedPlaneId) || planes[0] || null;
-  const calibrationValid = Boolean(selectedPlane?.points?.length >= 4);
+  const calibrationValid = Boolean(selectedPlane?.points?.length === SINGLE_REGION_CORNER_COUNT);
   const deviceLabel = camera.devices.find(device => device.id === sourceKey)?.label || (mode === 'SIMULATED' ? 'Demo Whiteboard' : 'Selected camera');
 
   useEffect(() => () => clearTimeout(previewTimerRef.current), []);
@@ -68,7 +68,19 @@ export default function CameraCalibrationPanel() {
 
   useEffect(() => {
     const savedSnapshot = cloneCalibration(selectedCalibration);
-    const next = calibrationPlanes(savedSnapshot?.planes ? savedSnapshot : savedSnapshot?.points || savedSnapshot).slice(0, 1);
+    const savedPlanes = calibrationPlanes(savedSnapshot?.planes ? savedSnapshot : savedSnapshot?.points || savedSnapshot).slice(0, 1);
+    const legacySingleRegion = Boolean(savedSnapshot && savedPlanes.some(plane => Array.isArray(plane.points) && plane.points.length !== SINGLE_REGION_CORNER_COUNT));
+    if (legacySingleRegion) {
+      const fresh = createDefaultPlanes({ demo: mode === 'SIMULATED' });
+      savedCalibrationRef.current = null;
+      setSavedCalibration(null); setSavedCalibrationVersion(null);
+      setDraftCalibration({ calibrationMode: CALIBRATION_MODES.SIMPLE, planes: fresh });
+      setSelectedPlaneId(fresh[0]?.id || ''); setIsDirty(false); setEditing(true);
+      setMessage({ text: CALIBRATION_FORMAT_CHANGED, type: 'warning' });
+      invalidatePreview();
+      return;
+    }
+    const next = savedPlanes;
     setDraftCalibration({ calibrationMode: CALIBRATION_MODES.SIMPLE, planes: cloneCalibration(next) });
     setSelectedPlaneId(next[0]?.id || ''); setIsDirty(false);
     if (savedSnapshot) {
@@ -285,7 +297,7 @@ export default function CameraCalibrationPanel() {
             <Btn variant="secondary" loading={detecting} disabled={camera.status !== 'READY' || detecting} onClick={autoDetect}>Auto Detect Board</Btn>
           </div>
         </div>
-        <p className="mt-3 text-xs text-muted-foreground dark:text-muted-foreground">Add points along the boundary, then drag them to refine the single region. The four canonical anchors remain separate. Coordinates remain normalized across responsive sizes. Arrow keys move precisely; hold Shift for larger steps.</p>
+        <p className="mt-3 text-xs text-muted-foreground dark:text-muted-foreground">Drag the four corner handles to match the board: top-left, top-right, bottom-right, then bottom-left. Coordinates remain normalized across responsive sizes. Arrow keys move precisely; hold Shift for larger steps.</p>
 
         <div className="flex flex-wrap gap-2 mt-4"><Btn disabled={camera.status !== 'READY' || !calibrationValid} loading={saving} onClick={save}>Save Calibration</Btn>{savedCalibration && <Btn variant="ghost" disabled={saving} onClick={cancel}>Cancel</Btn>}<Btn variant="secondary" disabled={camera.status !== 'READY' || !savedCalibration || isDirty} loading={processing} onClick={testCapture}>Preview Corrected Board</Btn></div>
       </>}

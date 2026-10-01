@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { bestFitQuadFromPolygon, orderQuadPoints, outputDimensions, validatePerspectiveQuad } from './perspectiveGeometry.js';
+import { orderQuadPoints, outputDimensions, validatePerspectiveQuad } from './perspectiveGeometry.js';
+import { CALIBRATION_FORMAT_CHANGED, calibrationValidation, createDefaultPlanes, preparePlaneForPerspective } from './calibrationPlanes.js';
 
 const trapezoid = [
   { x: 0.16, y: 0.12 }, { x: 0.84, y: 0.08 },
@@ -24,16 +25,11 @@ assert.equal(validatePerspectiveQuad([
   { x: 0.2, y: 0.2 }, { x: 0.2, y: 0.2 }, { x: 0.8, y: 0.8 }, { x: 0.1, y: 0.8 },
 ]).valid, false, 'duplicate corners are rejected');
 
-const trace = [
-  { id: 'tl', x: 0.08, y: 0.11 }, { id: 'top-detail', x: 0.47, y: 0.07 },
-  { id: 'tr', x: 0.89, y: 0.13 }, { id: 'right-detail', x: 0.93, y: 0.52 },
-  { id: 'br', x: 0.9, y: 0.91 }, { id: 'bottom-detail', x: 0.48, y: 0.95 },
-  { id: 'bl', x: 0.06, y: 0.9 }, { id: 'left-detail', x: 0.04, y: 0.48 },
-];
-const fitted = bestFitQuadFromPolygon(trace);
-assert.deepEqual(Object.values(fitted).map(point => point.id), ['tl', 'tr', 'br', 'bl'], 'a multi-point trace reduces to its outer quadrilateral');
-assert.throws(() => bestFitQuadFromPolygon([
-  { x: 0.1, y: 0.1 }, { x: 0.9, y: 0.9 }, { x: 0.1, y: 0.9 }, { x: 0.9, y: 0.1 },
-]), /cannot cross itself/, 'self-crossing traces are rejected');
+const freshPlane = createDefaultPlanes()[0];
+assert.equal(freshPlane.points.length, 4, 'Single Region starts with exactly four handles');
+assert.equal(calibrationValidation({ calibrationMode: 'SIMPLE', planes: [freshPlane] }).valid, true, 'four-corner calibration persists as valid');
+const legacyPlane = { ...freshPlane, points: [...freshPlane.points, { id: 'legacy-extra', x: 0.5, y: 0.5 }] };
+assert.match(calibrationValidation({ calibrationMode: 'SIMPLE', planes: [legacyPlane] }).error, new RegExp(CALIBRATION_FORMAT_CHANGED), 'legacy five-point calibration requires recalibration');
+assert.equal(preparePlaneForPerspective(legacyPlane).perspectiveError, CALIBRATION_FORMAT_CHANGED, 'legacy traces cannot reach the homography');
 
 console.log('perspective geometry tests passed');

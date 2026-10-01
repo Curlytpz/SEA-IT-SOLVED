@@ -59,15 +59,12 @@ assert.deepStrictEqual(advanced.planes[0].corners, {
 
 
 const tracePoints = [
-  { id: 'a', x: .1, y: .1 }, { id: 'b', x: .5, y: .08 },
-  { id: 'c', x: .9, y: .1 }, { id: 'd', x: .9, y: .9 }, { id: 'e', x: .1, y: .9 },
+  { id: 'a', x: .1, y: .1 }, { id: 'b', x: .9, y: .1 },
+  { id: 'c', x: .9, y: .9 }, { id: 'd', x: .1, y: .9 },
 ];
 const traceSegments = [
-  { type: 'bezier', fromPointId: 'a', toPointId: 'b', handle1: { x: .2, y: .02 }, handle2: { x: .4, y: .02 } },
-  { type: 'line', fromPointId: 'b', toPointId: 'c' },
-  { type: 'line', fromPointId: 'c', toPointId: 'd' },
-  { type: 'line', fromPointId: 'd', toPointId: 'e' },
-  { type: 'line', fromPointId: 'e', toPointId: 'a' },
+  { type: 'line', fromPointId: 'a', toPointId: 'b' }, { type: 'line', fromPointId: 'b', toPointId: 'c' },
+  { type: 'line', fromPointId: 'c', toPointId: 'd' }, { type: 'line', fromPointId: 'd', toPointId: 'a' },
 ];
 const traced = normalizePlanes({ planes: [{ id: 'trace', label: 'Trace', corners, perspectiveAnchors: corners, points: tracePoints, segments: traceSegments, closed: true }] })[0];
 assert.deepStrictEqual(traced.perspectiveAnchors, corners);
@@ -86,6 +83,14 @@ assert.ok(sanitized.segments.every((segment, index) =>
   segment.fromPointId === tracePoints[index].id &&
   segment.toPointId === tracePoints[(index + 1) % tracePoints.length].id
 ));
+
+assert.throws(() => normalizePlanes({ planes: [{ id: 'legacy-five', label: 'Legacy', corners, points: [...tracePoints, { id: 'extra', x: .5, y: .5 }] }] }), /format changed.*four corners/i);
+const readableLegacy = safeCalibration({
+  id: 'legacy-five', instructor_id: 'instructor', source_key: 'camera', hardware_mode: 'BROWSER',
+  points: { schemaVersion: 4, mode: 'SIMPLE', planes: [{ id: 'legacy-five', label: 'Legacy', corners, points: [...tracePoints, { id: 'extra', x: .5, y: .5 }] }] },
+  source_width: 1280, source_height: 720, is_active: true, created_at: new Date(), updated_at: new Date(),
+});
+assert.strictEqual(readableLegacy.planes[0].points.length, 5, 'legacy records stay readable so clients can request recalibration');
 
 console.log('Simple, multi-plane, trace, legacy, and Advanced calibration validation tests passed.');
 

@@ -5,6 +5,8 @@ const AppError = require('../utils/AppError');
 const POINT_NAMES = ['topLeft', 'topRight', 'bottomRight', 'bottomLeft'];
 const ADVANCED_POINT_NAMES = ['topLeft', 'topCenter', 'topRight', 'middleLeft', 'middleRight', 'bottomLeft', 'bottomCenter', 'bottomRight'];
 const MAX_PLANES = 12;
+const SINGLE_REGION_CORNER_COUNT = 4;
+const CALIBRATION_FORMAT_CHANGED = 'Calibration format changed. Please recalibrate the board using four corners.';
 
 function pointObject(value) {
   if (Array.isArray(value) && value.length === 4) return Object.fromEntries(POINT_NAMES.map((name, index) => [name, value[index]]));
@@ -71,10 +73,10 @@ function validateAdvancedPoints(input) {
   return points;
 }
 
-function normalizeTrace(plane, corners) {
+function normalizeTrace(plane, corners, { allowLegacyTrace = false } = {}) {
   const raw = Array.isArray(plane?.tracePoints) ? plane.tracePoints : Array.isArray(plane?.points) ? plane.points : null;
   if (!raw) return {};
-  if (raw.length < 3 || raw.length > 200) throw new AppError('A board trace requires between 3 and 200 control points.', 400);
+  if (raw.length !== SINGLE_REGION_CORNER_COUNT && !allowLegacyTrace) throw new AppError(CALIBRATION_FORMAT_CHANGED, 400);
   const seen = new Set();
   const points = raw.map((point, index) => {
     const id = String(point.id || `point-${index + 1}`).trim().slice(0, 100), x = Number(point.x), y = Number(point.y);
@@ -88,7 +90,7 @@ function normalizeTrace(plane, corners) {
   return { perspectiveAnchors: corners, points, tracePoints: points, segments, closed: true };
 }
 
-function normalizePlanes(input, calibrationId = '') {
+function normalizePlanes(input, calibrationId = '', options = {}) {
   const rawPlanes = Array.isArray(input?.planes) && input.planes.length
     ? input.planes
     : [{ id: calibrationId ? `legacy-${calibrationId}` : crypto.randomUUID(), label: 'Board', order: 1, corners: pointObject(input) }];
@@ -101,7 +103,7 @@ function normalizePlanes(input, calibrationId = '') {
     const label = String(plane.label || `Plane ${index + 1}`).trim().slice(0, 80);
     if (!label) throw new AppError('Each calibration plane requires a name.', 400);
     const corners = validatePoints(plane.perspectiveAnchors || plane.corners);
-    return { id, label, requestedOrder: Number(plane.order) || index + 1, corners, ...normalizeTrace(plane, corners) };
+    return { id, label, requestedOrder: Number(plane.order) || index + 1, corners, ...normalizeTrace(plane, corners, options) };
   }).sort((a, b) => a.requestedOrder - b.requestedOrder)
     .map(({ requestedOrder, ...plane }, index) => ({ ...plane, order: index + 1 }));
 }
@@ -137,7 +139,9 @@ function safeCalibration(row) {
       },
     }];
   } else {
-    planes = normalizePlanes(row.points, row.id);
+    // Read old records without changing them so the frontend can explicitly
+    // require a fresh four-corner calibration. New saves remain strict.
+    planes = normalizePlanes(row.points, row.id, { allowLegacyTrace: true });
   }
   return {
     id: row.id, instructorId: row.instructor_id, sourceKey: row.source_key,

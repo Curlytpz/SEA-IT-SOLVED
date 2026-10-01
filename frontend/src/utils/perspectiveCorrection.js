@@ -1,4 +1,5 @@
-import { advancedCells, calibrationPlanes, outerCornersFromAdvanced } from './calibrationPlanes';
+import { advancedCells, calibrationPlanes, outerCornersFromAdvanced, preparePlaneForPerspective, validatePlane } from './calibrationPlanes';
+import { outputDimensions } from './perspectiveGeometry';
 
 let openCvPromise;
 const OPEN_CV_RECOVERY_KEY = 'sea-it-solved:opencv-dependency-reload';
@@ -41,62 +42,36 @@ export async function loadOpenCv() {
   return openCvPromise;
 }
 
-function distance(a, b, width, height) {
-  return Math.hypot((a.x - b.x) * width, (a.y - b.y) * height);
-}
-
 export function canvasBlob(canvas) {
   return new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Unable to encode corrected image.')), 'image/jpeg', .94));
 }
 
-export async function correctPerspective(sourceCanvas, points, tracePoints = []) {
+export async function correctPerspective(sourceCanvas, points) {
   const cv = await loadOpenCv();
   const width = sourceCanvas.width, height = sourceCanvas.height;
-  const outputWidth = Math.max(1, Math.round(Math.max(distance(points.topLeft, points.topRight, width, height), distance(points.bottomLeft, points.bottomRight, width, height))));
-  const outputHeight = Math.max(1, Math.round(Math.max(distance(points.topLeft, points.bottomLeft, width, height), distance(points.topRight, points.bottomRight, width, height))));
-  const trace = tracePoints.length >= 3 ? tracePoints : [points.topLeft, points.topRight, points.bottomRight, points.bottomLeft];
-  let src, sourceMask, warped, warpedMask, maskedWarped, sourcePoints, destinationPoints, polygon, contours, matrix, roi, cropped;
+  const { corners, width: outputWidth, height: outputHeight } = outputDimensions(points, width, height);
+  let src, warped, sourcePoints, destinationPoints, matrix;
   try {
     src = cv.imread(sourceCanvas);
-    sourceMask = cv.Mat.zeros(height, width, cv.CV_8UC1);
-    polygon = cv.matFromArray(trace.length, 1, cv.CV_32SC2, trace.flatMap(point => [
-      Math.round(clampCoordinate(point.x) * (width - 1)),
-      Math.round(clampCoordinate(point.y) * (height - 1)),
-    ]));
-    contours = new cv.MatVector();
-    contours.push_back(polygon);
-    cv.fillPoly(sourceMask, contours, new cv.Scalar(255));
-
     sourcePoints = cv.matFromArray(4, 1, cv.CV_32FC2, [
-      points.topLeft.x * width, points.topLeft.y * height,
-      points.topRight.x * width, points.topRight.y * height,
-      points.bottomRight.x * width, points.bottomRight.y * height,
-      points.bottomLeft.x * width, points.bottomLeft.y * height,
+      corners.topLeft.x * (width - 1), corners.topLeft.y * (height - 1),
+      corners.topRight.x * (width - 1), corners.topRight.y * (height - 1),
+      corners.bottomRight.x * (width - 1), corners.bottomRight.y * (height - 1),
+      corners.bottomLeft.x * (width - 1), corners.bottomLeft.y * (height - 1),
     ]);
     destinationPoints = cv.matFromArray(4, 1, cv.CV_32FC2, [
       0, 0, outputWidth - 1, 0, outputWidth - 1, outputHeight - 1, 0, outputHeight - 1,
     ]);
     matrix = cv.getPerspectiveTransform(sourcePoints, destinationPoints);
     warped = new cv.Mat();
-    warpedMask = new cv.Mat();
-    cv.warpPerspective(src, warped, matrix, new cv.Size(outputWidth, outputHeight), cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
-    cv.warpPerspective(sourceMask, warpedMask, matrix, new cv.Size(outputWidth, outputHeight), cv.INTER_NEAREST, cv.BORDER_CONSTANT, new cv.Scalar(0));
-
-    maskedWarped = new cv.Mat(outputHeight, outputWidth, warped.type(), new cv.Scalar(255, 255, 255, 255));
-    warped.copyTo(maskedWarped, warpedMask);
-
-    const bounds = cv.boundingRect(warpedMask);
-    if (!bounds.width || !bounds.height) throw new Error('The traced calibration region is empty after perspective correction.');
-    roi = maskedWarped.roi(bounds);
-    cropped = roi.clone();
+    const interpolation = Number.isInteger(cv.INTER_CUBIC) ? cv.INTER_CUBIC : cv.INTER_LINEAR;
+    cv.warpPerspective(src, warped, matrix, new cv.Size(outputWidth, outputHeight), interpolation, cv.BORDER_REPLICATE);
 
     const canvas = document.createElement('canvas');
-    cv.imshow(canvas, cropped);
-    return { canvas, blob: await canvasBlob(canvas), width: bounds.width, height: bounds.height };
+    cv.imshow(canvas, warped);
+    return { canvas, blob: await canvasBlob(canvas), width: outputWidth, height: outputHeight };
   } finally {
-    cropped?.delete(); roi?.delete(); matrix?.delete(); contours?.delete(); polygon?.delete();
-    destinationPoints?.delete(); sourcePoints?.delete(); maskedWarped?.delete(); warpedMask?.delete(); warped?.delete();
-    sourceMask?.delete(); src?.delete();
+    matrix?.delete(); destinationPoints?.delete(); sourcePoints?.delete(); warped?.delete(); src?.delete();
   }
 }
 
@@ -166,8 +141,11 @@ export async function correctCalibration(sourceCanvas, calibration) {
 export async function correctPerspectivePlanes(sourceCanvas, planes) {
   const results = [];
   for (const plane of [...planes].sort((a, b) => a.order - b.order)) {
-    const corrected = await correctPerspective(sourceCanvas, plane.perspectiveAnchors || plane.corners, plane.points || plane.tracePoints || []);
-    results.push({ ...corrected, planeId: plane.id, label: plane.label, order: plane.order, corners: plane.corners });
+    const prepared = preparePlaneForPerspective(plane);
+    const error = prepared ? validatePlane(prepared) : 'Four perspective anchors are required.';
+    if (error) throw new Error(error);
+    const corrected = await correctPerspective(sourceCanvas, prepared.perspectiveAnchors || prepared.corners);
+    results.push({ ...corrected, planeId: prepared.id, label: prepared.label, order: prepared.order, corners: prepared.corners });
   }
   return results;
 }

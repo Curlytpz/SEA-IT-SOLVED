@@ -10,8 +10,11 @@ export default function ScrollStatement() {
       <div className="landing-statement-sticky">
         <div className={`${landingStyles.container} landing-statement-content`}>
           <p className={landingStyles.eyebrowLight}>From the classroom</p>
-          <h2 id="landing-scroll-statement" data-landing-reveal className="landing-statement-copy">
-            Every lecture contains <span className="text-primary">knowledge worth</span> keeping.
+          <h2 id="landing-scroll-statement" className="landing-statement-copy">
+            <span className="landing-scroll-word inline-block">Every lecture{' '}</span>
+            <span className="landing-scroll-word inline-block">contains{' '}</span>
+            <span className="landing-scroll-word inline-block text-primary">knowledge worth{' '}</span>
+            <span className="landing-scroll-word inline-block">keeping.</span>
           </h2>
         </div>
       </div>

@@ -79,23 +79,23 @@ export default function ClassCode({ sectionId, code, subjectCode, sectionName, c
 
   return (
     <>
-      <div className={compact ? 'flex min-w-0 items-center gap-2 border-t border-border/70 px-3 py-2.5 dark:border-border' : 'mt-4 flex min-w-0 flex-wrap items-stretch gap-2'}>
+      <div className={compact ? 'flex min-w-0 border-t border-border/70 px-3 py-2.5 dark:border-border' : 'mt-3 flex min-w-0'}>
         <button
           type="button"
           onClick={() => setOpen(true)}
           className={compact
-            ? 'group flex min-h-11 min-w-0 flex-1 items-center justify-between gap-3 rounded-lg px-2 text-left transition-colors hover:bg-primary-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-ring'
-            : 'group flex min-h-14 min-w-[14rem] flex-1 items-center justify-between gap-4 rounded-xl border border-primary/20 bg-primary-subtle px-4 text-left transition-colors hover:border-primary/35 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring'}
-          aria-label={`Show class code ${normalizedCode}`}
+            ? 'group flex min-h-11 min-w-0 items-center gap-2 rounded-xl border border-border/80 bg-surface-subtle px-2.5 py-1.5 text-left shadow-[var(--sh-inset)] transition-colors hover:bg-primary-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-border'
+            : 'group flex min-h-11 min-w-0 items-center gap-2 rounded-xl border border-border/80 bg-surface-subtle px-2.5 py-1.5 text-left shadow-[var(--sh-inset)] transition-colors hover:bg-primary-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-border'}
+          aria-label="Manage class code"
+          title="Manage class code"
         >
           <span className="min-w-0">
             <span className="block text-[12px] font-semibold text-muted-foreground dark:text-muted-foreground">Class code</span>
-            <code className={`mt-0.5 block truncate font-mono font-bold tracking-[0.14em] text-primary-subtle-foreground dark:text-primary ${compact ? 'text-sm' : 'text-lg'}`}>{normalizedCode}</code>
+            <code className={`block truncate font-mono font-semibold tracking-[0.12em] text-foreground dark:text-foreground ${compact ? 'text-sm' : 'text-[15px]'}`}>{normalizedCode}</code>
           </span>
-          <span className="shrink-0 text-xs font-semibold text-primary-subtle-foreground group-hover:text-primary-hover dark:text-primary">Show code</span>
         </button>
-        <Btn type="button" variant="outline" size="sm" onClick={copyCode} className={compact ? 'shrink-0' : 'min-h-14 shrink-0'}>
-          <Copy size={15} aria-hidden="true" /> {compact ? 'Copy' : 'Copy Code'}
+        <Btn type="button" variant="outline" size="sm" onClick={copyCode} className="shrink-0">
+          <Copy size={15} aria-hidden="true" /> Copy
         </Btn>
       </div>
 

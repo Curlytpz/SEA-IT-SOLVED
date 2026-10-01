@@ -231,23 +231,23 @@ html[data-theme-transition] *::after {
 }
 
 .landing-page {
-  --background: 167 39% 4.5%;
-  --foreground: 0 0% 92%;
-  --card: 165 33% 7%;
-  --card-foreground: 0 0% 92%;
-  --surface: 165 33% 7%;
-  --surface-subtle: 166 29% 9%;
-  --surface-elevated: 166 29% 11%;
-  --sidebar: 167 39% 4.5%;
-  --sidebar-foreground: 0 0% 92%;
-  --secondary-foreground: 162 11% 66%;
-  --muted-foreground: 162 11% 66%;
+  --background: 166 39% 8%;
+  --foreground: 0 0% 95%;
+  --card: 164 31% 11%;
+  --card-foreground: 0 0% 95%;
+  --surface: 164 31% 11%;
+  --surface-subtle: 164 27% 13%;
+  --surface-elevated: 164 25% 16%;
+  --sidebar: 166 39% 8%;
+  --sidebar-foreground: 0 0% 95%;
+  --secondary-foreground: 161 13% 74%;
+  --muted-foreground: 161 13% 70%;
   --primary: 171 64% 50%;
   --primary-hover: 173 80% 40%;
   --primary-foreground: 172 86% 9%;
-  --primary-subtle: 166 29% 13%;
+  --primary-subtle: 166 28% 17%;
   --primary-subtle-foreground: 171 64% 72%;
-  --border: 164 14% 12%;
+  --border: 164 16% 21%;
   --ring: 171 64% 50%;
 }
 
@@ -290,32 +290,32 @@ html[data-theme-transition] *::after {
 
 .landing-section-dark {
   color-scheme: dark;
-  --background: 167 39% 4.5%;
-  --foreground: 0 0% 92%;
-  --card: 165 33% 7%;
-  --card-foreground: 0 0% 92%;
-  --popover: 166 29% 11%;
-  --popover-foreground: 0 0% 92%;
+  --background: 166 39% 8%;
+  --foreground: 0 0% 95%;
+  --card: 164 31% 11%;
+  --card-foreground: 0 0% 95%;
+  --popover: 164 27% 15%;
+  --popover-foreground: 0 0% 95%;
   --primary: 171 64% 50%;
   --primary-hover: 173 80% 40%;
   --primary-foreground: 172 86% 9%;
-  --primary-subtle: 166 29% 13%;
+  --primary-subtle: 166 28% 17%;
   --primary-subtle-foreground: 171 64% 72%;
-  --secondary: 166 29% 9%;
-  --secondary-foreground: 162 11% 66%;
-  --muted: 166 29% 9%;
-  --muted-foreground: 162 11% 66%;
-  --accent: 166 29% 13%;
+  --secondary: 164 27% 13%;
+  --secondary-foreground: 161 13% 74%;
+  --muted: 164 27% 13%;
+  --muted-foreground: 161 13% 70%;
+  --accent: 166 28% 17%;
   --accent-foreground: 171 64% 72%;
-  --border: 164 14% 12%;
-  --input: 166 29% 12%;
-  --input-surface: 165 33% 7%;
+  --border: 164 16% 21%;
+  --input: 164 27% 15%;
+  --input-surface: 164 31% 11%;
   --ring: 171 64% 50%;
-  --surface: 165 33% 7%;
-  --surface-subtle: 166 29% 9%;
-  --surface-elevated: 166 29% 11%;
-  --sidebar: 167 39% 4.5%;
-  --sidebar-foreground: 0 0% 92%;
+  --surface: 164 31% 11%;
+  --surface-subtle: 164 27% 13%;
+  --surface-elevated: 164 25% 16%;
+  --sidebar: 166 39% 8%;
+  --sidebar-foreground: 0 0% 95%;
   --brand: 171 64% 50%;
   --brand-foreground: 0 0% 92%;
   --ambient-1: 171 48% 25%;

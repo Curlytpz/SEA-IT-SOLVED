@@ -18,7 +18,7 @@ function ProductWindow() {
       tilt
       role="img"
       aria-label="Active SEA-IT-SOLVED lesson workspace with a corrected classroom whiteboard"
-      className={`${landingStyles.darkSurface} relative rounded-[22px] bg-card shadow-[0_56px_140px_-54px_rgba(0,0,0,0.72)]`}
+      className={`${landingStyles.darkSurface} relative rounded-[22px] bg-card/85 shadow-[0_56px_140px_-54px_rgba(0,0,0,0.72)] backdrop-blur-xl`}
     >
       <header className="flex min-h-14 items-center gap-2 border-b border-border px-4 text-xs text-muted-foreground sm:px-5">
         <strong className="ml-2 truncate text-foreground">Active Lesson Workspace</strong>
@@ -31,8 +31,8 @@ function ProductWindow() {
         <div className="relative grid min-w-0 overflow-hidden place-items-center bg-background">
           <div aria-hidden="true" className="absolute inset-0" style={{ background: 'radial-gradient(circle at 60% 30%, hsl(var(--primary) / 0.09), transparent 56%)' }} />
           <img src={landingWhiteboard} alt="Classroom whiteboard filled with handwritten calculus examples" width="1672" height="941" fetchPriority="high" decoding="async" className="landing-hero-workspace-capture relative z-10 h-full max-h-[440px] w-full object-cover" />
-          <span className="absolute left-3 top-3 z-20 rounded-full border border-white/10 bg-background/90 px-3 py-1.5 text-xs font-semibold text-foreground shadow-lg sm:left-4 sm:top-4">Corrected whiteboard view</span>
-          <span className="absolute bottom-3 right-3 z-20 hidden items-center gap-1.5 rounded-full border border-primary/25 bg-sidebar/90 px-3 py-1.5 text-xs font-semibold text-primary sm:inline-flex">
+          <span className="absolute left-3 top-3 z-20 rounded-full border border-white/15 bg-background/65 px-3 py-1.5 text-xs font-semibold text-foreground shadow-lg backdrop-blur-md sm:left-4 sm:top-4">Corrected whiteboard view</span>
+          <span className="absolute bottom-3 right-3 z-20 hidden items-center gap-1.5 rounded-full border border-primary/30 bg-sidebar/65 px-3 py-1.5 text-xs font-semibold text-primary backdrop-blur-md sm:inline-flex">
             <Check size={11} aria-hidden="true" /> Calibration applied
           </span>
         </div>

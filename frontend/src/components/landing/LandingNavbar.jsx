@@ -75,11 +75,11 @@ export default function LandingNavbar() {
   }
 
   return (
-    <header ref={headerRef} className="landing-section-dark sticky top-0 z-50 border-b border-border bg-background/90 text-foreground shadow-[0_14px_36px_-32px_rgba(0,0,0,0.72)] backdrop-blur-xl">
+    <header ref={headerRef} className="landing-section-dark sticky top-0 z-50 border-b border-white/10 bg-background/65 text-foreground shadow-[0_18px_44px_-34px_rgba(0,0,0,0.78)] backdrop-blur-2xl supports-[backdrop-filter]:bg-background/55">
       <div className={`${landingStyles.container} flex min-h-[72px] items-center justify-between gap-4`}>
         <BrandLink />
 
-        <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center rounded-full border border-border bg-surface-subtle/75 p-1 lg:flex" aria-label="Public navigation">
+        <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center rounded-full border border-white/15 bg-surface-subtle/55 p-1 shadow-[0_12px_32px_-22px_rgba(0,0,0,0.9)] backdrop-blur-xl lg:flex" aria-label="Public navigation">
           {NAV_LINKS.map(([label, href]) => (
             <a key={href} href={href} onClick={event => handleSectionClick(event, href)} className="group relative inline-flex min-h-10 items-center rounded-full px-4 text-[13px] font-semibold text-muted-foreground transition-colors duration-200 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <span className="absolute inset-0 scale-95 rounded-full bg-surface-elevated opacity-0 transition-all duration-300 group-hover:scale-100 group-hover:opacity-100" />

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { orderQuadPoints, outputDimensions, validatePerspectiveQuad } from './perspectiveGeometry.js';
 import { CALIBRATION_FORMAT_CHANGED, calibrationValidation, createDefaultPlanes, preparePlaneForPerspective } from './calibrationPlanes.js';
 
@@ -31,5 +32,9 @@ assert.equal(calibrationValidation({ calibrationMode: 'SIMPLE', planes: [freshPl
 const legacyPlane = { ...freshPlane, points: [...freshPlane.points, { id: 'legacy-extra', x: 0.5, y: 0.5 }] };
 assert.match(calibrationValidation({ calibrationMode: 'SIMPLE', planes: [legacyPlane] }).error, new RegExp(CALIBRATION_FORMAT_CHANGED), 'legacy five-point calibration requires recalibration');
 assert.equal(preparePlaneForPerspective(legacyPlane).perspectiveError, CALIBRATION_FORMAT_CHANGED, 'legacy traces cannot reach the homography');
+
+const overlaySource = readFileSync(new URL('../components/hardware/CalibrationOverlay.jsx', import.meta.url), 'utf8');
+assert.doesNotMatch(overlaySource, /'Add Point'/, 'Single Region does not expose an Add Point action');
+assert.match(overlaySource, /\['delete', 'Delete', true/, 'Delete remains visible but cannot remove a required corner');
 
 console.log('perspective geometry tests passed');

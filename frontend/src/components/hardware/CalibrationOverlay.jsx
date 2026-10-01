@@ -250,6 +250,7 @@ export default function CalibrationOverlay({ planes = [], selectedId, onPlaneCha
 
   const toolbar = [
     ['select', 'Select', false],
+    ['delete', 'Delete', true, 'Single Region requires all four corners. Use Reset to restore them.'],
     ['undo', 'Undo', !history.length],
     ['reset', 'Reset', false],
   ];
@@ -271,8 +272,9 @@ export default function CalibrationOverlay({ planes = [], selectedId, onPlaneCha
       if (!event.target.closest?.('button')) { event.preventDefault(); event.stopPropagation(); }
     }}>
     <div className="absolute left-2 top-2 z-30 flex max-w-[calc(100%-1rem)] flex-wrap gap-1 rounded-lg bg-slate-950/85 p-1.5 shadow-lg">
-      {toolbar.map(([name, label, disabled]) => <button key={name} type="button" disabled={disabled}
+      {toolbar.map(([name, label, disabled, title]) => <button key={name} type="button" disabled={disabled} title={title}
         onClick={() => {
+          if (name === 'delete') return;
           if (name === 'undo') return undo();
           if (name === 'reset') return resetPlane();
           setTool(name);

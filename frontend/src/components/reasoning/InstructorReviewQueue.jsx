@@ -5,7 +5,7 @@ import { getInstructorReviewQueue } from '../../services/phase6Api';
 import { instructorReviewState } from './instructorReviewState';
 import GeneratedContent from './GeneratedContent';
 
-export default function InstructorReviewQueue() {
+export default function InstructorReviewQueue({ onSummaryChange, compactEmpty = false }) {
   const [review, setReview] = useState(null);
   const [error, setError] = useState('');
   const [section, setSection] = useState('');
@@ -24,7 +24,13 @@ export default function InstructorReviewQueue() {
   const rows = Array.isArray(review?.rows) ? review.rows : [];
   const state = review ? instructorReviewState(review) : 'loading';
   const sections = [...new Map(rows.map(row => [row.sectionId, row.sectionName])).entries()];
+  const reviewCount = rows.reduce((sum, row) => sum + row.pending, 0);
 
+  useEffect(() => {
+    if (review && !error) onSummaryChange?.({ count: reviewCount, state });
+  }, [error, onSummaryChange, review, reviewCount, state]);
+
+  if (!error && compactEmpty && (state === 'reviewed' || state === 'empty')) return null;
   if (!error && state === 'reviewed') return <div className="mb-6 flex min-h-11 items-center gap-2 rounded-xl bg-success-subtle px-3 text-sm font-semibold text-success-subtle-foreground"><span aria-hidden="true">✓</span> No solutions waiting for review</div>;
   if (!error && state === 'empty') return <div className="mb-6 flex min-h-11 items-center gap-2 rounded-xl bg-surface-subtle px-3 text-sm font-medium text-muted-foreground">No student solutions yet.</div>;
 
@@ -34,7 +40,7 @@ export default function InstructorReviewQueue() {
       : state === 'loading' ? <p className="mt-2 text-sm text-muted-foreground">Loading reviews…</p>
       : state === 'unavailable' ? <Alert type="error" label="Review status" className="mb-0 mt-3" actions={<Btn variant="secondary" size="sm" onClick={load}>Retry</Btn>}>Unable to determine the current review status.</Alert>
       : <>
-        <p className="mt-2 text-sm text-muted-foreground">{rows.reduce((sum, row) => sum + row.pending, 0)} manual responses · {rows.length} quizzes · {sections.length} sections</p>
+        <p className="mt-2 text-sm text-muted-foreground">{reviewCount} manual responses · {rows.length} quizzes · {sections.length} sections</p>
         <Select className="mt-3 max-w-xs" aria-label="Filter reviews by section" value={section} onChange={event => setSection(event.target.value)}>
           <option value="">All sections</option>
           {sections.map(([id, name]) => <option key={id} value={id}>{name}</option>)}

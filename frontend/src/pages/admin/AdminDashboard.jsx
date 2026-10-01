@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import { DashboardLoadingState, StatCard, Card, PageHeader } from '../../components/ui';
+import { DashboardLoadingState, DashboardStatusPanel, Card, PageHeader, StatusChip } from '../../components/ui';
 import api from '../../services/api';
-import { Clock, Users } from '../../components/icons';
+import { Check, Clock, Users } from '../../components/icons';
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
@@ -16,16 +16,30 @@ export default function AdminDashboard() {
       .finally(() => setLoading(false));
   }, []);
 
+  const pendingApprovals = Number(stats?.pending) || 0;
+  const totalUsers = Number(stats?.total) || 0;
+  const adminStory = pendingApprovals > 0
+    ? { title: pendingApprovals + (pendingApprovals === 1 ? ' approval needs review' : ' approvals need review'), description: 'Review the pending instructor requests.' }
+    : { title: 'Everything is up to date', description: 'There are no instructor approvals waiting for review.' };
+
   return (
     <DashboardLayout>
       <PageHeader title="System Overview" subtitle={loading ? 'User access and instructor approvals.' : `${stats?.pending ? `${stats.pending} instructor ${stats.pending === 1 ? 'approval' : 'approvals'} pending` : 'No instructor approvals pending'} • ${stats?.total ?? 0} registered ${stats?.total === 1 ? 'user' : 'users'}`} />
       {loading ? <DashboardLoadingState cards={2}/> : (
         <>
-          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <StatCard value={stats?.total ?? '—'} label="Total Users" />
-            <StatCard value={stats?.pending ?? '—'} label="Pending Instructors"
-              accent={stats?.pending > 0 ? '#f59e0b' : undefined} />
-          </div>
+          <DashboardStatusPanel
+            className="mb-6"
+            indicator={<div role="img" aria-label={pendingApprovals + ' instructor approvals pending'} className="grid h-32 w-32 shrink-0 place-items-center rounded-full bg-[var(--surface-2)] shadow-[var(--sh-inset)]"><div className="grid text-center">{pendingApprovals > 0 ? <strong className="text-3xl font-semibold leading-none tabular-nums text-foreground">{pendingApprovals}</strong> : <Check size={28} className="mx-auto text-success" aria-hidden="true" />}<span className="mt-1 text-[12px] font-medium text-muted-foreground">{pendingApprovals > 0 ? 'pending' : 'ready'}</span></div></div>}
+            title={adminStory.title}
+            description={adminStory.description}
+            chip={pendingApprovals > 0
+              ? <Link to="/admin/instructor-requests" className="inline-flex min-h-10 items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><StatusChip status="PENDING" label="Review approvals" /></Link>
+              : <StatusChip status="READY" label="Nothing waiting" />}
+            slots={[
+              { key: 'users', label: 'Users', value: totalUsers, status: 'Registered accounts', icon: <Users size={15} aria-hidden="true" />, to: '/admin/users' },
+              { key: 'approvals', label: 'Approvals', value: pendingApprovals, status: pendingApprovals > 0 ? 'Awaiting review' : 'None waiting', icon: <Clock size={15} aria-hidden="true" />, to: '/admin/instructor-requests', emphasized: pendingApprovals > 0 },
+            ]}
+          />
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Link to="/admin/instructor-requests" className="block">
               <Card interactive className="cursor-pointer p-5">

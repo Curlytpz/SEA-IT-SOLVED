@@ -8,7 +8,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ContentSkeleton, PageSkeleton, Skeleton } from './ui/skeleton';
 import { AlertCircle, ArrowLeft, CheckCircle2, Info, TriangleAlert } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { motion, useReducedMotion } from 'framer-motion';
 import { cn } from '../lib/utils';
+import { TACTILE_SPRING } from '../lib/motionVariants';
 export { CircularGauge, Meter, StatusChip, Toggle, Tooltip } from './ui/tactile';
 
 // Shared visual primitives for the light/dark dashboard design system.
@@ -117,6 +119,35 @@ export function Btn({ variant = 'primary', size = 'md', disabled, loading, loadi
 
 export function Card({ children, className = '', interactive = false, ...props }) {
   return <ShadCard className={cn(interactive && 'transition-[border-color,box-shadow,transform,background-color] duration-200 hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-glass active:translate-y-0 active:scale-[.995] motion-reduce:transform-none motion-reduce:transition-none', className)} {...props}>{children}</ShadCard>;
+}
+
+export function DashboardStatusPanel({ indicator, title, description, chip, slots = [], className = '' }) {
+  const reducedMotion = useReducedMotion();
+  return <motion.div initial={reducedMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={reducedMotion ? { duration: 0 } : TACTILE_SPRING}>
+    <Card className={cn('rounded-[1.75rem] border-white/60 bg-[linear-gradient(145deg,hsl(var(--surface-elevated)),hsl(var(--surface)))] p-5 shadow-[var(--sh-raised)] dark:border-border/80 sm:p-6', className)}>
+      <div className="grid items-center gap-6 min-[820px]:grid-cols-[auto_minmax(0,1fr)_minmax(17rem,.72fr)]">
+      <div className="flex justify-center min-[820px]:justify-start">{indicator}</div>
+      <div className="min-w-0 text-center min-[820px]:text-left">
+        <h2 className="text-[1.375rem] font-semibold leading-tight tracking-[-.025em] text-foreground">{title}</h2>
+        <p className="mt-2 max-w-[38ch] text-sm leading-6 text-muted-foreground min-[820px]:mx-0">{description}</p>
+        {chip && <div className="mt-4 flex justify-center min-[820px]:justify-start">{chip}</div>}
+      </div>
+      <div className="grid grid-cols-2 gap-3 max-[420px]:grid-cols-1">
+        {slots.map(({ key, label, value, status, icon, to, emphasized = false, ariaLabel }) => {
+          const surfaceClass = cn(
+            'flex min-h-32 min-w-0 flex-col justify-between rounded-2xl bg-[var(--surface-2)] p-3.5 text-left shadow-[var(--sh-inset)]',
+            emphasized && 'ring-1 ring-primary/30 shadow-[var(--sh-inset),0_0_24px_hsl(var(--primary)/.12)]',
+            to && 'transition-transform duration-200 ease-[var(--ease-apple)] hover:-translate-y-px active:scale-[.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transform-none motion-reduce:transition-none',
+          );
+          const content = <><span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground">{icon}{label}</span><strong className="mt-2 text-[1.875rem] font-semibold leading-none tabular-nums text-foreground">{value}</strong><span className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground"><i aria-hidden="true" className={cn('h-1.5 w-1.5 rounded-full bg-muted-foreground/60', emphasized && 'bg-primary')}/>{status}</span></>;
+          return to
+            ? <Link key={key} to={to} aria-label={ariaLabel || `${label}: ${value}. ${status}`} className={surfaceClass}>{content}</Link>
+            : <div key={key} className={surfaceClass}>{content}</div>;
+        })}
+      </div>
+      </div>
+    </Card>
+  </motion.div>;
 }
 
 export function BackButton({ to, onClick, children = 'Back', replace = false, state, className = '', ...props }) {

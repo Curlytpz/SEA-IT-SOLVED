@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import { DashboardLoadingState, EmptyState, PageHeader, StatCard, Badge, Btn, StatusChip } from '../../components/ui';
+import { DashboardLoadingState, DashboardStatusPanel, EmptyState, PageHeader, Badge, Btn, StatusChip } from '../../components/ui';
 import api from '../../services/api';
-import { BookOpen, Plus, Users } from '../../components/icons';
+import { BookOpen, Check, Plus, Users } from '../../components/icons';
 import InstructorReviewQueue from '../../components/reasoning/InstructorReviewQueue';
 import ClassCode from '../../components/sections/ClassCode';
 
 export default function InstructorDashboard() {
   const [sections, setSections] = useState([]);
   const [loading, setLoading]   = useState(true);
+  const [reviewSummary, setReviewSummary] = useState(null);
 
   useEffect(() => {
     api.get('/sections/instructor/sections').then(r=>setSections(r.data.data.sections)).catch(()=>{}).finally(()=>setLoading(false));
@@ -17,6 +18,12 @@ export default function InstructorDashboard() {
 
   const enrolled = sections.reduce((s,sec)=>s+(sec.enrolledCount||0),0);
   const pending  = sections.reduce((s,sec)=>s+(sec.pendingCount||0),0);
+  const reviewCount = reviewSummary?.state === 'pending' ? (Number(reviewSummary.count) || 0) : 0;
+  const instructorStory = reviewCount > 0
+    ? { title: reviewCount + (reviewCount === 1 ? ' solution needs review' : ' solutions need review'), description: 'Review the submitted student work when you’re ready.' }
+    : pending > 0
+      ? { title: pending + (pending === 1 ? ' request is waiting' : ' requests are waiting'), description: 'Review the pending section requests.' }
+      : { title: 'You’re ready to teach', description: 'Nothing currently needs your attention.' };
 
   return (
     <DashboardLayout>
@@ -27,13 +34,23 @@ export default function InstructorDashboard() {
 
         {loading ? <DashboardLoadingState /> : (
           <>
-          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <StatCard value={sections.length} label="Active Sections" />
-            <StatCard value={enrolled} label="Enrolled Students" />
-            <StatCard value={pending} label={pending > 0 ? 'Pending requests' : 'All caught up'} accent={pending>0?'#f59e0b':undefined} className={pending === 0 ? 'opacity-80' : ''} />
-          </div>
+          <DashboardStatusPanel
+            className="mb-6"
+            indicator={<div role="img" aria-label={reviewCount > 0 ? reviewCount + ' student solutions awaiting review' : pending > 0 ? pending + ' requests awaiting action' : 'No teaching tasks currently need attention'} className="grid h-32 w-32 shrink-0 place-items-center rounded-full bg-[var(--surface-2)] shadow-[var(--sh-inset)]"><div className="grid text-center">{reviewCount > 0 || pending > 0 ? <strong className="text-3xl font-semibold leading-none tabular-nums text-foreground">{reviewCount || pending}</strong> : <Check size={28} className="mx-auto text-success" aria-hidden="true" />}<span className="mt-1 text-[12px] font-medium text-muted-foreground">{reviewCount > 0 ? 'to review' : pending > 0 ? 'pending' : 'ready'}</span></div></div>}
+            title={instructorStory.title}
+            description={instructorStory.description}
+            chip={reviewCount > 0
+              ? <StatusChip status="PENDING" label="Solutions waiting" />
+              : pending > 0
+                ? <Link to="/instructor/sections" className="inline-flex min-h-10 items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><StatusChip status="PENDING" label="Review requests" /></Link>
+                : <StatusChip status="READY" label="All caught up" />}
+            slots={[
+              { key: 'sections', label: 'Active sections', value: sections.length, status: 'Teaching', icon: <BookOpen size={15} aria-hidden="true" />, to: '/instructor/sections' },
+              { key: 'students', label: 'Enrolled students', value: enrolled, status: enrolled === 1 ? '1 student' : enrolled + ' students', icon: <Users size={15} aria-hidden="true" />, to: '/instructor/sections' },
+            ]}
+          />
 
-          <InstructorReviewQueue/>
+          <InstructorReviewQueue onSummaryChange={setReviewSummary} compactEmpty/>
           {sections.length===0
             ? <EmptyState icon={<BookOpen size={23}/>} title="No sections yet" body="Create your first section to get started.">
                 <Link to="/instructor/sections"><Btn variant="primary">Create Section</Btn></Link>

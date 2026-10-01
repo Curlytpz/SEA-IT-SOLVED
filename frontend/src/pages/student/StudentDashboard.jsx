@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import { Alert, Badge, Btn, Card, DashboardLoadingState, EmptyState, PageHeader, SectionHeading, StatCard } from '../../components/ui';
-import { ArrowRight, BookOpen, Chart, Check, Play, Plus } from '../../components/icons';
+import { Alert, Badge, Btn, Card, CircularGauge, DashboardLoadingState, DashboardStatusPanel, EmptyState, PageHeader, SectionHeading, StatusChip } from '../../components/ui';
+import { ArrowRight, BookOpen, Chart, Check, Clock, Play, Plus } from '../../components/icons';
 import { getStudentLearning, startQuizAttempt } from '../../services/phase6Api';
 import api from '../../services/api';
 import GeneratedContent from '../../components/reasoning/GeneratedContent';
@@ -62,6 +62,16 @@ export default function StudentDashboard() {
     () => buildStudentClassGroups(data.sections, data.lessons),
     [data.sections, data.lessons],
   );
+  const pendingQuizCount = Number(data.summary.pendingQuizzes) || 0;
+  const completedQuizCount = Number(data.summary.completedQuizzes) || 0;
+  const totalQuizzes = pendingQuizCount + completedQuizCount;
+  const quizProgress = totalQuizzes > 0 ? (completedQuizCount / totalQuizzes) * 100 : 0;
+  const nextPendingQuiz = pendingQuizzes[0];
+  const studentStory = totalQuizzes === 0
+    ? { title: 'No quizzes yet', description: 'Join a class to see its quizzes here.' }
+    : pendingQuizCount === 0
+      ? { title: 'You’re all caught up', description: 'You’ve finished every quiz from your classes.' }
+      : { title: countLabel(pendingQuizCount, 'quiz') + ' waiting', description: 'Finish them to complete your progress.' };
 
   return <DashboardLayout>
     <div className="mx-auto w-full max-w-[1440px]">
@@ -70,11 +80,22 @@ export default function StudentDashboard() {
       </PageHeader>
       {error && <Alert type="error" onClose={() => setError('')}>{error}</Alert>}
       {loading ? <DashboardLoadingState/> : <>
-        <div className="grid gap-3 md:grid-cols-3">
-          <StatCard className="min-h-[7.5rem] shadow-[0_2px_8px_rgba(15,23,42,.04)] [&>div:first-child]:text-4xl [&>div:first-child]:tabular-nums" value={availableClasses.length} label="Available Classes"/>
-          <StatCard className="min-h-[7.5rem] shadow-[0_2px_8px_rgba(15,23,42,.04)] [&>div:first-child]:text-4xl [&>div:first-child]:tabular-nums" value={data.summary.pendingQuizzes} label="Pending Quizzes"/>
-          <StatCard className="min-h-[7.5rem] shadow-[0_2px_8px_rgba(15,23,42,.04)] [&>div:first-child]:text-4xl [&>div:first-child]:tabular-nums" value={data.summary.completedQuizzes} label="Completed Quizzes"/>
-        </div>
+        <DashboardStatusPanel
+          indicator={<CircularGauge value={quizProgress} label="Quiz progress" ariaLabel={countLabel(completedQuizCount, 'quiz') + ' completed out of ' + totalQuizzes} strokeWidth={10} className="h-32 w-32" center={<><strong className="text-lg leading-none tabular-nums text-foreground">{completedQuizCount}/{totalQuizzes}</strong><span className="mt-1 text-[12px] leading-none text-muted-foreground">completed</span></>} />}
+          title={studentStory.title}
+          description={studentStory.description}
+          chip={totalQuizzes === 0
+            ? <Link to="/student/join-section" className="inline-flex min-h-10 items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><StatusChip status="INFO" label="Join a class" /></Link>
+            : pendingQuizCount === 0
+              ? <StatusChip status="READY" label="Nothing due" />
+              : nextPendingQuiz
+                ? <button type="button" onClick={() => openPendingQuiz(nextPendingQuiz)} disabled={Boolean(quizBusy)} className="inline-flex min-h-10 items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60"><StatusChip status="PENDING" label="Start next quiz" /></button>
+                : <StatusChip status="PENDING" label="Quiz waiting" />}
+          slots={[
+            { key: 'classes', label: 'Classes', value: availableClasses.length, status: 'Enrolled', icon: <BookOpen size={15} aria-hidden="true" />, to: '/student/classes' },
+            { key: 'pending', label: 'Pending', value: pendingQuizCount, status: pendingQuizCount > 0 ? 'Needs attention' : 'None waiting', icon: <Clock size={15} aria-hidden="true" />, emphasized: pendingQuizCount > 0 },
+          ]}
+        />
 
         <section className="mt-8">
           <SectionHeading title="Pending Quizzes" description="Assessments that still need your answer."/>

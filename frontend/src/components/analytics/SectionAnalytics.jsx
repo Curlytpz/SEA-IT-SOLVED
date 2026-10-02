@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Alert, Card, LoadingState, Meter, StatCard, StatusChip } from '../ui';
+import { Alert, Card, CircularGauge, LoadingState, Meter, StatusChip } from '../ui';
 import { getSectionAnalytics } from '../../services/phase6Api';
 import GeneratedContent from '../reasoning/GeneratedContent';
-import { analyticsHeadingClassName, analyticsMetricsClassName } from './analyticsStyles';
+import { analyticsHeadingClassName } from './analyticsStyles';
 import { formatDisplayName } from '../../utils/displayName';
+import { ChevronRight } from 'lucide-react';
 
 const percent = value => value == null ? '—' : `${Math.round(value * 10) / 10}%`;
 function Bar({ value }) {
@@ -13,6 +14,33 @@ function Bar({ value }) {
 
 function Metric({ label, value }) {
   return <div><dt>{label}</dt><dd>{value}</dd></div>;
+}
+
+function ScoreRange({ lowest, highest, median, average, submitted }) {
+  const values = [lowest, highest, median, average].map(Number);
+  const hasRange = submitted >= 2 && Number.isFinite(values[0]) && Number.isFinite(values[1]);
+  if (!hasRange) {
+    const oneScore = submitted === 1 && Number.isFinite(Number(average)) ? percent(average) : null;
+    return <div className="tactile-inset-well grid min-h-24 content-center gap-1 px-4 py-3">
+      <p className="text-[13px] font-semibold text-foreground">Score range</p>
+      <p className="text-[12px] leading-5 text-muted-foreground">{submitted === 0 ? 'No submitted scores yet.' : oneScore ? `One submitted score: ${oneScore}.` : 'One submitted score; a range is not available yet.'}</p>
+    </div>;
+  }
+
+  const low = Math.max(0, Math.min(100, Number(lowest)));
+  const high = Math.max(low, Math.min(100, Number(highest)));
+  const medianPosition = Number.isFinite(Number(median)) ? Math.max(0, Math.min(100, Number(median))) : null;
+  const averagePosition = Number.isFinite(Number(average)) ? Math.max(0, Math.min(100, Number(average))) : null;
+  const label = `Scores range from ${percent(low)} to ${percent(high)}${medianPosition == null ? '' : `, median ${percent(medianPosition)}`}.`;
+
+  return <div className="tactile-inset-well min-h-24 px-4 py-3" role="img" aria-label={label}>
+    <div className="flex items-center justify-between gap-3 text-[12px] font-semibold text-muted-foreground"><span>Score range</span><span>{percent(low)}–{percent(high)}</span></div>
+    <div className="relative mt-3 h-3 rounded-full bg-[var(--surface-2)] shadow-[var(--sh-inset)]">
+      <span className="absolute inset-y-[3px] rounded-full bg-gradient-to-r from-teal-400 to-teal-500 transition-[left,width] duration-500 motion-reduce:transition-none" style={{ left: `${low}%`, width: `${Math.max(1, high - low)}%` }} />
+      {medianPosition != null && <span className="absolute -top-1 h-5 w-0.5 -translate-x-1/2 rounded-full bg-foreground/70" style={{ left: `${medianPosition}%` }}><span className="sr-only">Median {percent(medianPosition)}</span></span>}
+    </div>
+    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-muted-foreground"><span>Median {medianPosition == null ? '—' : percent(medianPosition)}</span><span>Class average {averagePosition == null ? '—' : percent(averagePosition)}</span></div>
+  </div>;
 }
 
 
@@ -43,14 +71,19 @@ export default function SectionAnalytics({ sectionId }) {
   if (!data) return <LoadingState text="Calculating student performance…"/>;
 
   const overview = data.overview;
-  const scoreRange = overview.lowestPercentage == null && overview.highestPercentage == null
-    ? '—'
-    : `${percent(overview.lowestPercentage)} – ${percent(overview.highestPercentage)}`;
-
   return <div className="grid gap-5">
     <section aria-labelledby="analytics-overview-title">
-      <div className={analyticsHeadingClassName}><div><h2 id="analytics-overview-title">Class overview</h2><p>The current assessment picture for this section.</p></div><span>{overview.submitted} submitted · Median {percent(overview.medianPercentage)}</span></div>
-      <div className={analyticsMetricsClassName}><StatCard value={overview.enrolled} label="Students"/><StatCard value={percent(overview.submissionRate)} label="Submission Rate"/><StatCard value={percent(overview.averagePercentage)} label="Class Average"/><StatCard value={scoreRange} label="Score Range"/></div>
+      <Card className="tactile-raised-card p-5 sm:p-6">
+        <div className="flex flex-col justify-between gap-3 min-[820px]:flex-row min-[820px]:items-start">
+          <div><h2 id="analytics-overview-title" className="text-[22px] font-[650] leading-tight tracking-[-.02em] text-foreground">Class overview</h2><p className="mt-1 text-sm text-muted-foreground">{overview.submitted} of {overview.enrolled} students have submitted</p></div>
+          <StatusChip status={overview.enrolled === 0 ? 'INFO' : overview.submitted >= overview.enrolled ? 'READY' : 'PENDING'} label={overview.enrolled === 0 ? 'No students enrolled' : overview.submitted >= overview.enrolled ? 'Everyone has submitted' : `${Math.max(0, overview.enrolled - overview.submitted)} not submitted yet`} />
+        </div>
+        <div className="mt-5 grid items-stretch gap-5 min-[820px]:grid-cols-[132px_minmax(0,1fr)_minmax(11rem,.58fr)] min-[820px]:items-center">
+          <CircularGauge value={overview.submissionRate} label="Submission rate" ariaLabel={`${overview.submitted} of ${overview.enrolled} students submitted (${percent(overview.submissionRate)})`} strokeWidth={12} bare className="h-[132px] w-[132px] justify-self-center min-[820px]:justify-self-start" center={<><strong className="text-[26px] font-[650] leading-none tabular-nums text-foreground">{overview.submitted}/{overview.enrolled}</strong><span className="mt-1 text-[12px] leading-none text-muted-foreground">students</span></>} />
+          <ScoreRange lowest={overview.lowestPercentage} highest={overview.highestPercentage} median={overview.medianPercentage} average={overview.averagePercentage} submitted={overview.submitted} />
+          <Link to={`/instructor/sections/${sectionId}?tab=students`} className="tactile-inset-well group flex min-h-24 items-center justify-between gap-3 px-4 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"><span><span className="block text-[13px] font-semibold text-muted-foreground">Students</span><strong className="mt-1 block text-[30px] font-[650] leading-none tracking-[-.03em] tabular-nums text-foreground">{overview.enrolled}</strong></span><ChevronRight size={18} aria-hidden="true" className="text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none motion-reduce:transform-none"/></Link>
+        </div>
+      </Card>
     </section>
 
     <Card className="p-4">

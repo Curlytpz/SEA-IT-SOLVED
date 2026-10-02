@@ -3111,23 +3111,14 @@ pre {
 .quiz-tutor-practice-card,
 .quiz-tutor-practice-skeleton { min-width:0; overflow:hidden; border:1px solid hsl(var(--border)); border-radius:.85rem; background:hsl(var(--card)); padding:1rem; }
 .quiz-tutor-practice-card > header { border-bottom:1px solid hsl(var(--border)); padding-bottom:.75rem; }
-.quiz-tutor-practice-card > header p { color:hsl(var(--primary-subtle-foreground)); font-size:.72rem; font-weight:780; letter-spacing:.04em; text-transform:uppercase; }
+.quiz-tutor-practice-card > header p { color:hsl(var(--primary-subtle-foreground)); font-size:.8125rem; font-weight:600; }
 .quiz-tutor-practice-question { min-width:0; margin-top:1rem; color:hsl(var(--foreground)); font-size:.94rem; font-weight:650; line-height:1.6; }
 .quiz-tutor-practice-question .math-content,
 .quiz-tutor-options .math-content,
 .quiz-tutor-correct-answer .math-content,
 .quiz-tutor-practice-review .math-content { width:100%; min-width:0; max-width:none; }
 .quiz-tutor-options { display:grid; min-width:0; gap:.5rem; margin-top:1rem; }
-.quiz-tutor-options > button { display:grid; min-width:0; min-height:48px; grid-template-columns:1.2rem 1.5rem minmax(0,1fr); align-items:center; gap:.45rem; border:1px solid hsl(var(--border)); border-radius:.65rem; background:hsl(var(--surface)); padding:.65rem .75rem; color:hsl(var(--foreground)); text-align:left; transition:border-color 160ms ease,background-color 160ms ease; }
-.quiz-tutor-options > button:hover:not(:disabled) { border-color:hsl(var(--primary) / .55); }
-.quiz-tutor-options > button:focus-visible { outline:2px solid hsl(var(--ring)); outline-offset:2px; }
-.quiz-tutor-options > button.is-selected { border-color:hsl(var(--primary)); background:hsl(var(--primary-subtle)); }
-.quiz-tutor-options > button:disabled { cursor:default; opacity:1; }
-.quiz-tutor-options > button > strong { color:hsl(var(--muted-foreground)); font-size:.78rem; }
-.quiz-tutor-option-radio { display:grid; width:1.05rem; height:1.05rem; place-items:center; border:1px solid hsl(var(--input)); border-radius:50%; }
-.quiz-tutor-option-radio i { width:.48rem; height:.48rem; border-radius:50%; background:transparent; }
-.quiz-tutor-options > button.is-selected .quiz-tutor-option-radio { border-color:hsl(var(--primary)); }
-.quiz-tutor-options > button.is-selected .quiz-tutor-option-radio i { background:hsl(var(--primary)); }
+.quiz-tutor-options > .quiz-option { min-width:0; }
 .quiz-tutor-check-action { display:flex; justify-content:flex-end; margin-top:.9rem; }
 .quiz-tutor-practice-review { position:relative; display:grid; min-width:0; gap:.75rem; margin-top:1rem; overflow:hidden; border-radius:.7rem; background:hsl(var(--surface-subtle)); padding:.9rem .9rem .9rem 1.1rem; }
 .quiz-tutor-practice-review::before,
@@ -3146,9 +3137,9 @@ pre {
 .has-math-review .visual-math-field {
   border-color: hsl(var(--warning));
 }
-.quiz-tutor-practice-review > p { color:hsl(var(--muted-foreground)); font-size:.65rem; font-weight:760; letter-spacing:.07em; text-transform:uppercase; }
+.quiz-tutor-practice-review > p { color:hsl(var(--muted-foreground)); font-size:.75rem; font-weight:600; }
 .quiz-tutor-practice-review h4 { color:hsl(var(--foreground)); font-size:1rem; font-weight:760; }
-.quiz-tutor-practice-review h5 { margin-bottom:.28rem; color:hsl(var(--muted-foreground)); font-size:.68rem; font-weight:720; text-transform:uppercase; }
+.quiz-tutor-practice-review h5 { margin-bottom:.28rem; color:hsl(var(--muted-foreground)); font-size:.75rem; font-weight:600; }
 .quiz-tutor-correct-answer { display:grid; min-width:0; grid-template-columns:1.5rem minmax(0,1fr); align-items:start; gap:.4rem; }
 .quiz-tutor-practice-review > footer { border-top:1px solid hsl(var(--border)); padding-top:.75rem; }
 .quiz-tutor-practice-error { position:relative; overflow:hidden; border-radius:.75rem; background:hsl(var(--surface-subtle)); padding:1rem 1rem 1rem 1.2rem; }

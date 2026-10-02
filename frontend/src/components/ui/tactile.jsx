@@ -29,7 +29,9 @@ export function StatusChip({ status, label, className = '', pulse, ...props }) {
 
 export function Toggle({ checked, onCheckedChange, disabled = false, label, className = '', ...props }) {
   return <button type="button" role="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onCheckedChange?.(!checked)} className={cn('relative inline-flex min-h-10 min-w-16 items-center rounded-full border border-white/60 bg-[var(--surface-2)] p-1 shadow-[var(--sh-inset)] transition-[background-color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 dark:border-border/80', checked && 'bg-primary/20', className)} {...props}>
-    <span className={cn('h-8 w-8 rounded-full bg-surface-elevated shadow-[var(--neu-shadow-raised-sm)] transition-transform duration-200 ease-[var(--ease-apple)]', checked && 'translate-x-6 bg-primary')} aria-hidden="true"/>
+    <span className={cn('grid h-8 w-8 place-items-center rounded-full bg-surface-elevated text-muted-foreground shadow-[var(--neu-shadow-raised-sm)] transition-transform duration-200 ease-[var(--ease-apple)]', checked && 'translate-x-6 bg-primary text-primary-foreground')} aria-hidden="true">
+      <span className="text-[11px] font-bold">{checked ? '✓' : '—'}</span>
+    </span>
     <span className="sr-only">{checked ? 'On' : 'Off'}</span>
   </button>;
 }
@@ -41,16 +43,25 @@ export function Meter({ value = 0, label, className = '' }) {
   </div>;
 }
 
-export function CircularGauge({ value = 0, label, detail, center, ariaLabel, strokeWidth = 7, bare = false, className = '' }) {
+export function CircularGauge({ value = 0, label, detail, center, ariaLabel, strokeWidth = 7, threshold, bare = false, className = '' }) {
   const clamped = Math.max(0, Math.min(100, Number(value) || 0));
   const radius = 52;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (clamped / 100) * circumference;
+  const thresholdValue = Number.isFinite(Number(threshold)) ? Math.max(0, Math.min(100, Number(threshold))) : null;
+  const thresholdAngle = thresholdValue === null ? 0 : (thresholdValue / 100) * Math.PI * 2;
+  const tick = thresholdValue === null ? null : {
+    x1: 70 + Math.cos(thresholdAngle) * (radius - strokeWidth / 2 - 2),
+    y1: 70 + Math.sin(thresholdAngle) * (radius - strokeWidth / 2 - 2),
+    x2: 70 + Math.cos(thresholdAngle) * (radius + strokeWidth / 2 + 3),
+    y2: 70 + Math.sin(thresholdAngle) * (radius + strokeWidth / 2 + 3),
+  };
   return <div className={cn('relative grid h-28 w-28 shrink-0 place-items-center', !bare && 'rounded-full bg-[var(--surface-2)] shadow-[var(--sh-inset)]', className)} role="img" aria-label={ariaLabel || ((label || 'Value') + ': ' + Math.round(clamped) + '%')}>
     <svg viewBox="0 0 140 140" className="h-full w-full -rotate-90" aria-hidden="true">
       <defs><linearGradient id="circular-gauge-teal" x1="18%" y1="12%" x2="82%" y2="88%"><stop stopColor="#2dd4bf" /><stop offset="1" stopColor="#14b8a6" /></linearGradient></defs>
       <circle cx="70" cy="70" r={radius} fill="none" stroke="var(--lo)" strokeOpacity=".5" strokeWidth={strokeWidth} />
       <circle cx="70" cy="70" r={radius} fill="none" stroke="url(#circular-gauge-teal)" strokeLinecap="round" strokeWidth={strokeWidth} strokeDasharray={circumference} strokeDashoffset={offset} className="transition-[stroke-dashoffset] duration-[900ms] ease-[cubic-bezier(.32,.72,0,1)] motion-reduce:transition-none" />
+      {tick && <line {...tick} stroke="var(--foreground)" strokeOpacity=".5" strokeWidth="2" strokeLinecap="round" />}
     </svg>
     <div className="absolute grid text-center">{center || <><strong className="text-lg leading-none tabular-nums text-foreground">{Math.round(clamped)}%</strong>{detail && <span className="mt-1 text-[12px] leading-none text-muted-foreground">{detail}</span>}</>}</div>
   </div>;

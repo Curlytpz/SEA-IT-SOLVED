@@ -79,7 +79,7 @@ export default function ClassCode({ sectionId, code, subjectCode, sectionName, c
 
   return (
     <>
-      <div className={compact ? 'flex min-w-0 border-t border-border/70 px-3 py-2.5 dark:border-border' : 'mt-3 flex min-w-0'}>
+      <div className={compact ? 'flex min-w-0 items-center gap-2 border-t border-border/70 px-3 py-2.5 dark:border-border' : 'mt-3 flex min-w-0 items-center gap-2'}>
         <button
           type="button"
           onClick={() => setOpen(true)}
@@ -94,8 +94,8 @@ export default function ClassCode({ sectionId, code, subjectCode, sectionName, c
             <code className={`block truncate font-mono font-semibold tracking-[0.12em] text-foreground dark:text-foreground ${compact ? 'text-sm' : 'text-[15px]'}`}>{normalizedCode}</code>
           </span>
         </button>
-        <Btn type="button" variant="outline" size="sm" onClick={copyCode} className="shrink-0">
-          <Copy size={15} aria-hidden="true" /> Copy
+        <Btn type="button" variant="outline" size="sm" onClick={copyCode} className="h-11 shrink-0">
+          <Copy size={15} aria-hidden="true" /> {copied ? 'Copied' : 'Copy'}
         </Btn>
       </div>
 

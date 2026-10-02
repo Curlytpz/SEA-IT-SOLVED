@@ -203,7 +203,7 @@ export default function StudentQuizAttempt() {
       <BackButton to={`/student/lessons/${data.attempt.lessonId}`}>
         Back to lesson
       </BackButton>
-      <div className="mx-auto max-w-5xl">
+      <div className="w-full">
         {error && <Alert onClose={() => setError("")}>{error}</Alert>}
         <Card className="tactile-raised-card">
           <header className="border-b border-border p-4 sm:p-6">

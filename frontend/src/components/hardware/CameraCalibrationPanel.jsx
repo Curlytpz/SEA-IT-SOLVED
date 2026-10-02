@@ -279,13 +279,13 @@ export default function CameraCalibrationPanel({ initialHardwareSettings, initia
 
   return <div id="camera-calibration" className="space-y-5 scroll-mt-24">
     {message.text && <Alert type={message.type} onClose={() => setMessage({ text: '', type: 'success' })}>{message.text}</Alert>}
-    <Card className="p-5">
-      <SettingsPanelHeader icon={<Camera size={17}/>} title="Camera Calibration" description="Trace one precise board region while four internal anchors preserve perspective correction." editing={editing} configured={!!savedCalibration}/>
+    <Card className="p-6">
+      <SettingsPanelHeader icon={<Camera size={17}/>} title="Camera Calibration" description="Trace one precise board region while four internal anchors preserve perspective correction." editing={editing} configured={!!savedCalibration} simulated={mode==='SIMULATED'}/>
       {!editing && savedCalibration ? <ConfiguredSummary items={[{ label: 'Camera', value: deviceLabel }, { label: 'Calibration', value: 'Single region' }]}>
-        <Btn onClick={beginEditing}>Change Calibration</Btn>
+        <Btn variant="secondary" onClick={beginEditing}>Change Calibration</Btn>
         {camera.status !== 'READY' && <Btn variant="secondary" onClick={startCamera}>{mode === 'SIMULATED' ? 'Start Preview' : 'Start Camera'}</Btn>}
         {camera.status === 'READY' && mode !== 'SIMULATED' && <Btn variant="secondary" onClick={camera.stop}>Stop Camera</Btn>}
-        <Btn variant="secondary" disabled={camera.status !== 'READY'} loading={processing} onClick={testCapture}>Preview Corrected Board</Btn>
+        <Btn disabled={camera.status !== 'READY'} loading={processing} onClick={testCapture}>Preview Corrected Board</Btn>
       </ConfiguredSummary> : <>
         <div className="grid gap-4 mb-4 sm:grid-cols-2">
           <FormField label="Hardware Mode"><Select value={mode} onChange={event => { const next = event.target.value; setMode(next); setSourceKey(defaultCameraSourceKey(next)); }}><option value="SIMULATED">Simulated / Development</option><option value="BROWSER">Browser Webcam</option><option value="REAL" disabled>Real Raspberry Pi Hardware (Later)</option></Select></FormField>
@@ -308,7 +308,7 @@ export default function CameraCalibrationPanel({ initialHardwareSettings, initia
         </div>
         <p className="mt-3 text-xs text-muted-foreground dark:text-muted-foreground">Drag the four corner handles to match the board: top-left, top-right, bottom-right, then bottom-left. Coordinates remain normalized across responsive sizes. Arrow keys move precisely; hold Shift for larger steps.</p>
 
-        <div className="flex flex-wrap gap-2 mt-4"><Btn disabled={camera.status !== 'READY' || !calibrationValid} loading={saving} onClick={save}>Save Calibration</Btn>{savedCalibration && <Btn variant="ghost" disabled={saving} onClick={cancel}>Cancel</Btn>}<Btn variant="secondary" disabled={camera.status !== 'READY' || !savedCalibration || isDirty} loading={processing} onClick={testCapture}>Preview Corrected Board</Btn></div>
+        <div className="flex flex-wrap gap-2 mt-4"><Btn disabled={camera.status !== 'READY' || !calibrationValid} loading={saving} onClick={save}>Save Calibration</Btn>{savedCalibration && <Btn variant="ghost" disabled={saving} onClick={cancel}>Cancel</Btn>}</div>
       </>}
       {!editing && <div className="pointer-events-none fixed -left-[10000px] top-0 h-[360px] w-[640px] overflow-hidden opacity-0" aria-hidden="true"><CameraPreview {...camera} mode={mode} videoRef={videoRef} canvasRef={canvasRef}/></div>}
     </Card>

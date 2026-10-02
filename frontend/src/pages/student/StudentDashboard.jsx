@@ -74,7 +74,7 @@ export default function StudentDashboard() {
       : { title: countLabel(pendingQuizCount, 'quiz') + ' waiting', description: 'Finish them to complete your progress.' };
 
   return <DashboardLayout>
-    <div className="mx-auto w-full max-w-[1440px]">
+    <div className="w-full">
       <PageHeader title="Learning Overview" subtitle={loading ? 'Classes, assessments, and recent performance.' : 'Published lessons and quiz activity from your classes.'}>
         <Link to="/student/join-section"><Btn><Plus size={16}/>Join a Section</Btn></Link>
       </PageHeader>

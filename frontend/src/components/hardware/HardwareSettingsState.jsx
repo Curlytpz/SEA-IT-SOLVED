@@ -1,9 +1,12 @@
-import { Check } from '../icons';
+import { StatusChip, Tooltip } from '../ui';
 
-export function SettingsPanelHeader({icon,title,description,editing,configured=true}){
+export function SettingsPanelHeader({icon,title,description,editing,configured=true,simulated=false}){
   return <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
     <div><h2 className="flex items-center gap-2 text-lg font-bold text-foreground dark:text-foreground">{icon}{title}</h2><p className="mt-1 text-sm leading-6 text-muted-foreground dark:text-muted-foreground">{description}</p></div>
-    <span className={`inline-flex min-h-7 shrink-0 items-center gap-1.5 self-start rounded-full border border-white/60 px-2.5 text-xs font-semibold shadow-[var(--neu-shadow-raised-sm)] dark:border-border/80 ${editing ? 'bg-warning-subtle text-warning-subtle-foreground dark:bg-warning-subtle dark:text-warning-subtle-foreground' : configured ? 'bg-success-subtle text-success-subtle-foreground dark:bg-success-subtle dark:text-success-subtle-foreground' : 'bg-surface-elevated text-muted-foreground dark:bg-card/10 dark:text-muted-foreground'}`}>{!editing&&configured&&<Check size={13}/>} {editing?'Editing':configured?'Configured':'Setup required'}</span>
+    <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
+      <StatusChip status={editing ? 'DRAFT' : configured ? 'READY' : 'PENDING'} label={editing ? 'Editing' : configured ? 'Configured' : 'Setup required'} />
+      {simulated && <Tooltip label="This setting uses the development simulator."><span className="inline-flex min-h-6 items-center rounded-full border border-border bg-secondary px-2 text-[11px] font-semibold text-muted-foreground">Simulated</span></Tooltip>}
+    </div>
   </div>;
 }
 

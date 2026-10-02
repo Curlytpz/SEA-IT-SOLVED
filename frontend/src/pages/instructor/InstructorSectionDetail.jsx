@@ -6,7 +6,7 @@ import LessonEditModal from '../../components/LessonEditModal';
 import api from '../../services/api';
 import { getSectionAudioRecordings } from '../../services/audioRecordingApi';
 import LessonRecordingControl from '../../components/hardware/LessonRecordingControl';
-import { BookOpen, Chart, Check, CircleX, Pencil, Play, Plus, Scan, Trash, Users } from '../../components/icons';
+import { BookOpen, Chart, Check, CircleX, Pencil, Play, Plus, Scan, Search, Trash, Users } from '../../components/icons';
 import { ContentTransition } from '../../components/PageTransition';
 import SectionAnalytics from '../../components/analytics/SectionAnalytics';
 import ClassCode from '../../components/sections/ClassCode';
@@ -94,7 +94,8 @@ export default function InstructorSectionDetail() {
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-bold text-foreground">{section.subjectName}</h1>
-            <Badge status={section.sectionName} />
+            <span className="inline-flex min-h-7 items-center rounded-full border border-border bg-secondary px-2.5 text-[12px] font-semibold normal-case text-secondary-foreground">{section.sectionName}</span>
+            <span className="text-sm text-muted-foreground">{section.enrolledCount || 0} enrolled</span>
             {section.pendingCount > 0 && (
               <StatusChip status="PENDING" label={`${section.pendingCount} pending request${section.pendingCount === 1 ? '' : 's'}`}/>
             )}
@@ -165,7 +166,7 @@ function StudentsTab({ section, onAction }) {
     <>
       {msg.text && <Alert type={msg.type} onClose={()=>setMsg({text:''})}>{msg.text}</Alert>}
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <Input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Search students" aria-label="Search students" className="sm:max-w-xs" />
+        <div className="relative sm:max-w-xs"><Search size={16} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"/><Input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Search students" aria-label="Search students" className="h-10 bg-[var(--surface-2)] pl-9 shadow-[var(--sh-inset)]" /></div>
         <Btn size="sm" onClick={()=>setShowAdd(v=>!v)}>{showAdd?<><CircleX size={14}/> Cancel</>:<><Plus size={14}/> Add Student</>}</Btn>
       </div>
       {showAdd && (
@@ -194,7 +195,7 @@ function StudentsTab({ section, onAction }) {
               <Btn variant="ghost" size="sm" loading={rl[s.id]} className="w-full text-destructive hover:bg-destructive-subtle hover:text-destructive-subtle-foreground" onClick={()=>setConfirm(s)}>Remove student</Btn>
             </article>)}
           </div>
-          <div className="scrollbar-hidden hidden max-w-full overflow-x-auto rounded-xl border border-border bg-surface shadow-sm [-webkit-overflow-scrolling:touch] sm:block">
+          <div className="scrollbar-hidden hidden max-w-full overflow-x-auto rounded-2xl border border-[var(--edge)] bg-[var(--surface-color)] shadow-[var(--sh-inset)] [-webkit-overflow-scrolling:touch] sm:block sm:max-w-5xl">
             <table className="w-full text-sm">
               <thead><tr className="bg-surface-subtle border-b border-border">
                 {['#','Name','Student no.','Email','Enrolled','Actions'].map(h=><th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">{h}</th>)}
@@ -202,12 +203,12 @@ function StudentsTab({ section, onAction }) {
               <tbody className="divide-y divide-border">
                 {visibleStudents.map((s,i)=>(
                   <tr key={s.id} className="hover:bg-surface-subtle/60">
-                    <td className="w-10 px-4 py-3.5 text-muted-foreground font-semibold">{i+1}</td>
-                    <td className="whitespace-nowrap px-4 py-3.5 font-semibold text-foreground">{formatPersonName(s)}</td>
-                    <td className="w-32 whitespace-nowrap px-4 py-3.5 text-muted-foreground">{s.studentNumber||'—'}</td>
-                    <td className="max-w-[24rem] truncate px-4 py-3.5 text-muted-foreground">{s.email}</td>
-                    <td className="w-32 whitespace-nowrap px-4 py-3.5 text-muted-foreground">{new Date(s.approvedAt).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'})}</td>
-                    <td className="w-20 px-4 py-3.5 text-right"><Btn variant="ghost" size="sm" loading={rl[s.id]} aria-label={`Remove ${formatPersonName(s)}`} className="text-destructive hover:bg-destructive-subtle hover:text-destructive-subtle-foreground" onClick={()=>setConfirm(s)}><Trash size={15}/></Btn></td>
+                    <td className="w-10 px-4 py-4 text-muted-foreground font-semibold">{i+1}</td>
+                    <td className="whitespace-nowrap px-4 py-4 font-semibold text-foreground">{formatPersonName(s)}</td>
+                    <td className="w-32 whitespace-nowrap px-4 py-4 text-muted-foreground">{s.studentNumber||'—'}</td>
+                    <td className="max-w-[20rem] truncate px-4 py-4 text-muted-foreground">{s.email}</td>
+                    <td className="w-32 whitespace-nowrap px-4 py-4 text-muted-foreground">{new Date(s.approvedAt).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'})}</td>
+                    <td className="w-16 px-2 py-2 text-right"><Btn variant="ghost" size="sm" loading={rl[s.id]} aria-label={`Remove ${formatPersonName(s)}`} className="text-destructive hover:bg-destructive-subtle hover:text-destructive-subtle-foreground" onClick={()=>setConfirm(s)}><Trash size={15}/></Btn></td>
                   </tr>
                 ))}
               </tbody>

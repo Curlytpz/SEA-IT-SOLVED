@@ -127,7 +127,9 @@ export default function DashboardLayout({ children }) {
       </aside>
 
       <main className="relative z-[1] min-h-dvh min-w-0 bg-transparent lg:pl-[16.75rem]">
-        <div className="mx-auto w-full max-w-[1920px] [container-type:inline-size] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(.75rem,env(safe-area-inset-left))] pr-[max(.75rem,env(safe-area-inset-right))] pt-4 sm:px-6 sm:py-7 lg:px-8 2xl:px-10"><PageTransition>{children}</PageTransition></div>
+        <div className="mx-auto w-full max-w-[1920px] [container-type:inline-size] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(.75rem,env(safe-area-inset-left))] pr-[max(.75rem,env(safe-area-inset-right))] pt-4 sm:px-6 sm:py-7 lg:px-8 2xl:px-10">
+          <div className="app-page-container"><PageTransition>{children}</PageTransition></div>
+        </div>
       </main>
     </div>
   );

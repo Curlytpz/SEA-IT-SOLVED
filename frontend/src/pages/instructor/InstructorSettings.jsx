@@ -81,11 +81,13 @@ export default function InstructorSettings() {
           <PageHeader title="Hardware Settings" subtitle="Configure classroom camera, lighting, and optional lesson audio recording.">
             {returnTo&&<BackButton to={returnTo} className="mb-0">Back to Lesson</BackButton>}
           </PageHeader>
-          <CameraCalibrationPanel initialHardwareSettings={hydrated.settings} initialCalibrations={hydrated.calibrations}/>
-          <div className="my-8 border-t border-border dark:border-border"/>
-          <LightingSettingsPanel initialHardwareSettings={hydrated.settings}/>
-          <div className="my-8 border-t border-border dark:border-border"/>
-          <MicrophoneSettingsPanel initialHardwareSettings={hydrated.settings}/>
+          <div className="space-y-6">
+            <CameraCalibrationPanel initialHardwareSettings={hydrated.settings} initialCalibrations={hydrated.calibrations}/>
+            <div className="grid items-start gap-6 min-[900px]:grid-cols-2">
+              <LightingSettingsPanel initialHardwareSettings={hydrated.settings}/>
+              <MicrophoneSettingsPanel initialHardwareSettings={hydrated.settings}/>
+            </div>
+          </div>
         </>}
       </main>
     </DashboardLayout>

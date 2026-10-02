@@ -113,7 +113,7 @@ export default function StudentClasses() {
 
     return (
       <DashboardLayout>
-        <div className="mx-auto w-full max-w-5xl">
+        <div className="w-full">
           <BackButton to="/student/classes">Back to My Classes</BackButton>
           <PageHeader
             title={

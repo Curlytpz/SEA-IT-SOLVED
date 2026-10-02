@@ -83,7 +83,7 @@ export default function StudentLesson() {
   if (!data) return <DashboardLayout><Alert>{error}</Alert></DashboardLayout>;
 
   const hasMaterials = (data.document?.sections?.length ?? data.materials.length) > 0;
-  return <DashboardLayout><div className="mx-auto w-full max-w-[1480px] overflow-x-clip">
+  return <DashboardLayout><div className="w-full overflow-x-clip">
     <BackButton to="/student">Back to learning</BackButton>
     <PageHeader title={<GeneratedContent markdown={data.lesson.title} audience="student" inline/>} subtitle={`${data.lesson.subjectCode} • ${data.lesson.sectionName} • ${data.lesson.instructorName}`}><Badge status={data.lesson.status}/></PageHeader>
     {error && <Alert onClose={() => setError('')}>{error}</Alert>}

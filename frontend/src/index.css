@@ -215,6 +215,12 @@ h1, h2, h3, h4, [data-slot="card-title"] {
   box-shadow: var(--sh-inset);
 }
 
+.app-page-container {
+  width: 100%;
+  max-width: 75rem;
+  margin-inline: auto;
+}
+
 @media (max-width: 639px) {
   .soft-neu-raised { box-shadow: var(--neu-shadow-raised-sm); }
 }
